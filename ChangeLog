@@ -1,2 +1,9 @@
-fwsnort-0.2 (10//2003):
-    -Added --no-jumps
+fwsnort-0.2 (12//2003):
+    - Added "-j REJECT --reject-with tcp-reset" for tcp sessions
+      if the --ipt-block option is specified.
+    - Added ability to download latest snort rules from snort.org.
+    - Added --no-ipt-jumps.
+    - Added better checking for iptables build characteristics such
+      as the LOG target and wether or not the ipv4options extension
+      is compiled in.
+    - Added config preservation code from psad in install.pl.
