@@ -50,7 +50,8 @@ my %sopt_filter = (
     'content' => '[\s;]content:\s*\"(.*?)\";',
     'flags'   => '[\s;]flags:\s*(.*?);',
     'itype'   => '[\s;]itype:\s*(\d+);',
-    'ttl'     => '[\s;]ttl:\s*(\d+);'
+    'ttl'     => '[\s;]ttl:\s*(\d+);',
+    'tos'     => '[\s;]tos:\s*(\d+);'
 );
 
 ### snort options that cannot be included directly
@@ -74,7 +75,6 @@ my %sopt_nofilter = (
 my %sopt_log = (
     'id'       => '[\s;]id:\s*(\d+);',
     'seq'      => '[\s;]seq:\s*(\d+);',
-    'tos'      => '[\s;]tos:\s*(\d+);',
     'icmp_seq' => '[\s;]icmp_seq:\s*(\d+);',
     'icmp_id'  => '[\s;]icmp_id:\s*(\d+);',
     'icode'    => '[\s;]icode:\s*(\d+);',
@@ -93,6 +93,7 @@ my $rules_type = '';
 my $logfile    = '';
 
 my %snort_sigs;
+my $snort_sid;
 
 my %cmds = (
     'iptables' => $iptablesCmd,
@@ -100,16 +101,17 @@ my %cmds = (
 );
 
 &usage(1) unless (GetOptions(
-    'fw-apply'  => \$fw_apply,    ### apply the generated ruleset
-    'fw-log'    => \$fw_log,
-    'fw-drop'   => \$fw_drop,
-    'fw-reject' => \$fw_reject,
-    'type=s'    => \$rules_type,  ### process this type of snort rules
-    'logfile=s' => \$logfile,
-    'stdout'    => \$stdout,      ### print the fw ruleset on STDOUT
-    'verbose'   => \$verbose,
-    'debug'     => \$debug,
-    'help'      => \$help
+    'fw-apply'    => \$fw_apply,    # apply the generated ruleset
+    'fw-log'      => \$fw_log,
+    'fw-drop'     => \$fw_drop,
+    'fw-reject'   => \$fw_reject,
+    'snort-sid=i' => \$snort_sid,   # Parse only this particular snort rule
+    'type=s'      => \$rules_type,  # process this type of snort rule
+    'logfile=s'   => \$logfile,
+    'stdout'      => \$stdout,      # print the fw ruleset on STDOUT
+    'verbose'     => \$verbose,
+    'debug'       => \$debug,
+    'help'        => \$help
 ));
 
 &usage(0) if $help;
@@ -121,7 +123,11 @@ my %cmds = (
 &check_type() if $rules_type;
 
 ### parse snort rules (signatures)
+print "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=\n",
+    sprintf("%-30s%-10s%-10s%-10s%-10s", '    File', 'Filter',
+        'Log-only', 'None', 'Total'), "\n\n";
 &parse_snort_rules();
+print "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=\n";
 
 exit 0;
 ### write the equivalent iptables ruleset out to disk
@@ -143,18 +149,22 @@ sub parse_snort_rules() {
             next unless $rfile =~ /${rules_type}\.rules$/;
         }
         my ($type) = ($rfile =~ /(\w+)\.rules/);
-        print " ==================================================\n";
-        print " .. Parsing: $rfile\n";
+        print sprintf("%-30s", " .. $rfile");
         open R, "< ${rules_dir}/${rfile}" or die " ** Could not " .
-            "open ${rules_type}/${rfile}";
+            "open: ${rules_type}/${rfile}";
         my @lines = <R>;
         close R;
-        my $line_num   = 0;
-        my $rule_num   = 0;
-        my $parsed_ctr = 0;
+        my $line_num    = 0;
+        my $rule_num    = 0;
+        my $parsed_ctr  = 0;
+        my $logonly_ctr = 0;
+        my $unsup_ctr   = 0;
         RULE: for my $line (@lines) {
             $line_num++;
-            next unless $line =~ /^alert/;
+            next RULE unless $line =~ /^alert/;
+            if ($snort_sid) {
+                next RULE unless $line =~ /[\s;]sid:\s*$snort_sid\D/;
+            }
             $rule_num++;  ### keep track of the abs num of rules
             my $rule_hdr;
             my $rule_options;
@@ -169,6 +179,7 @@ sub parse_snort_rules() {
             unless ($hdr_href) {
                 print " ** Unrecognized rule header: \"$rule_hdr\" at ",
                     "line: $line_num.  Skipping rule.\n";
+                $unsup_ctr++;
                 next RULE;
             }
             if ($debug) {
@@ -176,20 +187,35 @@ sub parse_snort_rules() {
                     "    $hdr_href->{'src_p'}, bidir: $hdr_href->{'bidir'} ",
                     "$hdr_href->{'dst'}, $hdr_href->{'dst_p'}\n";
             }
-            my ($opt_filter_href, $opt_logprefix_href)
+            my ($ipttype, $opt_filter_href, $opt_logprefix_href)
                 = &parse_rule_options($rule_options, $line_num);
-            unless ($opt_filter_href) {
+            if ($ipttype == 1) {  ### we can filter
+                $parsed_ctr++;  ### keep track of successfully parsed rules
+            } elsif ($ipttype == 2) {
+                $logonly_ctr++;
+            } else {
+                $unsup_ctr++;
                 next RULE;
             }
-            $parsed_ctr++;  ### keep track of successfully parsed rules
             $abs_num++;;
         }
-        print " .. Successfully parsed $parsed_ctr out of $rule_num rules.\n";
-        print "\n";
+#        print "    Iptables filter rules:   $parsed_ctr\n",
+#            "    Iptables log only rules: $logonly_ctr\n",
+#            "    Unsupported rules:       $unsup_ctr\n",
+#            "    Total rules:             $rule_num\n",
+#            "\n";
+#        print "$parsed_ctr    $logonly_ctr    $unsup_ctr    $rule_num\n";
+        print sprintf("%-10s%-10s%-10s%-10s", $parsed_ctr, $logonly_ctr,
+            $unsup_ctr, $rule_num) . "\n";
     }
-    print " ==========\n";
-    print " .. Totals: Parsed $abs_num out of $sabs_num: " .
-        sprintf("%.2f", $abs_num/$sabs_num*100) . "%\n";
+    print "\n";
+    if ($abs_num) {  ### we parse at least one rule
+        print " .. Generated iptables rules for $abs_num out of ",
+            "$sabs_num signatures: ",
+            sprintf("%.2f", $abs_num/$sabs_num*100), "%\n";
+    } else {
+        print " .. No rules parsed.\n";
+    }
     return;
 }
 
@@ -199,6 +225,7 @@ sub parse_rule_options() {
     my %opt_logprefix;
     my %opt_filter;
     my %opt_log;
+    my $status = 1;   ### 1 => can filter with iptables, 2 => iptables logs
 
     for my $option (keys %sopt_nofilter) {
         my $regex = $sopt_nofilter{$option};
@@ -216,6 +243,7 @@ sub parse_rule_options() {
         my $regex = $sopt_log{$option};
         if ($rule_options =~ /$regex/) {
             $opt_log{$option} = $1;
+            $status = 2;
         }
     }
 
@@ -245,7 +273,7 @@ sub parse_rule_options() {
             print "$line_num option: \"$option\" -- $rule_options\n";
         }
     }
-    return \%opt_filter, \%opt_logprefix;
+    return $status, \%opt_filter, \%opt_logprefix;
 }
 
 sub parse_rule_hdr() {
