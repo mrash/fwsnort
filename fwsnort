@@ -52,10 +52,25 @@ my $parse_errs = "${logdir}/parse_errs.log";
 
 ### iptables script
 my $fwscript = "${scripts_dir}/fw_ruleset.sh";
-#====================== end config ======================
+#===================== end config =======================
 
 ### version number
 my $version = '0.1';
+
+### supported variables in snort signatures
+my %snort_vars = (
+    'EXTERNAL_NET'    => '',
+    'HOME_NET'        => '',
+    'HTTP_SERVERS'    => '',
+    'SMTP_SERVERS'    => '',
+    'DNS_SERVERS'     => '',
+    'HTTP_PORTS'      => '',
+    'TELNET_SERVERS'  => '',
+    'AIM_SERVERS'     => '',
+    'SQL_SERVERS'     => '',
+    'SHELLCODE_PORTS' => '',
+    'ORACLE_PORTS'    => ''
+);
 
 ### snort options that should be put into iptables
 ### ruleset, but only in log messages with --log-prefix
@@ -105,6 +120,44 @@ my %sopt_log = (
     'icode'    => '[\s;]icode:\s*(\d+);',
 );
 
+### variables that are supported by the fwsnort config
+my %conf_supported_vars = ();
+
+### port config (see any snort.conf file)
+my @http_ports      = ();
+my @shellcode_ports = ();
+my @oracle_ports    = ();
+
+### interface config
+my %interfaces   = ();  ### corresponds to $EXTERNAL_NET and $HOME_NET
+my %intf_to_type = ();
+
+### server config
+#my %servers = ();
+
+### port config
+#my %ports = ();
+
+my @http_servers   = ();
+my @smtp_servers   = ();
+my @dns_servers    = ();
+my @sql_servers    = ();
+my @telnet_servers = ();
+my @aim_servers    = ();
+
+my %snort_sigs;
+
+### For each internal interface fwsnort will create two associated iptables
+### chains.  For example, suppose eth0 is the external interface and
+### eth1 is the internal interface:
+###   jump int: eth0   dst: internal network  (src doesn't matter)
+###   jump int: eth1   src: internal network  (dst doesn't matter)
+my %snort_chains;
+
+### config and commands hashes (constructed by readconf())
+my %config;
+my %cmds;
+
 ### establish some default behavior
 my $fw_apply   = 0;
 my $fw_log     = 0;
@@ -115,24 +168,8 @@ my $stdout     = 0;
 my $debug      = 0;
 my $verbose    = 0;
 my $snort_sid  = 0;
+my $dump_conf  = 0;
 my $rules_type = '';
-my $int_intf   = '';
-my $dmz_intf   = '';
-my $ext_intf   = '';
-my @http_ports = ();
-
-my %snort_sigs;
-
-### For each internal interface fwsnort will create two associated iptables
-### chains.  For example suppose eth0 is the external interface and
-### eth1 is the internal interface:
-###   jump int: eth0   dst: internal network  (src doesn't matter)
-###   jump int: eth1   src: internal network  (dst doesn't matter)
-my %snort_chains;
-
-### config and commands hashes (constructed by readconf())
-my %config;
-my %cmds;
 
 &usage(1) unless (GetOptions(
     'fw-apply'      => \$fw_apply,   # apply the generated ruleset
@@ -141,13 +178,12 @@ my %cmds;
     'fw-reject'     => \$fw_reject,
     'snort-sid=i'   => \$snort_sid,  # Parse only this particular snort rule
     'type=s'        => \$rules_type, # process this type of snort rule
-    'external-intf' => \$ext_intf,   # manually specify the external interface
-    'internal-intf' => \$int_intf,   # manually specify the internal interface
-    'internal-dmz'  => \$dmz_intf,  # manually specify the internal interface
     'logfile=s'     => \$logfile,
     'stdout'        => \$stdout,     # print the fw ruleset on STDOUT
     'verbose'       => \$verbose,
     'debug'         => \$debug,
+    'dump-conf'     => \$dump_conf,  # display config variables
+    'config=s'      => \$fwsnort_conf, # manually specify the config file
     'help'          => \$help
 ));
 
@@ -159,17 +195,15 @@ my %cmds;
 ### read in configuration info from the config file
 &readconf();
 
-### take the interfaces from the command line if specified
-$config{'INTERNAL_INTF'} = $int_intf if $int_intf;
-$config{'DMZ_INTF'}      = $dmz_intf if $dmz_intf;
-$config{'EXTERNAL_INTF'} = $ext_intf if $ext_intf;
-
 ### make sure the commands are where the
 ### config file says they are
 &chk_commands();
 
 ### make sure the config is correct
 &validateconf();
+
+### display the config on STDOUT
+&dump_conf() if $dump_conf;
 
 ### make sure the specified <type>.rules file exists
 ### if --type was used
@@ -416,28 +450,38 @@ sub readconf() {
     open C, "< $fwsnort_conf" or die $!;
     my @lines = <C>;
     close C;
+    my $l_ctr = 0;
     for my $line (@lines) {
+        $l_ctr++;
         chomp $line;
         next if $line =~ /^\s*#/;
         next unless $line =~ /\S/;
         if ($line =~ /^\s*(\w+)Cmd\s+(\S+);/) {  ### e.g. "iptableCmd"
             $cmds{$1} = $2;
-        } elsif ($line =~ /^\s*(\S+)\s+(\S+);/) {
-            $config{$1} = $2;
+        } elsif ($line =~ /^\s*(\S+)\s+(.*?);/) {
+            my $var = $1;
+            my $val = $2;
+            die " ** $fwsnort_conf: Variable \"$var\" is set to _CHANGEME_ at\n",
+                "    line $l_ctr.  Edit $fwsnort_conf.\n"
+                if $val eq '_CHANGEME_';
+            if ($val =~ /^\$(\w+)/) {  ### it is a variable
+                if (defined $config{$1}) {
+                    $config{$var} = $config{$1};
+                } else {
+                    die " ** $fwsnort_conf: Variable \"$1\" is not ",
+                        "defined at line: $l_ctr\n";
+                }
+            } else {
+                $config{$var} = $val;
+            }
         }
     }
     return;
 }
 
 sub validateconf() {
-    die " ** The path to ifconfig is not in $fwsnort_conf.  Exiting.\n"
+    die " ** The path to ifconfig is not in $fwsnort_conf. Exiting.\n"
         unless defined $cmds{'ifconfig'};
-    for my $var (keys %config) {
-        if ($config{$var} eq '_CHANGEME_') {
-            die " ** $fwsnort_conf: The $var variable is set to\n",
-                "    \"_CHANGEME_\".  Edit $fwsnort_conf.\n";
-        }
-    }
     if (defined $config{'NUM_INTERFACES'}) {
         die " ** $fwsnort_conf: NUM_INTERFACES can be 1, 2, or 3.\n",
             "    Edit $fwsnort_conf.\n" unless
@@ -449,41 +493,75 @@ sub validateconf() {
             "    defined. Exiting.\n";
     }
     if ($config{'NUM_INTERFACES'} == 3) {
-        die " ** $fwsnort_conf: EXTERNAL_INTF is not defined.  Exiting.\n"
-            unless defined $config{'EXTERNAL_INTF'};
-        die " ** $fwsnort_conf: INTERNAL_INTF is not defined.  Exiting.\n"
-            unless defined $config{'INTERNAL_INTF'};
-        die " ** $fwsnort_conf: DMZ_INTF is not defined.  Exiting.\n"
+        die " ** $fwsnort_conf: DMZ_INTF is not defined. Exiting.\n"
             unless defined $config{'DMZ_INTF'};
-        $snort_chains{$config{'INTERNAL_INTF'}}
+        $intf_to_type{$config{'DMZ_INTF'}} = 'DMZ_INTF';
+        $interfaces{'DMZ_INTF'}{'name'} = $config{'DMZ_INTF'};
+        $interfaces{'DMZ_INTF'}{'net'}
             = &get_intf_net($config{'INTERNAL_INTF'});
-        $snort_chains{$config{'DMZ_INTF'}}
-            = &get_intf_net($config{'DMZ_INTF'});
-        $snort_chains{$config{'EXTERNAL_INTF'}}
-            = &get_intf_net($config{'EXTERNAL_INTF'});
-    } elsif ($config{'NUM_INTERFACES'} == 2) {
-        die " ** $fwsnort_conf: EXTERNAL_INTF is not defined.  Exiting.\n"
-            unless defined $config{'EXTERNAL_INTF'};
-        die " ** $fwsnort_conf: INTERNAL_INTF is not defined.  Exiting.\n"
+    }
+    if ($config{'NUM_INTERFACES'} == 2 || $config{'NUM_INTERFACES'} == 3) {
+        die " ** $fwsnort_conf: INTERNAL_INTF is not defined. Exiting.\n"
             unless defined $config{'INTERNAL_INTF'};
         die " ** $fwsnort_conf: DMZ_INTF cannot be defined when ",
             "NUM_INTERFACES is 2. Exiting.\n"
             if defined $config{'DMZ_INTF'};
-        $snort_chains{$config{'INTERNAL_INTF'}}
+        $intf_to_type{$config{'INTERNAL_INTF'}} = 'INTERNAL_INTF';
+        $interfaces{'INTERNAL_INTF'}{'name'} = $config{'INTERNAL_INTF'};
+        $interfaces{'INTERNAL_INTF'}{'net'}
             = &get_intf_net($config{'INTERNAL_INTF'});
-        $snort_chains{$config{'EXTERNAL_INTF'}}
-            = &get_intf_net($config{'EXTERNAL_INTF'});
     } elsif ($config{'NUM_INTERFACES'} == 1) {
-        die " ** $fwsnort_conf: EXTERNAL_INTF is not defined.  Exiting.\n"
-            unless defined $config{'EXTERNAL_INTF'};
         die " ** $fwsnort_conf: INTERNAL_INTF cannot be defined when ",
             "NUM_INTERFACES is 1. Exiting.\n"
             if defined $config{'INTERNAL_INTF'};
         die " ** $fwsnort_conf: DMZ_INTF cannot be defined when ",
             "NUM_INTERFACES is 1. Exiting.\n"
             if defined $config{'DMZ_INTF'};
-        $snort_chains{$config{'EXTERNAL_INTF'}}
-            = &get_intf_net($config{'EXTERNAL_INTF'});
+    }
+    die " ** $fwsnort_conf: EXTERNAL_INTF is not defined. Exiting.\n"
+        unless defined $config{'EXTERNAL_INTF'};
+    $intf_to_type{$config{'EXTERNAL_INTF'}} = 'EXTERNAL_INTF';
+    $interfaces{'EXTERNAL_INTF'}{'name'} = $config{'EXTERNAL_INTF'};
+    $interfaces{'EXTERNAL_INTF'}{'net'}
+        = &get_intf_net($config{'EXTERNAL_INTF'});
+
+    if (defined $config{'HTTP_PORTS'}) {
+        @http_ports = split /,\s*/, $config{'HTTP_PORTS'};
+        for my $port (@http_ports) {
+            print $port, "\n";
+            die " ** $fwsnort_conf: HTTP_PORTS can only contain a comma\n",
+                "    separated list of port numbers.\n"
+                unless $port =~ /^\d+$/;
+        }
+        $conf_supported_vars{'HTTP_PORTS'} = '';
+    }
+    &build_ip_arr('HTTP_SERVERS', \@http_servers);
+    &build_ip_arr('SMTP_SERVERS', \@smtp_servers);
+    &build_ip_arr('DNS_SERVERS', \@dns_servers);
+    &build_ip_arr('SQL_SERVERS', \@sql_servers);
+    &build_ip_arr('TELNET_SERVERS', \@telnet_servers);
+    return;
+}
+
+sub build_ip_arr() {
+    my ($key, $aref) = shift;
+    if (defined $config{$key}) {
+        my $intf_flag = 0;
+        for my $loc (keys %interfaces) {
+            if ($config{$key} eq $interfaces{$loc}{'name'}) {
+                ### the server variable is tied to an interface
+                $intf_flag = 1;
+            }
+        }
+        unless ($intf_flag) {
+            @$aref = split /,\s*/, $config{$key};
+            for my $ip (@$aref) {
+                die " ** $fwsnort_conf: $key can only contain a comma\n",
+                    "    separated list of ip addresses.\n"
+                    unless $ip =~ /(?:\d{1,3}\.){3}\d{1,3}/;
+            }
+        }
+        $conf_supported_vars{'HTTP_SERVERS'} = '';
     }
     return;
 }
@@ -500,6 +578,71 @@ sub get_intf_net() {
     }
     die " ** Could not get ip and netmask for interface $intf.  Is the ",
         "    interface up?\n";
+}
+
+sub dump_conf() {
+    print " .. Interfaces:\n";
+    for my $loc (keys %interfaces) {
+        print "    Type: $loc, Name: $interfaces{$loc}{'name'}, ",
+            "Net: $interfaces{$loc}{'net'}\n";
+    }
+    print " .. HTTP_SERVERS: ";
+    if (defined $config{'HTTP_SERVERS'}) {
+        if (@http_servers) {
+            print @http_servers, "\n";
+        } else {
+            print $intf_to_type{$config{'HTTP_SERVERS'}}, "\n";
+        }
+    } else {
+        print "Not Defined\n";
+    }
+    print " .. SMTP_SERVERS: ";
+    if (defined $config{'SMTP_SERVERS'}) {
+        if (@smtp_servers) {
+            print @smtp_servers, "\n";
+        } else {
+            print $intf_to_type{$config{'SMTP_SERVERS'}}, "\n";
+        }
+    } else {
+        print "Not Defined\n";
+    }
+    print " .. DNS_SERVERS: ";
+    if (defined $config{'DNS_SERVERS'}) {
+        if (@dns_servers) {
+            print @dns_servers, "\n";
+        } else {
+            print $intf_to_type{$config{'DNS_SERVERS'}}, "\n";
+        }
+    } else {
+        print "Not Defined\n";
+    }
+    print " .. SQL_SERVERS: ";
+    if (defined $config{'SQL_SERVERS'}) {
+        if (@sql_servers) {
+            print @sql_servers, "\n";
+        } else {
+            print $intf_to_type{$config{'SQL_SERVERS'}}, "\n";
+        }
+    } else {
+        print "Not Defined\n";
+    }
+    print " .. TELNET_SERVERS: ";
+    if (defined $config{'TELNET_SERVERS'}) {
+        if (@telnet_servers) {
+            print @telnet_servers, "\n";
+        } else {
+            print $intf_to_type{$config{'TELNET_SERVERS'}}, "\n";
+        }
+    } else {
+        print "Not Defined\n";
+    }
+    print " .. AIM_SERVERS: ";
+    if (@aim_servers) {
+        print @aim_servers, "\n";
+    } else {
+        print "Not Defined\n";
+    }
+    exit 0;
 }
 
 sub setup() {
