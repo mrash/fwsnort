@@ -533,29 +533,18 @@ sub ipt_build() {
     my $src = $hdr_href->{'src'};
     my $dst = $hdr_href->{'dst'};
 
-    if ($src eq 'EXTERNAL_NET') {
-        if ($dst eq 'HOME_NET' || $dst eq 'any') {
+    ### build INPUT iptables rules
+    if (defined $config{$dst} && defined $intf_net{$config{$dst}}) {
+        if ($intf_type{$intf_net{$config{$dst}}{'name'}} eq 'INTERNAL_INTF') {
+            ### snort:      EXTERNAL   -> HOME
+            ### iptables:   any source -> external intf  (for INPUT chain)
             push @rules_dst, $intf_net{'EXTERNAL_INTF'}{'ip'};
-            push @rules_chns, "fwsnort_INPUT_$config{'EXTERNAL_INTF'}";
-        } else {
-            print " ** src: $src, dst: $dst\n";
-        }
-    } elsif ($dst eq 'EXTERNAL_NET') {
-        if ($src eq 'HOME_NET' || $src eq 'any') {
+            push @rules_chns, "fwsnort_INPUT_${intf_net{'EXTERNAL_INTF'}{'name'}}";
+        } elsif ($intf_type{$intf_net{$config{$dst}}{'name'}} eq 'EXTERNAL_INTF') {
+            ### snort:      INTERNAL   -> EXTERNAL
+            ### iptables:   any source -> internal intf  (for INPUT chain)
             push @rules_dst, $intf_net{'INTERNAL_INTF'}{'ip'};
-            push @rules_chns, "fwsnort_INPUT_$config{'INTERNAL_INTF'}";
-        } else {
-            print " ** src: $src, dst: $dst\n";
-        }
-    } elsif ($src eq 'any') {
-        if ($dst eq 'any') {
-            print "dup: $ipt_rule_ctr\n";
-            push @rules_dst, $intf_net{'EXTERNAL_INTF'}{'ip'};
-            push @rules_chns, "fwsnort_INPUT_$config{'EXTERNAL_INTF'}";
-            push @rules_dst, $intf_net{'INTERNAL_INTF'}{'ip'};
-            push @rules_chns, "fwsnort_INPUT_$config{'INTERNAL_INTF'}";
-        } else {
-            print " ** src: $src, dst: $dst\n";
+            push @rules_chns, "fwsnort_INPUT_${intf_net{'INTERNAL_INTF'}{'name'}}";
         }
     } elsif ($dst eq 'any') {
         if ($src eq 'any') {
@@ -573,7 +562,6 @@ sub ipt_build() {
 
     my $ctr = 0;
     for my $dst (@rules_dst) {
-
         ### build as many iptables rules as we need based on
         ### the source and destination
         &ipt_build_rule(
