@@ -391,7 +391,12 @@ $ipt_sync = 0 if $no_ipt_sync;
 ### specified on the command line
 &check_type() if $rules_type;
 
-&logr(localtime() . " .. Begin parsing cycle ..");
+### truncate old log (does anyone actually use the fwsnort
+### parsing log?)
+open L, "> $logfile" or die " ** Could not open $logfile: $!";
+close L;
+
+&logr(localtime() . " .. Begin parsing cycle.");
 
 ### parse snort rules (signatures)
 if ($ipt_sync) {
@@ -575,6 +580,11 @@ sub parse_rule_options() {
             "line: $line_num.  Skipping rule.");
         return 0;
     }
+    if ($rule_options =~ /ip_proto\s*:.*ip_proto\s*:/) {
+        &logr(" ** SID: $sid  Unsupported multiple ip_proto fields at " .
+            "line: $line_num.  Skipping rule.");
+        return 0;
+    }
 
     for my $opt (keys %{$snort_opts{'filter'}}) {
         ### see if we match the option regex
@@ -613,6 +623,11 @@ sub parse_rule_hdr() {
         my $dst_p = $6;
 
         unless ($proto =~ /^\w+$/) {
+            &logr(" ** Unsupported protocol: \"$proto\" at line: " .
+                "$line_num.  Skipping rule.");
+            return 0;
+        }
+        if ($proto eq 'ip') {
             &logr(" ** Unsupported protocol: \"$proto\" at line: " .
                 "$line_num.  Skipping rule.");
             return 0;
@@ -904,8 +919,10 @@ sub ipt_build_rule() {
 
     ### append the protocol to the rule
     if (defined $opts_href->{'ip_proto'}) {
+        return 0 unless $opts_href->{'ip_proto'} =~ /^\w+$/;
         $rule .= " $iptables_opts{'ip_proto'} $opts_href->{'ip_proto'}";
     } else {
+        return 0 unless $hdr_href->{'proto'} =~ /^\w+$/;
         $rule .= " $iptables_opts{'proto'} $hdr_href->{'proto'}";
     }
 
@@ -1063,7 +1080,7 @@ sub ipt_add_rule() {
 
     if ($verbose) {
         push @ipt_script_lines, "### snort rule: $orig_snort_rule";
-        push @ipt_script_lines, "\$ECHO \" .. rule: $ipt_rule_ctr\"";
+        push @ipt_script_lines, "\$ECHO \" .. rule $ipt_rule_ctr\"";
     } else {
         push @ipt_script_lines, $comment;
     }
