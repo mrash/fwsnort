@@ -143,10 +143,10 @@ sub parse_snort_rules() {
 
     my $abs_num = 0;
     my $sabs_num = 0;
-    for my $rfile (@rfiles) {
-        next unless $rfile =~ /\.rules$/;
+    FILE: for my $rfile (@rfiles) {
+        next FILE unless $rfile =~ /\.rules$/;
         if ($rules_type) {
-            next unless $rfile =~ /${rules_type}\.rules$/;
+            next FILE unless $rfile =~ /${rules_type}\.rules$/;
         }
         my ($type) = ($rfile =~ /(\w+)\.rules/);
         print sprintf("%-30s", " .. $rfile");
@@ -162,9 +162,6 @@ sub parse_snort_rules() {
         RULE: for my $line (@lines) {
             $line_num++;
             next RULE unless $line =~ /^alert/;
-            if ($snort_sid) {
-                next RULE unless $line =~ /[\s;]sid:\s*$snort_sid\D/;
-            }
             $rule_num++;  ### keep track of the abs num of rules
             my $rule_hdr;
             my $rule_options;
@@ -199,12 +196,6 @@ sub parse_snort_rules() {
             }
             $abs_num++;;
         }
-#        print "    Iptables filter rules:   $parsed_ctr\n",
-#            "    Iptables log only rules: $logonly_ctr\n",
-#            "    Unsupported rules:       $unsup_ctr\n",
-#            "    Total rules:             $rule_num\n",
-#            "\n";
-#        print "$parsed_ctr    $logonly_ctr    $unsup_ctr    $rule_num\n";
         print sprintf("%-10s%-10s%-10s%-10s", $parsed_ctr, $logonly_ctr,
             $unsup_ctr, $rule_num) . "\n";
     }
