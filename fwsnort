@@ -512,9 +512,6 @@ sub build_fwsnort_chains() {
 sub ipt_build() {
     my ($hdr_href, $opts_href) = @_;
 
-    ### start the rule
-    my $rule = '';
-
     ### determine which chain the rule should be added to (default
     ### to the fwsnort_<EXTERNAL_INTF> chain).
 #    my $chain = " -A fwsnort_${config{'EXTERNAL_INTF'}}";
@@ -530,93 +527,63 @@ sub ipt_build() {
 #        }
 #    }
 
+    my @rules_dst  = ();
+    my @rules_chns = ();
 
     my $src = $hdr_href->{'src'};
     my $dst = $hdr_href->{'dst'};
 
     if ($src eq 'EXTERNAL_NET') {
-        if ($dst eq 'HOME_NET') {
-            &ipt_build_rule(
-                "$cmds{'iptables'} -A fwsnort_INPUT_$config{'EXTERNAL_INTF'}",
-                $hdr_href,
-                $opts_href,
-                '',
-                $intf_net{'EXTERNAL_INTF'}{'ip'}
-            );
-        } elsif ($dst eq 'any') {
-            &ipt_build_rule(
-                "$cmds{'iptables'} -A fwsnort_INPUT_$config{'EXTERNAL_INTF'}",
-                $hdr_href,
-                $opts_href,
-                '',
-                $intf_net{'EXTERNAL_INTF'}{'ip'}
-            );
+        if ($dst eq 'HOME_NET' || $dst eq 'any') {
+            push @rules_dst, $intf_net{'EXTERNAL_INTF'}{'ip'};
+            push @rules_chns, "fwsnort_INPUT_$config{'EXTERNAL_INTF'}";
         } else {
             print " ** src: $src, dst: $dst\n";
         }
     } elsif ($dst eq 'EXTERNAL_NET') {
-        if ($src eq 'HOME_NET') {
-            &ipt_build_rule(
-                "$cmds{'iptables'} -A fwsnort_INPUT_$config{'INTERNAL_INTF'}",
-                $hdr_href,
-                $opts_href,
-                '',
-                $intf_net{'INTERNAL_INTF'}{'ip'}
-            );
-        } elsif ($src eq 'any') {
-            &ipt_build_rule(
-                "$cmds{'iptables'} -A fwsnort_INPUT_$config{'INTERNAL_INTF'}",
-                $hdr_href,
-                $opts_href,
-                '',
-                $intf_net{'INTERNAL_INTF'}{'ip'}
-            );
+        if ($src eq 'HOME_NET' || $src eq 'any') {
+            push @rules_dst, $intf_net{'INTERNAL_INTF'}{'ip'};
+            push @rules_chns, "fwsnort_INPUT_$config{'INTERNAL_INTF'}";
         } else {
             print " ** src: $src, dst: $dst\n";
         }
     } elsif ($src eq 'any') {
         if ($dst eq 'any') {
             print "dup: $ipt_rule_ctr\n";
-            &ipt_build_rule(
-                "$cmds{'iptables'} -A fwsnort_INPUT_$config{'EXTERNAL_INTF'}",
-                $hdr_href,
-                $opts_href,
-                '',
-                $intf_net{'EXTERNAL_INTF'}{'ip'}
-            );
-
-            &ipt_build_rule(
-                "$cmds{'iptables'} -A fwsnort_INPUT_$config{'INTERNAL_INTF'}",
-                $hdr_href,
-                $opts_href,
-                '',
-                $intf_net{'INTERNAL_INTF'}{'ip'}
-            );
+            push @rules_dst, $intf_net{'EXTERNAL_INTF'}{'ip'};
+            push @rules_chns, "fwsnort_INPUT_$config{'EXTERNAL_INTF'}";
+            push @rules_dst, $intf_net{'INTERNAL_INTF'}{'ip'};
+            push @rules_chns, "fwsnort_INPUT_$config{'INTERNAL_INTF'}";
         } else {
             print " ** src: $src, dst: $dst\n";
         }
     } elsif ($dst eq 'any') {
         if ($src eq 'any') {
             print "dup: $ipt_rule_ctr\n";
-            &ipt_build_rule(
-                "$cmds{'iptables'} -A fwsnort_INPUT_$config{'EXTERNAL_INTF'}",
-                $hdr_href,
-                $opts_href,
-                '',
-                $intf_net{'EXTERNAL_INTF'}{'ip'}
-            );
-            &ipt_build_rule(
-                "$cmds{'iptables'} -A fwsnort_INPUT_$config{'INTERNAL_INTF'}",
-                $hdr_href,
-                $opts_href,
-                '',
-                $intf_net{'INTERNAL_INTF'}{'ip'}
-            );
+            push @rules_dst, $intf_net{'EXTERNAL_INTF'}{'ip'};
+            push @rules_chns, "fwsnort_INPUT_$config{'EXTERNAL_INTF'}";
+            push @rules_dst, $intf_net{'INTERNAL_INTF'}{'ip'};
+            push @rules_chns, "fwsnort_INPUT_$config{'INTERNAL_INTF'}";
         } else {
             print " ** src: $src, dst: $dst\n";
         }
     } else {
         print " ** src: $src, dst: $dst\n";
+    }
+
+    my $ctr = 0;
+    for my $dst (@rules_dst) {
+
+        ### build as many iptables rules as we need based on
+        ### the source and destination
+        &ipt_build_rule(
+            "$cmds{'iptables'} -A $rules_chns[$ctr]",
+            $hdr_href,
+            $opts_href,
+            '',
+            $dst
+        );
+        $ctr++;
     }
 
     return;
