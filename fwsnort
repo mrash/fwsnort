@@ -81,9 +81,12 @@
 # $Id$
 #
 
+use lib '/usr/lib/fwsnort';
+use IO::Socket;
 use IPTables::Parse;
 use Net::IPv4Addr qw(ipv4_network);
 use File::Copy;
+use File::Path;
 use Sys::Hostname;
 use Getopt::Long;
 use Data::Dumper;
@@ -94,6 +97,8 @@ my $fwsnort_dir = '/etc/fwsnort';
 my $rules_dir   = "${fwsnort_dir}/snort_rules";
 my $archive_dir = "${fwsnort_dir}/archive";
 my $log_dir     = '/var/log';
+
+my $snort_website = 'www.snort.org';
 
 ### config file
 my $fwsnort_conf = "${fwsnort_dir}/fwsnort.conf";
@@ -253,7 +258,7 @@ my %cmds;
 
 ### establish some default behavior
 my $ipt_apply  = 0;
-my $ipt_drop   = 0;
+my $ipt_block  = 0;
 my $ipt_reject = 0;
 my $help       = 0;
 my $stdout     = 0;
@@ -263,6 +268,7 @@ my $snort_sid  = 0;
 my $dump_conf  = 0;
 my $verbose    = 0;
 my $print_ver  = 0;
+my $update_rules   = 0;  ### used to download latest snort rules
 my $ipt_print_type = 0;
 my $ipt_rule_ctr   = 1;
 my $ipt_sync       = 1;
@@ -278,22 +284,23 @@ Getopt::Long::Configure('no_ignore_case');
 
 &usage(1) unless (GetOptions(
     'ipt-apply'    => \$ipt_apply,    # Apply the generated ruleset.
-    'ipt-drop'     => \$ipt_drop,     # Add iptables DROP rules.
+    'ipt-block'    => \$ipt_block,    # Add iptables DROP/REJECT rules.
     'snort-sid=i'  => \$snort_sid,    # Parse only this particular snort rule.
     'type=s'       => \$rules_type,   # Process this type of snort rule
                                       # (e.g. "ddos")
     'snort-rdir=s' => \$rules_dir,    # Manually specify the snort rules
                                       # directory.
     'no-ipt-sync'  => \$no_ipt_sync,  # Do not sync with the iptables policy.
-    'no-ipt-log'   => \$no_ipt_log,   # Do not generate iptables log rules.
+    'no-ipt-log'   => \$no_ipt_log,   # Do not generate iptables logging rules.
     'no-ipt-test'  => \$no_ipt_test,  # Don't perform any checks against
                                       # iptables.
     'no-ipt-jumps' => \$no_ipt_jumps, # Don't jump packets from the INPUT or
                                       # FORWARD chains.
+    'update-rules' => \$update_rules, # Download latest snort rules.
     'strict'       => \$strict,       # Strict mode.
     'debug'        => \$debug,
-    'dump-conf'    => \$dump_conf,    # display config variables
-    'config=s'     => \$fwsnort_conf, # manually specify the config file
+    'dump-conf'    => \$dump_conf,    # Display config variables
+    'config=s'     => \$fwsnort_conf, # Manually specify the config file
     'verbose'      => \$verbose,
     'logfile=s'    => \$logfile,      # Specify the logfile path.
     'stdout'       => \$stdout,       # Print log messages to stdout.
@@ -309,7 +316,7 @@ if ($print_ver) {
     exit 0;
 }
 
-if ($no_ipt_log && !$ipt_drop) {
+if ($no_ipt_log && !$ipt_block) {
     print " ** --ipt-no-log option can only be used with --ipt-drop\n";
     exit 1;
 }
@@ -344,6 +351,9 @@ $ipt_sync = 0 if $no_ipt_sync;
 
 ### make sure the config is correct
 &validateconf();
+
+### download latest snort rules from snort.org
+&update_rules() if $update_rules;
 
 ### if we are running with $chk_ipt_policy, then cache
 ### the current iptables policy
@@ -447,6 +457,14 @@ sub parse_snort_rules() {
                 $rule_hdr     = $1;
                 $rule_options = $2;
             } else {  ### don't know what type of snort rule it is
+                next RULE;
+            }
+            ### skip all icmp "Undefined Code" rules; psad properly
+            ### handles this, but not fwsnort (see the icmp-info.rules
+            ### file).
+            if ($rfile =~ /icmp/ and $rule_options =~ /undefined\s+code/i) {
+                $unsup_ctr++;
+                $tot_unsup_ctr++;
                 next RULE;
             }
             my $hdr_href = &parse_rule_hdr($rule_hdr);
@@ -560,8 +578,8 @@ sub parse_rule_options() {
         my $option = $1;
         if (! defined $opts{$option}
             && ! defined $snort_opts{'ignore'}{$option}) {
-            print "$line_num SID: $sid  bad option: \"$option\" ",
-                "-- $rule_options\n";
+            &logr("$line_num SID: $sid  bad option: \"$option\" ",
+                "-- $rule_options");
         }
     }
     return \%opts;
@@ -622,8 +640,13 @@ sub ipt_allow_traffic() {
     ### INPUT chain
     my $h_proto = $hdr_href->{'proto'};
 
-    ### FIXME: for now always add icmp protocol rules
-    return 1 if $h_proto eq 'icmp';
+    if ($h_proto eq 'icmp') {
+        if (defined $ipt_policy{$chain}
+                and defined $ipt_policy{$chain}{'icmp'}) {
+            return 1;
+        }
+        return 0;
+    }
 
     my $h_src = $hdr_href->{'src'};
     my $h_dst = $hdr_href->{'dst'};
@@ -706,6 +729,7 @@ sub cache_ipt_policy() {
             'FORWARD', 'ACCEPT');
     }
 
+print Dumper %ipt_policy;
     return;
 }
 
@@ -896,12 +920,12 @@ sub ipt_build_rule() {
         $rule .= " $iptables_opts{'dst_p'} $hdr_href->{'dst_p'}";
     }
 
-    &ipt_build_opts($rule, $opts_href, $orig_snort_rule);
+    &ipt_build_opts($rule, $hdr_href, $opts_href, $orig_snort_rule);
     return 1;
 }
 
 sub ipt_build_opts() {
-    my ($rule, $opts_href, $orig_snort_rule) = @_;
+    my ($rule, $hdr_href, $opts_href, $orig_snort_rule) = @_;
 
     ### append tcp flags
     if (defined $opts_href->{'flags'}) {
@@ -1001,16 +1025,21 @@ sub ipt_build_opts() {
     }
 
     ### write the rule out to the iptables script
-    &ipt_add_rule($comment, $orig_snort_rule, $log_prefix, $rule);
+    &ipt_add_rule($hdr_href, $orig_snort_rule, $rule,
+        $log_prefix, $comment);
     return;
 }
 
 sub ipt_add_rule() {
-    my ($comment, $orig_snort_rule, $log_prefix, $rule) = @_;
+    my ($hdr_href, $orig_snort_rule, $rule, $log_prefix, $comment) = @_;
 
     my $drop_rule;
-    if ($ipt_drop) {
-        $drop_rule = "$rule -j DROP";
+    if ($ipt_block) {
+        if ($hdr_href->{'proto'} eq 'tcp') {
+            $drop_rule = "$rule -j REJECT --reject-with tcp-reset";
+        } else {
+            $drop_rule = "$rule -j DROP";
+        }
     }
     $rule .= $log_prefix;
 
@@ -1021,7 +1050,7 @@ sub ipt_add_rule() {
         &write_ipt_script($comment);
     }
     &write_ipt_script($rule) unless $no_ipt_log;
-    &write_ipt_script($drop_rule) if $ipt_drop;
+    &write_ipt_script($drop_rule) if $ipt_block;
     $ipt_rule_ctr++;
 
     return;
@@ -1109,7 +1138,7 @@ sub ipt_config_section() {
 sub ipt_type() {
     my $type = shift;
     &write_ipt_script("\n###\n############ ${type}.rules ############\n###");
-    &write_ipt_script("\$ECHO \" .. Adding iptables $type rules.\"");
+    &write_ipt_script("\$ECHO \" .. Adding $type rules.\"");
     return;
 }
 
@@ -1212,9 +1241,33 @@ sub validateconf() {
 }
 
 sub ipt_test() {
-    ### test for string match support
+
+    ### test for the LOG target.
     my $rv = (system "$cmds{'iptables'} -I INPUT 1 -s " .
-        qq/10.1.1.1 -m string --string "test"/) >> 8;
+        "127.0.0.2 -j LOG 2> /dev/null") >> 8;
+    if ($rv == 0) {
+        system "$cmds{'iptables'} -D INPUT 1";
+    } else {
+        die " ** Iptables has not been compiled with logging support.  ",
+            "If you want to\n    have fwsnort generate an iptables script ",
+            "    anyway then specify the\n    --no-ipt-test option. ",
+            "Exiting.\n"
+            unless $no_ipt_log;
+    }
+
+    ### test for the ipv4options extension.
+    $rv = (system "$cmds{'iptables'} -I INPUT 1 -p icmp --icmp-type 0 -m " .
+        "ipv4options --rr -s 127.0.0.2 -j LOG 2> /dev/null") >> 8;
+    if ($rv == 0) {
+        system "$cmds{'iptables'} -D INPUT 1";
+    } else {
+        ### put ipopts in the unsupported list
+        $snort_opts{'unsupported'}{'ipopts'} = '[\s;]ipopts:\s*(\w+)\s*;';
+    }
+
+    ### test for string match support.
+    $rv = (system "$cmds{'iptables'} -I INPUT 1 -s " .
+        qq|127.0.0.2 -m string --string "test" 2> /dev/null|) >> 8;
     if ($rv == 0) {
         system "$cmds{'iptables'} -D INPUT 1";
     } else {
@@ -1226,8 +1279,8 @@ sub ipt_test() {
     }
 
     ### test for --hex-string
-    $rv = (system "$cmds{'iptables'} -I INPUT 1 -s 10.1.1.1 " .
-        qq/-m string --hex-string "|0a 5d|"/) >> 8;
+    $rv = (system "$cmds{'iptables'} -I INPUT 1 -s 127.0.0.2 " .
+        "-m string --hex-string \"|0a 5d|\" 2> /dev/null") >> 8;
     if ($rv == 0) {
         system "$cmds{'iptables'} -D INPUT 1";
     } else {
@@ -1235,7 +1288,22 @@ sub ipt_test() {
             "been applied.\n    fwsnort will not be of very much use ",
             "without this.\n    ** NOTE: If you want to have ",
             "fwsnort generate an iptables script anyway, ",
-            "specify the --no-ipt-test option. Exiting.\n";
+            "specify the --no-ipt-test option.  Exiting.\n";
+    }
+
+    if ($ipt_block) {
+        ### we are going to generate a policy that drops icmp and udp
+        ### packets, and kills tcp sessions with tcp-reset.
+        $rv = (system "$cmds{'iptables'} -I INPUT 1 -p tcp -s 127.0.0.2 " .
+            "-j REJECT --reject-with tcp-reset 2> /dev/null") >> 8;
+        if ($rv == 0) {
+            system "$cmds{'iptables'} -D INPUT 1";
+        } else {
+            die " ** It does not appear that the REJECT target has ",
+                "been compiled into iptables.\n    The --ipt-block option ",
+                "requires this option so that tcp sessions can be killed.\n",
+                "    Exiting.\n";
+        }
     }
 
     ### more tests should be added
@@ -1408,6 +1476,50 @@ sub setup() {
     return;
 }
 
+sub update_rules() {
+    ### make sure we can actually reach snort.org.
+    print " .. Downloading latest rules:\n",
+        "    http://$snort_website/dl/rules/snortrules-stable.tar.gz\n";
+    if (&test_snort_website()) {
+        chdir $fwsnort_dir or die " ** Could not chdir $fwsnort_dir: $!";
+        system "$cmds{'wget'} http://$snort_website/dl/rules/" .
+            "snortrules-stable.tar.gz";
+        system "$cmds{'tar'} xvfz snortrules-stable.tar.gz";
+        if (-d 'rules') {
+            if (-d 'snort_rules') {
+                rmtree 'snort_rules.orig' if -d 'snort_rules.orig';
+                move 'snort_rules', 'snort_rules.orig';
+            }
+            move 'rules', 'snort_rules' or die " ** Could not ",
+                "move rules -> snort_rules: $!";
+        } else {
+            print " ** snortrules-stable.tar.gz did not appear to ",
+                "contain a\n    \"rules\" directory.  Defaulting to ",
+                "existing snort-2.0 rules.\n";
+        }
+    } else {
+        print " ** Could not connect to $snort_website on tcp/80.\n",
+            "    Defaulting to existing snort-2.0 rules.\n";
+    }
+    print " .. Moving rules files to $fwsnort_dir/snort_rules/\n",
+        " .. Finished.\n";
+    exit 0;
+}
+
+sub test_snort_website() {
+    my $sock = new IO::Socket::INET(
+        PeerAddr => $snort_website,
+        PeerPort => 80,
+        Proto    => 'tcp',
+        Timeout  => 7
+    );
+    if (defined($sock)) {
+        close $sock;
+        return 1;
+    }
+    return 0;
+}
+
 sub chk_commands() {
     for my $cmd (keys %cmds) {
         die " ** $cmd is not located at $cmds{$cmd}: $!"
@@ -1463,19 +1575,22 @@ sub usage() {
     print <<_USAGE_;
 
 fwsnort v$version
- .. By Michael Rash <mbr\@cipherdyne.org>, http://www.cipherdyne.org
+ .. By Michael Rash <mbr\@cipherdyne.org>, http://www.cipherdyne.org/
 
 Usage: fwsnort [-t <snort rule type>] [-l <logfile>] [-v] [-V] [-h]
-       [-t] [-c <config file>] [--snort-sid <sid>] [--no-ipt-sync]
-       [--ipt-apply] [--ipt-drop] [--ipt-script <script>]
-       [--dump-conf] [--debug] [--strict]
+       [-u] [-c <config file>] [--snort-sid <sid>] [--ipt-apply]
+       [--ipt-drop] [--ipt-script <script>] [--no-ipt-sync]
+       [--no-ipt-log] [--no-ipt-test] [--no-ipt-jumps] [--dump-conf]
+       [--debug] [--strict]
 
 Options:
     --strict                - Make snort parser very strict about
                               which options it will translate into
                               iptables rules.
+    --ipt-script <script>   - Print iptables script to <script>.
     --ipt-apply             - Execute the fwsnort.sh script.
-    --ipt-drop              - Add a DROP rule for every log rule.
+    --ipt-block             - Add a protocol-dependent DROP or REJECT
+                              rule for every logging rule.
     --snort-sid  <sid>      - Generate an equivalent iptables rule
                               for the specific snort id <sid>.
     --no-ipt-sync           - Add iptables rules for signatures that
@@ -1484,11 +1599,15 @@ Options:
                               (can only be used with --ipt-drop).
     --no-ipt-test           - Do not run any checks for iptables
                               options.
-    --ipt-script <script>   - Print iptables script to <script>.
-    -t   --type <type>      - Only process snort rules of type
-                              <type> (e.g. "ddos" or "backdoor")
-    -c   --config <config>  - Use <config> instead of the
-                              normal config file located at
+    --no-ipt-jumps          - Do not jump packets from built-in
+                              iptables INPUT or FORWARD chains to
+                              chains created by fwsnort.
+    -u   --update-rules     - Download latest snort rules from
+                              http://$snort_website/
+    -t   --type <type>      - Only process snort rules of type <type>
+                              (e.g. "ddos" or "backdoor")
+    -c   --config <config>  - Use <config> instead of the normal
+                              config file located at
                               $fwsnort_conf.
     --dump-conf             - Dump configuration on STDOUT and exit.
     --debug                 - Run in debug mode.
