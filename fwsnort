@@ -185,22 +185,22 @@ my %snort_opts = (
         'fragbits'     => '[\s;]fragbits:\s*\S+\s*;',
         'content-list' => '[\s;]content\-list:\s*\".*?\"\s*;',
         'rpc'          => '[\s;]rpc:\s*\S+\s*;',
+        'byte_test'    => '[\s;]byte_test\s*.*?\s*;',
+        'byte_jump'    => '[\s;]byte_jump\s*.*?\s*;',
+        'distance'     => '[\s;]distance:\s*(\d+)\s*;',
+        'within'       => '[\s;]within:\s*(\d+)\s*;',
 #        'offset'       => '[\s;]offset:\s*\d+\s*;',
 #        'depth'        => '[\s;]depth:\s*\d+\s*;',
 #        'ipopts'  => '[\s;]ipopts:\s*(\w+)\s*;',
 
         ### the following fields get logged by iptables but
         ### we cannot filter them directly (yet).
-        'id'        => '[\s;]id:\s*(\d+)\s*;',
-        'seq'       => '[\s;]seq:\s*(\d+)\s*;',  ### --log-tcp-sequence
-        'icmp_seq'  => '[\s;]icmp_seq:\s*(\d+)\s*;',
-        'icmp_id'   => '[\s;]icmp_id:\s*(\d+)\s*;',
-        'icode'     => '[\s;]icode:\s*(\d+)\s*;',
-        'sameip'    => '[\s;]sameip\s*;',
-        'byte_test' => '[\s;]byte_test\s*.*?\s*;',
-        'byte_jump' => '[\s;]byte_test\s*.*?\s*;',
-        'distance'  => '[\s;]distance:\s*(\d+)\s*;',
-        'within'    => '[\s;]within:\s*(\d+)\s*;'
+        'id'       => '[\s;]id:\s*(\d+)\s*;',
+        'seq'      => '[\s;]seq:\s*(\d+)\s*;',  ### --log-tcp-sequence
+        'icmp_seq' => '[\s;]icmp_seq:\s*(\d+)\s*;',
+        'icmp_id'  => '[\s;]icmp_id:\s*(\d+)\s*;',
+        'icode'    => '[\s;]icode:\s*(\d+)\s*;',
+        'sameip'   => '[\s;]sameip\s*;',
     },
 
     ### snort options that fwsnort will ignore
@@ -1492,7 +1492,7 @@ Options:
     --dump-conf             - Dump configuration on STDOUT and exit.
     --debug                 - Run in debug mode.
     -v   --verbose          - Run in verbose mode.
-    -V   --Version          - Print fwsnort version number and exti.
+    -V   --Version          - Print fwsnort version number and exit.
     -h   --help             - Display usage on STDOUT and exit.
 
 _USAGE_
