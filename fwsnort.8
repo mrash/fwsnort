@@ -17,7 +17,7 @@
 .B ] [--ipt-script
 .I script
 .B ] [--ipt-apply] [--ipt-block] [--no-ipt-sync] [--no-ipt-log] [--no-ipt-test]
-.B [--no-ipt-test] [--dump-conf] [--debug] [--strict]
+.B [--no-ipt-test] [--internal-net] [--dmz-net] [--dump-conf] [--debug] [--strict]
 .SH DESCRIPTION
 .B fwsnort
 translates snort rules into equivalent iptables rules and generates a
@@ -40,7 +40,7 @@ hex data in content fields, fwsnort implements a patch against
 iptables-1.2.7a which adds a "--hex-string" option which will accept
 content fields such as "|0d0a5b52504c5d3030320d0a|".
 .B fwsnort
-is able to translate approximately 80% of all snort signatures
+is able to translate approximately 70% of all snort signatures
 into equivalent iptables rules.  For more information about the
 translation strategy as well as advantages/disadvantages of the method
 used by fwsnort to obtain intrusion detection data, see the README
@@ -116,6 +116,25 @@ Do not jump packets from the built-in iptables INPUT and FORWARD chains
 to the custom fwsnort chains.  This options is mostly useful to make it
 easy to manually alter the placement of the jump rules in the iptables
 ruleset.
+.TP
+
+.BR \-i ", " \-\^\-internal-net\ \<network/mask>
+Specify the internal network instead of having
+.B fwsnort
+parse the output of ifconfig.  This is useful if the internal interface
+does not have an ip address assigned (such as when the Linux system is
+acting as a bridge).  Note there is no "--external-net" option since iptables
+rules are built relative to the internal network.  Both CIDR and standard
+notations (e.g. "192.168.10.0/24" and "192.168.10.0/255.255.255.0") for the
+<network/mask> combination are supported.
+.TP
+
+.BR \-d ", " \-\^\-dmz-net\ \<network/mask>
+Specify the dmz network instead of reading this information out of the
+output of ifconfig.  Similarly to the
+.B --internal-net
+option, both CIDR and standard notations (e.g. "192.168.10.0/24" and
+"192.168.10.0/255.255.255.0") for the <network/mask> combination are supported.
 .TP
 
 .BR \-\^\-dump-conf
