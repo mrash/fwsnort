@@ -242,9 +242,9 @@ my %config;
 my %cmds;
 
 ### establish some default behavior
-my $fw_apply   = 0;
-my $fw_drop    = 0;
-my $fw_reject  = 0;
+my $ipt_apply  = 0;
+my $ipt_drop   = 0;
+my $ipt_reject = 0;
 my $help       = 0;
 my $stdout     = 0;
 my $debug      = 0;
@@ -266,9 +266,8 @@ my $snort_type     = '';
 Getopt::Long::Configure('no_ignore_case');
 
 &usage(1) unless (GetOptions(
-    'fw-apply'    => \$fw_apply,     # apply the generated ruleset
-    'fw-drop'     => \$fw_drop,
-    'fw-reject'   => \$fw_reject,
+    'ipt-apply'   => \$ipt_apply,     # apply the generated ruleset
+    'ipt-drop'    => \$ipt_drop,
     'snort-sid=i' => \$snort_sid,    # Parse only this particular snort rule
     'type=s'      => \$rules_type,   # process this type of snort rule
                                      # (e.g. "ddos")
@@ -295,8 +294,8 @@ if ($print_ver) {
     exit 0;
 }
 
-if ($no_ipt_log && !$fw_drop) {
-    print " ** --ipt-no-log option can only be used with --fw-drop\n";
+if ($no_ipt_log && !$ipt_drop) {
+    print " ** --ipt-no-log option can only be used with --ipt-drop\n";
     exit 1;
 }
 
@@ -375,7 +374,7 @@ chmod 0500, $ipt_script;
 print "\n .. Logfile:         $logfile\n";
 print " .. Iptables script: $ipt_script\n";
 
-if ($fw_apply) {
+if ($ipt_apply) {
     print " .. Executing $ipt_script\n";
     system $ipt_script;
 }
@@ -934,7 +933,7 @@ sub ipt_add_rule() {
     my ($comment, $orig_snort_rule, $log_prefix, $rule) = @_;
 
     my $drop_rule;
-    if ($fw_drop) {
+    if ($ipt_drop) {
         $drop_rule = "$rule -j DROP";
     }
     $rule .= $log_prefix;
@@ -946,7 +945,7 @@ sub ipt_add_rule() {
         &logr("$comment\n", $ipt_script);
     }
     &logr("$rule\n", $ipt_script) unless $no_ipt_log;
-    &logr("$drop_rule\n", $ipt_script) if $fw_drop;
+    &logr("$drop_rule\n", $ipt_script) if $ipt_drop;
     $ipt_rule_ctr++;
 
     return;
@@ -1360,21 +1359,21 @@ fwsnort v$version
 
 Usage: fwsnort [-t <snort rule type>] [-l <logfile>] [-v] [-V] [-h]
        [-t] [-c <config file>] [--snort-sid <sid>] [--no-ipt-sync]
-       [--fw-apply] [--fw-drop] [--ipt-script <script>] [--dump-conf]
-       [--debug] [--strict]
+       [--ipt-apply] [--ipt-drop] [--ipt-script <script>]
+       [--dump-conf] [--debug] [--strict]
 
 Options:
     --strict                - Make snort parser very strict about
                               which options it will translate into
                               iptables rules.
-    --fw-apply              - Execute the fwsnort.sh script.
-    --fw-drop               - Add a DROP rule for every log rule.
+    --ipt-apply             - Execute the fwsnort.sh script.
+    --ipt-drop              - Add a DROP rule for every log rule.
     --snort-sid  <sid>      - Generate an equivalent iptables rule
                               for the specific snort id <sid>.
     --no-ipt-sync           - Add iptables rules for signatures that
                               are already blocked by iptables.
     --no-ipt-log            - Do not generated iptables log rules
-                              (can only be used with --fw-drop).
+                              (can only be used with --ipt-drop).
     --no-ipt-test           - Do not run any checks for iptables
                               options.
     --ipt-script <script>   - Print iptables script to <script>.
