@@ -90,12 +90,13 @@ use strict;
 my $fwsnort_dir = '/etc/fwsnort';
 my $rules_dir   = "${fwsnort_dir}/snort-1.8.7_rules";
 my $archive_dir = "${fwsnort_dir}/archive";
+my $log_dir     = '/var/log';
 
 ### config file
 my $fwsnort_conf = "${fwsnort_dir}/fwsnort.conf";
 
 ### log file
-my $logfile = "${fwsnort_dir}/fwsnort.log";
+my $logfile = "${log_dir}/fwsnort.log";
 
 ### iptables script
 my $ipt_script = "${fwsnort_dir}/fwsnort.sh";
@@ -1257,9 +1258,14 @@ sub setup() {
     die " ** No snort rules directory: $rules_dir"
         unless -d $rules_dir;
 
-    ### this directory can be created at runtime
+    ### these directories can be created at runtime
     unless (-d $archive_dir) {
         mkdir $archive_dir, 0500 or die $!;
+    }
+
+    ### these directories can be created at runtime
+    unless (-d $log_dir) {
+        mkdir $log_dir, 0755 or die $!;
     }
 
     ### archive any existing ipt_script file
@@ -1320,9 +1326,12 @@ fwsnort v$version
 Usage: fwsnort [-t <snort rule type>] [-l <logfile>] [-v] [-V] [-h]
        [-t] [-c <config file>] [--snort-sid <sid>] [--no-ipt-sync]
        [--fw-apply] [--fw-drop] [--ipt-script <script>] [--dump-conf]
-       [--debug]
+       [--debug] [--strict]
 
 Options:
+    --strict                - Make snort parser very strict about
+                              which options it will translate into
+                              iptables rules.
     --fw-apply              - Execute the fwsnort.sh script.
     --fw-drop               - Add a DROP rule for every log rule.
     --snort-sid  <sid>      - Generate an equivalent iptables rule
