@@ -901,6 +901,7 @@ sub ipt_build_opts() {
         $content = $opts_href->{'content'};
     }
     if ($content) {
+        $content =~ s/`/\\`/g;
         if ($content =~ /\|.+\|/) {  ### there is hex data in the content
             $rule .= " $iptables_opts{'content'} --hex-string \"$content\"";
         } else {
