@@ -4,7 +4,7 @@
 #
 # File: install.pl
 #
-# Purpose: To install fwsnort
+# Purpose: This is the installation script for fwsnort.
 #
 # Author: Michael Rash <mbr@cipherydne.com>
 #
@@ -83,6 +83,22 @@ sub install() {
     system "$makeCmd test";
     system "$makeCmd install";
     chdir '..';
+
+    ### installing IPTables::Parse
+    &logr(" .. Installing the IPTables::Parse perl module\n");
+    chdir 'IPTables-0.10/Parse' or die " ** Could not chdir to ",
+        "IPTables-0.10/Parse: $!";
+    unless (-e 'Makefile.PL') {
+        die " ** Your source directory appears to be incomplete!  " .
+            "IPTables::Parse is missing.\n    Download the latest sources " .
+            "from http://www.cipherdyne.com\n";
+    }
+    system "$perlCmd Makefile.PL";
+    system $makeCmd;
+#    system "$Cmds{'make'} test";
+    system "$makeCmd install";
+    chdir '../..';
+    print "\n\n";
 
     opendir D, 'snort-1.8.7_rules' or die " ** Could not open " .
         'the snort-1.8.7_rules directory';
