@@ -433,7 +433,7 @@ sub parse_snort_rules() {
         RULE: for my $rule (@lines) {
             chomp $rule;
             $line_num++;
-            next RULE unless $rule =~ /^alert/;
+            next RULE unless $rule =~ /^\s*alert/;
             $rule_num++;  ### keep track of the abs num of rules
             my $rule_hdr;
             my $rule_options;
