@@ -35,7 +35,7 @@ use strict;
 #========================= config ========================
 my $sbin_dir    = '/usr/sbin';
 my $fwsnort_dir = '/etc/fwsnort';
-my $rules_dir   = "${fwsnort_dir}/snort-1.8.7_rules";
+my $rules_dir   = "${fwsnort_dir}/snort_rules";
 
 ### system binaries
 my $perlCmd = '/usr/bin/perl';
