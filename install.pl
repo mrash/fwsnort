@@ -158,7 +158,7 @@ sub install_manpage() {
     unlink "/usr/local/man/man8/${manpage}" if
         (-e "/usr/local/man/man8/${manpage}");
 
-    ### default location to put the psad man page, but check with
+    ### default location to put the fwsnort man page, but check with
     ### /etc/man.config
     my $mpath = '/usr/share/man/man8';
     if (-e '/etc/man.config') {

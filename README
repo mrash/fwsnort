@@ -44,7 +44,7 @@ rules are applicable to the specific policy loaded on the machine.
 PLATFORMS:
 
 fwsnort is compatible with iptables only, hence fwsnort will exclusively run
-on Linux running a 2.4.x series kernel.
+on Linux running a 2.4.x series (or later) kernel.
 
 =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 COPYRIGHT:
