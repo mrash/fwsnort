@@ -41,6 +41,7 @@ my $stdout     = 0;
 my $rules_type = '';
 my $logfile    = '';
 
+my %snort_sigs;
 
 my %cmds = (
     'iptables' => $iptablesCmd,
@@ -66,19 +67,85 @@ my %cmds = (
 ### make sure the specified <type>.rules file exists
 &check_type() if $rules_type;
 
+### parse snort rules (signatures)
+&parse_snort_rules();
 
+exit 0;
+### write the equivalent iptables ruleset out to disk
+&write_iptables();
+
+exit 0;
 #===================== end main ======================
+sub parse_snort_rules() {
+    opendir D, $rules_dir or die " ** Could not open $rules_dir";
+    my @rfiles = readdir D;
+    closedir D;
+    shift @rfiles; shift @rfiles;
+
+    for my $rfile (@rfiles) {
+        next unless $rfile =~ /\.rules$/;
+        if ($rules_type) {
+            next unless $rfile =~ /${rules_type}\.rules$/;
+        }
+#        print " .. Parsing: ${rules_dir}/${rfile}\n";
+        print " .. Parsing: ${rfile}\n";
+        open R, "< ${rules_dir}/${rfile}" or die " ** Could not " .
+            "open ${rules_type}/${rfile}";
+        my @lines = <R>;
+        close R;
+        my $line_num = 0;
+        RULE: for my $line (@lines) {
+            $line_num++;
+            next unless $line =~ /^alert/;
+            my $rule_hdr;
+            my $rule_options;
+            if ($line =~ m|^(.*)\s+\((.*)\)|) {
+                $rule_hdr     = $1;
+                $rule_options = $2;
+            } else {  ### don't know what type of snort rule it is
+                next RULE;
+            }
+            my ($rv, $proto, $src, $src_p, $bidir, $dst, $dst_p)
+                = &parse_rule_hdr($rule_hdr);
+            unless ($rv) {
+                print " ** Unrecognized rule header: \"$rule_hdr\" at " .
+                    "line: $line_num\n";
+                next RULE;
+            }
+            print "proto: $proto, src: $src, src_p: $src_p, bidir: $bidir " .
+                "dst: $dst, dst_p: $dst_p\n";
+        }
+    }
+    return;
+}
+
+sub parse_rule_hdr() {
+    my $rule_hdr = shift;
+    my $tmpd;
+    if ($rule_hdr =~ m|^alert\s+(\S+)\s+(\S+)\s+(\S+)
+                        \s+(\S+)\s+(\S+)\s+(\S+)|x) {
+        if ($4 eq '<>') {
+            return 1,$1,$2,$3,1,$5,$6;
+        } elsif ($4 eq '<-') {
+            return 1,$1,$5,$3,1,$2,$6; ### switch src and dst
+        }
+        return 1,$1,$2,$3,0,$5,$6;  ### normal src -> dst
+    } else {
+        return 0,0,0,0,0,0,0;
+    }
+}
+
 sub check_type() {
     unless (-e "${rules_dir}/${rules_type}.rules") {
         print " ** \"$rules_type\" is not a valid type.\n",
-            "    Choose one of:\n";
-        opendir D, $rules_dir or die "Could not open $rules_dir";
+            "    Choose from the following available signature types:\n";
+        opendir D, $rules_dir or die " ** Could not open $rules_dir";
         my @rfiles = readdir D;
         closedir D;
         shift @rfiles; shift @rfiles;
         for my $file (@rfiles) {
             if ($file =~ /^(\S+)\.rules/) {
-                print "    $1\n";
+                print "        $1\n";
             }
         }
         print " ** Exiting.\n";
