@@ -59,28 +59,25 @@ my %sopt_nofilter = (
     'offset'       => '[\s;]offset:\s*\d+;',
     'depth'        => '[\s;]depth:\s*\d+;',
     'dsize'        => '[\s;]dsize:\s*\S+;',
-    'icmp_id'      => '[\s;]icmp_id:\s*\d+;',
-    'icmp_seq'     => '[\s;]icmp_seq:\s*\d+;',
     'seq'          => '[\s;]seq:\s*\d+;',
     'ack'          => '[\s;]ack:\s*\d+;',
     'fragbits'     => '[\s;]fragbits:\s*\S+;',
-    'icode'        => '[\s;]icode:\s*\d+;',
     'uricontent'   => '[\s;]uricontent:\s*\".*?\";',
     'content-list' => '[\s;]content\-list:\s*\".*?\";',
     'ipopts'       => '[\s;]ipopts:\s*.*?;',
     'rpc'          => '[\s;]rpc:\s*\S+;',
-    'id'           => '[\s;]id:\s*\d+;',
-    'tos'          => '[\s;]tos:\s*\d+;'
 );
 
 ### snort options which are logged within iptables
 ### logging statements (so we can detect these values
 ### but just not filter them directly)
-my @sopt_log = (
-    'id',
-    'icode',
-    'seq',
-    'tos'
+my %sopt_log = (
+    'id'       => '[\s;]id:\s*(\d+);',
+    'seq'      => '[\s;]seq:\s*(\d+);',
+    'tos'      => '[\s;]tos:\s*(\d+);',
+    'icmp_seq' => '[\s;]icmp_seq:\s*(\d+);',
+    'icmp_id'  => '[\s;]icmp_id:\s*(\d+);',
+    'icode'    => '[\s;]icode:\s*(\d+);',
 );
 
 ### establish some default behavior
@@ -201,6 +198,7 @@ sub parse_rule_options() {
 
     my %opt_logprefix;
     my %opt_filter;
+    my %opt_log;
 
     for my $option (keys %sopt_nofilter) {
         my $regex = $sopt_nofilter{$option};
@@ -211,6 +209,12 @@ sub parse_rule_options() {
         }
     }
 
+    for my $option (keys %sopt_log) {
+        my $regex = $sopt_log{$option};
+        if ($rule_options =~ /$regex/) {
+            $opt_log{$option} = $1;
+        }
+    }
     for my $option (keys %sopt_logprefix) {
         my $regex = $sopt_logprefix{$option};
         if ($rule_options =~ /$regex/) {
@@ -227,7 +231,8 @@ sub parse_rule_options() {
     while ($rule_options =~ /(\w+):\s*.*?;/g) {
         my $option = $1;
         if (! defined $sopt_filter{$option} &&
-            ! defined $sopt_logprefix{$option}) {
+            ! defined $sopt_logprefix{$option} &&
+            ! defined $sopt_log{$option}) {
             print "$line_num option: $option -- $rule_options\n";
         }
     }
