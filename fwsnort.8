@@ -19,13 +19,22 @@ the iptables ruleset on the machine to determine which snort rules are
 applicable to the specific iptables policy.  After all, if iptables is
 blocking all inbound http traffic from external addresses, it is probably
 not of much use to try detecting inbound attacks against against tcp/80.
-
+By default fwsnort generates iptables rules that log snort sid's with
+--log-prefix to klogd where the messages can be analyzed with a log
+watcher such as logwatch or psad.
 .B fwsnort
 relies on the iptables string match module to match snort content fields
 in the application portion of ip traffic.  Since snort rules can contain
 hex data in content fields, fwsnort implements a patch against
 iptables-1.2.7a which adds a "--hex-string" option which will accept
 content fields such as "|0d0a5b52504c5d3030320d0a|".
+.B fwsnort
+is able to translate approximately 80% of all snort signatures
+into equivalent iptables rules.  For more information about the
+translation strategy as well as advantages/disadvantages of the method
+used by fwsnort to obtain intrusion detection data, see the README
+included with the fwsnort sources or browse to:
+http://www.cipherdyne.com/fwsnort.
 
 .SH OPTIONS
 .PP
@@ -33,7 +42,7 @@ content fields such as "|0d0a5b52504c5d3030320d0a|".
 .TP
 
 .BR \-c ", " \-\^\-config\ \<configuration\ file>
-By default fwsnort makes use of the configuration file 
+By default fwsnort makes use of the configuration file
 .B /etc/fwsnort/fwsnort.conf
 for almost all configuration parameters.  fwsnort can be made to
 override this path by specifying a different file on the command
@@ -149,11 +158,11 @@ commented out of /etc/fwsnort/fwsnort.conf.
 .TP
 
 .BR INTERNAL_INTF
-Defines the internal interface, e.g. "eth1".
+Defines an (optional) internal interface, e.g. "eth1".
 .TP
 
 .BR DMZ_INTF
-Defines the dmz interface, e.g. "eth2".
+Defines an (optional) dmz interface, e.g. "eth2".
 
 .SH EXAMPLES
 The following examples illustrate the command line arguments that could
@@ -198,6 +207,12 @@ errors are written to the fwsnort logfile /var/log/fwsnort.log
 
 .SH AUTHOR
 Michael Rash <mbr@cipherdyne.com>
+
+.SH CREDITS
+.B fwsnort
+is based on the original
+.B snort2iptables
+script written by William Stearns.
 
 .SH BUGS
 Send bug reports to mbr@cipherdyne.com. Suggestions and/or comments are
