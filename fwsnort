@@ -290,6 +290,10 @@ if ($strict) {
 ### make sure the config is correct
 &validateconf();
 
+### now that we have the interfaces, add the iptables
+### chains to the fwsnort shell script
+&add_ipt_chains();
+
 ### display the config on STDOUT
 &dump_conf() if $dump_conf;
 
@@ -306,12 +310,17 @@ print "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=",
 print "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=",
     "-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=\n";
 
+### jump packets (as appropriate) from the INPUT and
+### FORWARD chains to our chains
+&jump_chain();
+
 exit 0;
 ### write the equivalent iptables ruleset out to disk
 &write_iptables();
 
 exit 0;
 #===================== end main ======================
+
 sub parse_snort_rules() {
     opendir D, $rules_dir or die " ** Could not open $rules_dir";
     my @rfiles = readdir D;
@@ -364,12 +373,8 @@ sub parse_snort_rules() {
             }
             my $opts_href = &parse_rule_options($rule_options, $line_num);
             if ($opts_href) {
-                my $rv = &build_ipt_rule($hdr_href, $opts_href);
-                if ($rv == 1) {
-                    $parsed_ctr++;  ### keep track of successfully parsed rules
-                } elsif ($rv == 2) {
-                    $logonly_ctr++;
-                }
+                &build_ipt_rule($hdr_href, $opts_href);
+                $parsed_ctr++;  ### keep track of successfully parsed rules
             } else {
                 $unsup_ctr++;
                 next RULE;
@@ -466,17 +471,17 @@ sub build_ipt_rule() {
     my $rule = $cmds{'iptables'};
 
     ### determine which chain the rule should be added to (default
-    ### to the Snort_<EXTERNAL_INTF> chain).
-    my $chain = " -A Snort_${config{'EXTERNAL_INTF'}}";
+    ### to the fwsnort_<EXTERNAL_INTF> chain).
+    my $chain = " -A fwsnort_${config{'EXTERNAL_INTF'}}";
     if ($config{'NUM_INTERFACES'} > 1) {
         if (defined $config{$hdr_href->{'src'}}
             && defined $intf_net{$config{$hdr_href->{'src'}}}) {
             $chain =
-                " -A Snort_${intf_net{$config{$hdr_href->{'src'}}}{'name'}}";
+                " -A fwsnort_${intf_net{$config{$hdr_href->{'src'}}}{'name'}}";
         } elsif (defined $config{$hdr_href->{'dst'}}
             && defined $intf_net{$hdr_href->{'dst'}}) {
             $chain =
-                " -A Snort_${intf_net{$config{$hdr_href->{'dst'}}}{'name'}}";
+                " -A fwsnort_${intf_net{$config{$hdr_href->{'dst'}}}{'name'}}";
         }
     }
 
@@ -575,13 +580,8 @@ sub build_ipt_rule() {
         }
     }
 
-#    my $log_only_flag = 0;
-#    for my $opt (keys %{$snort_opts{'log_only'}) {
-#        if (defined $opts_href->{$opt}) {
-#            $log_only_flag = 1;
-
-    ### construct the log-prefix (should only contain the sid in
-    ### order to conserve kernel memory).
+    ### construct the log-prefix (should only contain the sid
+    ### to conserve kernel memory).
     my $log_prefix = " -j LOG --log-prefix \"SID$opts_href->{'sid'} \""
         if defined $opts_href->{'sid'};
     $rule .= $log_prefix;
@@ -601,6 +601,32 @@ sub build_ipt_rule() {
     print $rule, "\n";
     return 1;
 
+}
+
+sub add_ipt_chains() {
+    for my $intf (keys %intf_net) {
+        print "### create the \"fwsnort_${intf_net{$intf}{'name'}}\" chain.\n";
+        print "$cmds{'iptables'} -N fwsnort_${intf_net{$intf}{'name'}}\n";
+        print "$cmds{'iptables'} -F fwsnort_${intf_net{$intf}{'name'}}\n";
+    }
+    return;
+}
+
+sub jump_chain() {
+    print "$cmds{'iptables'} -I INPUT 1 ",
+        "-i $intf_net{'EXTERNAL_INTF'}{'name'} ",
+        "-j fwsnort_${intf_net{'EXTERNAL_INTF'}{'name'}}\n";
+    if (defined $intf_net{'INTERNAL_INTF'}) {
+        print "$cmds{'iptables'} -I FORWARD 1 ",
+            "-i $intf_net{'EXTERNAL_INTF'}{'name'} ",
+            "-j fwsnort_${intf_net{'EXTERNAL_INTF'}{'name'}}\n";
+    }
+#    if (defined $intf_net{'DMZ_INTF'}) {
+#        print "$cmds{'iptables'} -I INPUT 1 ",
+#            "-i $intf_net{'DMZ_INTF'}{'name'} ",
+#            "-j fwsnort_${intf_net{'EXTERNAL_INTF'}{'name'}";
+
+    return;
 }
 
 sub check_type() {
