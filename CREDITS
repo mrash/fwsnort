@@ -5,3 +5,10 @@ Thomas Bullinger        Contributed patches for the --no-jumps option, and
                         option.
 
 Paul O'Neil             Discovered missed DMZ interface code bug.
+
+Ahmad Almulhem          Suggested --ipt-tos and --ipt-mark options, suggested
+                        ability to manually specify interface networks
+                        instead of automatically parsing the output of
+                        ifconfig.  This allows fwsnort to be run on a system
+                        where no ip is assigned to an interface such as a
+                        linux box that is acting as a bridge.
