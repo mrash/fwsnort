@@ -1,0 +1,3 @@
+Thomas Bullinger        Contributed patches for the --no-jumps option, and
+                        wrote the makefwsnort.sh script to download the
+                        latest stable snort rules.
