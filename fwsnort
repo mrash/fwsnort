@@ -151,13 +151,13 @@ my %snort_opts = (
     ### snort options which are logged within iptables
     ### logging statements (so we can detect these values
     ### but just not filter them directly)
-    'log_only' => {
-        'id'       => '[\s;]id:\s*(\d+)\s*;',
-        'seq'      => '[\s;]seq:\s*(\d+)\s*;',
-        'icmp_seq' => '[\s;]icmp_seq:\s*(\d+)\s*;',
-        'icmp_id'  => '[\s;]icmp_id:\s*(\d+)\s*;',
-        'icode'    => '[\s;]icode:\s*(\d+)\s*;'
-    },
+#    'log_only' => {
+#        'id'       => '[\s;]id:\s*(\d+)\s*;',
+#        'seq'      => '[\s;]seq:\s*(\d+)\s*;',
+#        'icmp_seq' => '[\s;]icmp_seq:\s*(\d+)\s*;',
+#        'icmp_id'  => '[\s;]icmp_id:\s*(\d+)\s*;',
+#        'icode'    => '[\s;]icode:\s*(\d+)\s*;'
+#    },
 
     ### snort options that can be put into iptables
     ### ruleset, but only in log messages with --log-prefix
@@ -176,12 +176,20 @@ my %snort_opts = (
         'ack'          => '[\s;]ack:\s*\d+\s*;',
         'fragbits'     => '[\s;]fragbits:\s*\S+\s*;',
         'content-list' => '[\s;]content\-list:\s*\".*?\"\s*;',
-        'rpc'          => '[\s;]rpc:\s*\S+\s*;'
+        'rpc'          => '[\s;]rpc:\s*\S+\s*;',
+
+        ### the following fields get logged by iptables but
+        ### we cannot filter them directly (yet).
+        'id'       => '[\s;]id:\s*(\d+)\s*;',
+        'seq'      => '[\s;]seq:\s*(\d+)\s*;',
+        'icmp_seq' => '[\s;]icmp_seq:\s*(\d+)\s*;',
+        'icmp_id'  => '[\s;]icmp_id:\s*(\d+)\s*;',
+        'icode'    => '[\s;]icode:\s*(\d+)\s*;'
     },
 
     ### snort options that fwsnort will ignore
     'ignore' => {
-        'rev'       => '[\s;]rev:\s*(\d+)\s*;'
+        'rev' => '[\s;]rev:\s*(\d+)\s*;'
     }
 );
 
@@ -259,6 +267,8 @@ if ($strict) {
         = '[\s;]offset:\s*\d+\s*;';
     $snort_opts{'unsupported'}{'depth'}
         = '[\s;]depth:\s*\d+\s*;';
+    $snort_opts{'unsupported'}{'nocase'}
+        = '[\s;]nocase\s*;';
 }
 
 ### make sure some directories exist, etc.
@@ -327,7 +337,7 @@ sub parse_snort_rules() {
             my $rule_hdr;
             my $rule_options;
             $sabs_num++;
-            if ($line =~ m|^(.*)\s+\((.*)\)|) {
+            if ($line =~ m|^(.*?)\s+\((.*)\)|) {
                 $rule_hdr     = $1;
                 $rule_options = $2;
             } else {  ### don't know what type of snort rule it is
@@ -389,12 +399,16 @@ sub parse_rule_options() {
         }
     }
 
-    for my $type ('filter', 'log_only', 'logprefix') {
-        for my $opt (keys %{$snort_opts{$type}}) {
-            ### see if we match the option regex
-            if ($rule_options =~ /$snort_opts{$type}{$opt}/) {
-                $opts{$opt} = $1;
-            }
+    for my $opt (keys %{$snort_opts{'filter'}}) {
+        ### see if we match the option regex
+        if ($rule_options =~ /$snort_opts{'filter'}{$opt}/) {
+            $opts{$opt} = $1;
+        }
+    }
+
+    for my $opt (keys %{$snort_opts{'logprefix'}}) {
+        if ($rule_options =~ /$snort_opts{'logprefix'}{$opt}/) {
+            $opts{$opt} = $1;
         }
     }
 
@@ -516,9 +530,13 @@ sub build_ipt_rule() {
         $f_str .= 'FIN,' if $opts_href->{'flags'} =~ /F/;
         $f_str =~ s/\,$//;
 
-        ### --tcp-flags ACK ACK
-        ### --tcp-flags URG,PSH,SYN,FIN URG,PSH,SYN,FIN
-        $rule .= " $iptables_opts{'flags'} ALL $f_str";
+        if ($opts_href->{'flags'} =~ /\+/) {
+            ### --tcp-flags ACK ACK
+            $rule .= " $iptables_opts{'flags'} $f_str $f_str";
+        } else {
+            ### --tcp-flags ALL URG,PSH,SYN,FIN
+            $rule .= " $iptables_opts{'flags'} ALL $f_str";
+        }
     }
 
     ### append tos
