@@ -114,8 +114,8 @@ sub install() {
     chdir '../..';
     print "\n\n";
 
-    opendir D, 'snort-1.8.7_rules' or die " ** Could not open " .
-        'the snort-1.8.7_rules directory';
+    opendir D, 'snort-2.0_rules' or die " ** Could not open " .
+        'the snort-2.0_rules directory';
     my @rfiles = readdir D;
     closedir D;
     shift @rfiles; shift @rfiles;
@@ -123,7 +123,7 @@ sub install() {
     for my $rfile (@rfiles) {
         next unless $rfile =~ /\.rules$/;
         print " .. Installing $rfile\n";
-        copy "snort-1.8.7_rules/${rfile}", "${rules_dir}/${rfile}";
+        copy "snort-2.0_rules/${rfile}", "${rules_dir}/${rfile}";
     }
 
     print "\n";
