@@ -30,6 +30,7 @@
 
 use IO::Socket;
 use File::Copy;
+use File::Path;
 use Getopt::Long;
 use strict;
 
@@ -39,7 +40,8 @@ my $lib_dir     = '/usr/lib/fwsnort';
 my $fwsnort_dir = '/etc/fwsnort';
 my $rules_dir   = "${fwsnort_dir}/snort_rules";
 
-my $snort_website = 'www.snort.org';
+my $snort_website  = 'www.snort.org';
+my $snort_web_file = 'snortrules-stable.tar.gz';
 
 ### system binaries
 my $perlCmd = '/usr/bin/perl';
@@ -134,20 +136,28 @@ sub install() {
         ### make sure we can actually reach snort.org.
         if (&test_snort_website()) {
             system "$cmds{'wget'} http://$snort_website/dl/rules/" .
-                "snortrules-stable.tar.gz";
-            system "$cmds{'tar'} xvfz snortrules-stable.tar.gz";
-            if (-d 'rules') {
-                move 'rules', 'downloaded_snort_rules' or die " ** Could not ",
-                    "move rules -> downloaded_snort_rules: $!";
-                $local_rules_dir = 'downloaded_snort_rules';
+                $snort_web_file;
+            if (-e $snort_web_file) {
+                system "$cmds{'tar'} xvfz $snort_web_file";
+                if (-d 'rules') {
+                    rmtree 'downloaded_snort_rules'
+                        if -d 'downloaded_snort_rules';
+                    move 'rules', 'downloaded_snort_rules'
+                        or die " ** Could not move rules -> ",
+                            "downloaded_snort_rules: $!";
+                    $local_rules_dir = 'downloaded_snort_rules';
+                } else {
+                    print " ** $snort_web_file did not appear to ",
+                        "contain a\n    \"rules\" directory.  Defaulting to ",
+                        "existing snort-2.1 rules.\n";
+                }
             } else {
-                print " ** snortrules-stable.tar.gz did not appear to ",
-                    "contain a\n    \"rules\" directory.  Defaulting to ",
-                    "existing snort-2.0 rules.\n";
+                print " ** Could not download $snort_web_file\n",
+                    "    Defaulting to existing snort-2.1 rules.\n";
             }
         } else {
             print " ** Could not connect to $snort_website on tcp/80.\n",
-                "    Defaulting to existing snort-2.0 rules.\n";
+                "    Defaulting to existing snort-2.1 rules.\n";
         }
     }
 
@@ -264,7 +274,7 @@ sub query_get_latest_snort_rules() {
     print " .. Would you like to download the latest snort rules from \n",
         "    http://$snort_website/?  If you not (or if you aren't connected\n",
         "    to the Net, then the installation will default to using \n",
-        "    snort-2.0 signatures.\n";
+        "    snort-2.1 signatures.\n";
     while ($ans ne 'y' && $ans ne 'n') {
         print "    ([y]/n)?  ";
         $ans = <STDIN>;
