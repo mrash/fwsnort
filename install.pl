@@ -8,7 +8,20 @@
 #
 # Author: Michael Rash <mbr@cipherydne.com>
 #
-# License: GPL
+# License (GNU Public License):
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program; if not, write to the Free Software
+#    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307
+#    USA
+#
+# TODO:
+#   - Write the uninstall() routine. :)
 #
 #######################################################################
 #
@@ -42,7 +55,7 @@ my $help      = 0;
 
 &usage(0) if $help;
 
-die " ** Cannot install and unistall.  Exiting."
+die " ** Cannot both install and unistall.  Exiting."
     if $install && $uninstall;
 
 die " ** \"$perlCmd\" is not executable." unless -x $perlCmd;
@@ -85,7 +98,7 @@ sub install() {
     chdir '..';
 
     ### installing IPTables::Parse
-    &logr(" .. Installing the IPTables::Parse perl module\n");
+    print " .. Installing the IPTables::Parse perl module\n";
     chdir 'IPTables-0.10/Parse' or die " ** Could not chdir to ",
         "IPTables-0.10/Parse: $!";
     unless (-e 'Makefile.PL') {
@@ -120,16 +133,25 @@ sub install() {
     copy 'fwsnort', "${sbin_dir}/fwsnort";
     chmod 0500, "${sbin_dir}/fwsnort";
 
+    print "\n .. fwsnort will generate an iptables script located at\n",
+        "    /etc/fwsnort/fwsnort.sh when executed.\n";
+    print "\n .. fwsnort has been successfully installed!\n\n";
+
     return;
 }
 
 sub uninstall() {
-
+    ### FIXME
     return;
 }
 
 sub usage() {
     my $exit = shift;
-
+    print <<_HELP_;
+install.pl:
+    -i --install     - install fwsnort
+    -u --uninstall   - uninstall fwsnort
+    -h --help        - print help and exit
+_HELP_
     exit $exit;
 }
