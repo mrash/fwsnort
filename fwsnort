@@ -12,7 +12,7 @@
 #
 # Credits: (see the CREDITS file)
 #
-# Version: 0.6.2
+# Version: 0.6.3
 #
 # Copyright (C) 2003 Michael Rash (mbr@cipherdyne.org)
 #
@@ -34,6 +34,7 @@
 #     from an iptables ruleset if the iptables policy will not allow such
 #     traffic through in the first place).
 #   - Implement code for the various SERVER variables.
+#   - fwsnort.sh generation timestamp.
 #   - Two new options: --ipt-tos and --ipt-mark.
 #
 # Snort Rule Options:
@@ -1566,13 +1567,10 @@ sub get_intf_net() {
     my $intf = shift;
     my @if_lines = `$cmds{'ifconfig'} $intf`;
     for my $line (@if_lines) {
-        if ($line =~ /^\s+inet\s+addr:($ip_re)
-            \s+Bcast:\S+\s+\s+Mask:($ip_re)/ix) {
-            my ($net, $cidr) = ipv4_network("$1/$2");
-            return $1, "${net}/${cidr}";
-        } elsif ($line =~ /^\s+inet\s+addr:($ip_re)\s+Mask:($ip_re)/ix) {
-            ### the loopback interface ifconfig output does not report
-            ### a broadcast address.
+        ### this is very generic; the output of ifconfig can vary
+        ### quite a bit depending on the specific type of interface
+        ### (and even the language output... Italian says "inet adr:")
+        if ($line =~ /^\s+inet\s+.*?:($ip_re)\s+.*:($ip_re)/ix) {
             my ($net, $cidr) = ipv4_network("$1/$2");
             return $1, "${net}/${cidr}";
         }
