@@ -242,7 +242,6 @@ my %cmds;
 
 ### establish some default behavior
 my $fw_apply   = 0;
-my $fw_log     = 0;
 my $fw_drop    = 0;
 my $fw_reject  = 0;
 my $help       = 0;
@@ -252,11 +251,12 @@ my $strict     = 0;
 my $snort_sid  = 0;
 my $dump_conf  = 0;
 my $verbose    = 0;
-my $ver        = 0;
+my $print_ver  = 0;
 my $ipt_print_type = 0;
 my $ipt_rule_ctr   = 1;
 my $ipt_sync       = 1;
 my $no_ipt_sync    = 0;
+my $no_ipt_log     = 0;
 my $rules_type     = '';
 my $snort_type     = '';
 
@@ -264,30 +264,35 @@ my $snort_type     = '';
 Getopt::Long::Configure('no_ignore_case');
 
 &usage(1) unless (GetOptions(
-    'fw-apply'     => \$fw_apply,     # apply the generated ruleset
-    'fw-log'       => \$fw_log,
-    'fw-drop'      => \$fw_drop,
-    'fw-reject'    => \$fw_reject,
-    'snort-sid=i'  => \$snort_sid,    # Parse only this particular snort rule
-    'type=s'       => \$rules_type,   # process this type of snort rule (e.g. "ddos")
-    'logfile=s'    => \$logfile,
-    'stdout'       => \$stdout,       # print the fw ruleset on STDOUT
-    'no-ipt-sync'  => \$no_ipt_sync,  # do not check the iptables policy
-    'strict'       => \$strict,
-    'debug'        => \$debug,
-    'dump-conf'    => \$dump_conf,    # display config variables
-    'config=s'     => \$fwsnort_conf, # manually specify the config file
-    'verbose'      => \$verbose,
-    'Version'      => \$ver,
-    'help'         => \$help
+    'fw-apply'    => \$fw_apply,     # apply the generated ruleset
+    'fw-drop'     => \$fw_drop,
+    'fw-reject'   => \$fw_reject,
+    'snort-sid=i' => \$snort_sid,    # Parse only this particular snort rule
+    'type=s'      => \$rules_type,   # process this type of snort rule (e.g. "ddos")
+    'logfile=s'   => \$logfile,
+    'stdout'      => \$stdout,       # print the fw ruleset on STDOUT
+    'no-ipt-sync' => \$no_ipt_sync,  # do not sync with the iptables policy
+    'no-ipt-log'  => \$no_ipt_log,   # do not generate iptables log rules
+    'strict'      => \$strict,
+    'debug'       => \$debug,
+    'dump-conf'   => \$dump_conf,    # display config variables
+    'config=s'    => \$fwsnort_conf, # manually specify the config file
+    'verbose'     => \$verbose,
+    'Version'     => \$print_ver,
+    'help'        => \$help
 ));
 
 &usage(0) if $help;
 
 ### Print the version number and exit if -V given on the command line.
-if ($ver) {
+if ($print_ver) {
     print " .. fwsnort v$version, by Michael Rash (mbr\@cipherdyne.com)\n";
     exit 0;
+}
+
+if ($no_ipt_log && !$fw_drop) {
+    print " ** --ipt-no-log option can only be used with --fw-drop\n";
+    exit 1;
 }
 
 if ($strict) {
@@ -353,16 +358,21 @@ print "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=",
         'Success', 'Fail', 'Total'), "\n\n";
 &parse_snort_rules();
 
-print "\n .. Logfile:         $logfile\n";
-print " .. Iptables script: $ipt_script\n";
-print "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=",
-    "-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=\n";
-
 ### jump packets (as appropriate) from the INPUT and
 ### FORWARD chains to our fwsnort chains
 &ipt_jump_chain();
 
 chmod 0500, $ipt_script;
+
+print "\n .. Logfile:         $logfile\n";
+print " .. Iptables script: $ipt_script\n";
+
+if ($fw_apply) {
+    print " .. Executing $ipt_script\n";
+    system $ipt_script;
+}
+print "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=",
+    "-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=\n";
 
 exit 0;
 #===================== end main ======================
@@ -889,7 +899,6 @@ sub ipt_build_opts() {
     ### to conserve kernel memory).
     my $log_prefix = " -j LOG --log-prefix \"SID$opts_href->{'sid'} \""
         if defined $opts_href->{'sid'};
-    $rule .= $log_prefix;
 
     ### print the rest of the logprefix snort options in a comment
     ### one line above the rule
@@ -909,13 +918,27 @@ sub ipt_build_opts() {
     }
 
     ### write the rule out to the iptables script
+    &ipt_add_rule($comment, $orig_snort_rule, $log_prefix, $rule);
+    return;
+}
+
+sub ipt_add_rule() {
+    my ($comment, $orig_snort_rule, $log_prefix, $rule) = @_;
+
+    my $drop_rule;
+    if ($fw_drop) {
+        $drop_rule = "$rule -j DROP";
+    }
+    $rule .= $log_prefix;
+
     if ($verbose) {
         &logr("### snort rule: $orig_snort_rule\n", $ipt_script);
         &logr("/bin/echo \" .. rule: $ipt_rule_ctr\"\n", $ipt_script)
     } else {
         &logr("$comment\n", $ipt_script);
     }
-    &logr("$rule\n", $ipt_script);
+    &logr("$rule\n", $ipt_script) unless $no_ipt_log;
+    &logr("$drop_rule\n", $ipt_script) if $fw_drop;
     $ipt_rule_ctr++;
 
     return;
@@ -1291,13 +1314,35 @@ sub usage() {
     my $exit = shift;
     print <<_USAGE_;
 
-fwsnort usage:
-    --fw-apply
-    --fw-log
-    --fw-drop
-    --fw-reject
-    -s, --stdout
-    -h, --help
+fwsnort v$version
+ .. By Michael Rash <mbr\@cipherdyne.com>, http://www.cipherdyne.com
+
+Usage: fwsnort [-t <snort rule type>] [-l <logfile>] [-v] [-V] [-h]
+       [-t] [-c <config file>] [--snort-sid <sid>] [--no-ipt-sync]
+       [--fw-apply] [--fw-drop] [--ipt-script <script>] [--dump-conf]
+       [--debug]
+
+Options:
+    --fw-apply              - Execute the fwsnort.sh script.
+    --fw-drop               - Add a DROP rule for every log rule.
+    --snort-sid  <sid>      - Generate an equivalent iptables rule
+                              for the specific snort id <sid>.
+    --no-ipt-sync           - Add iptables rules for signatures that
+                              are already blocked by iptables.
+    --no-ipt-log            - Do not generated iptables log rules
+                              (can only be used with --fw-drop).
+    --ipt-script <script>   - Print iptables script to <script>.
+    -t   --type <type>      - Only process snort rules of type
+                              <type> (e.g. "ddos" or "backdoor")
+    -c   --config <config>  - Use <config> instead of the
+                              normal config file located at
+                              $fwsnort_conf.
+    --dump-conf             - Dump configuration on STDOUT and exit.
+    --debug                 - Run in debug mode.
+    -v   --verbose          - Run in verbose mode.
+    -V   --Version          - Print fwsnort version number and exti.
+    -h   --help             - Display usage on STDOUT and exit.
+
 _USAGE_
     exit $exit;
 }
