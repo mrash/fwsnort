@@ -740,11 +740,11 @@ sub ipt_build() {
     my $ctr = 0;
 
     ### build iptables INPUT rules
-    my $rv = 1;
+    my $found_rule = 0;
     for my $sd (@input_rules_sd) {
         ### build as many iptables rules as we need based on
         ### the source and destination
-        $rv = &ipt_build_rule(
+        my $rv = &ipt_build_rule(
             'INPUT',
             "$cmds{'iptables'} -A $input_rules_chns[$ctr]",
             $hdr_href,
@@ -752,6 +752,7 @@ sub ipt_build() {
             $sd,
             $orig_snort_rule,
         );
+        $found_rule = 1 if $rv;
         $ctr++;
     }
 
@@ -762,7 +763,7 @@ sub ipt_build() {
         for my $sd (@forward_rules_sd) {
             ### build as many iptables rules as we need based on
             ### the source and destination
-            $rv = &ipt_build_rule(
+            my $rv = &ipt_build_rule(
                 'FORWARD',
                 "$cmds{'iptables'} -A $forward_rules_chn[$ctr]",
                 $hdr_href,
@@ -770,10 +771,11 @@ sub ipt_build() {
                 $sd,
                 $orig_snort_rule,
             );
+            $found_rule = 1 if $rv;
             $ctr++;
         }
     }
-    return $rv;
+    return $found_rule;
 }
 
 sub ipt_build_rule() {
@@ -901,15 +903,15 @@ sub ipt_build_opts() {
     $comment =~ s/,$//;
 
     ### print the snort rules type header to the fwsnort.sh script
-    if ($verbose || ! $ipt_print_type) {
+    if (! $ipt_print_type) {
         &ipt_type($snort_type);
         $ipt_print_type = 1;
     }
 
     ### write the rule out to the iptables script
-    &logr("/bin/echo \" .. rule: $ipt_rule_ctr\"\n", $ipt_script);
     if ($verbose) {
         &logr("### snort rule: $orig_snort_rule\n", $ipt_script);
+        &logr("/bin/echo \" .. rule: $ipt_rule_ctr\"\n", $ipt_script)
     } else {
         &logr("$comment\n", $ipt_script);
     }
