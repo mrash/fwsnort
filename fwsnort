@@ -75,7 +75,7 @@
 #
 
 use IPTables::Parse;
-use Net::IPv4Addr qw(:all);
+use Net::IPv4Addr qw(ipv4_network);
 use File::Copy;
 use Sys::Hostname;
 use Getopt::Long;
@@ -321,9 +321,7 @@ print "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=",
 ### FORWARD chains to our chains
 &ipt_jump_chain();
 
-exit 0;
-### write the equivalent iptables ruleset out to disk
-&write_iptables();
+chmod 0500, $ipt_ruleset;
 
 exit 0;
 #===================== end main ======================
@@ -392,7 +390,7 @@ sub parse_snort_rules() {
         printf("%-10s%-10s%-10s\n", $parsed_ctr, $unsup_ctr, $rule_num);
     }
     print "\n";
-    if ($abs_num) {  ### we parse at least one rule
+    if ($abs_num) {  ### we parsed at least one rule
         print " .. Generated iptables rules for $abs_num out of ",
             "$sabs_num signatures: ",
             sprintf("%.2f", $abs_num/$sabs_num*100), "%\n";
@@ -407,6 +405,14 @@ sub parse_rule_options() {
 
     ### tmp hash we will return
     my %opts;
+
+    if ($snort_sid) {
+        if ($rule_options =~ /sid:\s*$snort_sid\s*;/) {
+            &logr(" .. matched sid:$snort_sid: $rule_options\n", $logfile);
+        } else {
+            return 0;
+        }
+    }
 
     for my $opt (keys %{$snort_opts{'unsupported'}}) {
         ### see if we match a regex belonging to an supported option
