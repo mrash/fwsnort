@@ -122,7 +122,7 @@ sub install() {
     print " .. Copying all rules files to $rules_dir\n";
     for my $rfile (@rfiles) {
         next unless $rfile =~ /\.rules$/;
-        print " .. Installing ${rules_dir}/${rfile}\n";
+        print " .. Installing $rfile\n";
         copy "snort-1.8.7_rules/${rfile}", "${rules_dir}/${rfile}";
     }
 
