@@ -1,10 +1,12 @@
 #!/usr/bin/perl -w
 #
-#######################################################################
+############################################################################
 #
 # File: fwsnort
 #
 # Purpose: To translate snort rules into equivalent iptables rules.
+#          fwsnort is based on the original snort2iptables shell script
+#          written by William Stearns.
 #
 # Author: Michael B. Rash <mbr@cipherdyne.com>
 #
@@ -22,7 +24,7 @@
 #    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307
 #    USA
 #
-#######################################################################
+############################################################################
 #
 # $Id$
 #
@@ -238,7 +240,7 @@ sub parse_snort_rules() {
             my ($ipttype, $opt_filter_href, $opt_logprefix_href)
                 = &parse_rule_options($rule_options, $line_num);
             if ($ipttype == 1) {  ### we can filter
-#                &add_ipt_filter_rule($hdr_href, $opt_filter_href);
+                &add_ipt_filter_rule($hdr_href, $opt_filter_href);
                 $parsed_ctr++;  ### keep track of successfully parsed rules
             } elsif ($ipttype == 2) {
                 &add_ipt_log_rule($hdr_href, $opt_logprefix_href);
@@ -362,11 +364,25 @@ sub add_ipt_filter_rule() {
     }
     ### iptables  -A INPUT -p tcp --sport 3999 -m string
     ###     --hex-string "fsdf" -j LOG
-#    if ($hdr_href->{'src'} eq '$EXTERNAL_NET' &&
-#        $hdr_href->{'dst'} eq '$HOME_NET') {
-        print "$cmds{'iptables'} -A SnortRules -p $hdr_href->{'proto'} ",
-            "$src_port $dst_port -i eth0 -j LOG\n";
-#    }
+    if ($hdr_href->{'src'} eq '$EXTERNAL_NET' &&
+        $hdr_href->{'dst'} eq '$HOME_NET') {
+        for my $internal_intf (keys %snort_chains) {
+            my $net = $snort_chains{$internal_intf};
+            print "$cmds{'iptables'} -A Snort_${config{'EXTERNAL_INTF'}} ",
+                "-d $net -p $hdr_href->{'proto'} $src_port $dst_port ",
+                "-j LOG\n";
+        }
+    } elsif ($hdr_href->{'src'} eq '$HOME_NET' &&
+        $hdr_href->{'dst'} eq '$EXTERNAL_NET') {
+        for my $internal_intf (keys %snort_chains) {
+            my $net = $snort_chains{$internal_intf};
+            print "$cmds{'iptables'} -A Snort_${internal_intf} ",
+                "-s $net -p $hdr_href->{'proto'} $src_port $dst_port ",
+                "-j LOG\n";
+        }
+    } else {
+        print " ** Bad: $hdr_href->{'src'}  $hdr_href->{'dst'}\n";
+    }
     return;
 }
 
