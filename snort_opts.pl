@@ -15,6 +15,7 @@
 
 my %options = (
     'flow'         => 0,
+    'flowbits'     => 0,
     'msg'          => 0,
     'logto'        => 0,
     'ttl'          => 0,
@@ -50,10 +51,11 @@ my %options = (
     'sameip'       => 0,
     'stateless'    => 0,
     'regex'        => 0,
-    'byte_test'    => 0,
     'distance'     => 0,
     'within'       => 0,
-    'byte_jump'    => 0
+    'byte_jump'    => 0,
+    'byte_test'    => 0,
+    'pcre'         => 0
 );
 
 
