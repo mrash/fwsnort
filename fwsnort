@@ -516,8 +516,13 @@ sub build_fwsnort_chains() {
 sub ipt_build() {
     my ($hdr_href, $opts_href) = @_;
 
-    my @rules_dst  = ();
-    my @rules_chns = ();
+    ### for iptables INPUT chain
+    my @input_rules_dst  = ();
+    my @input_rules_chns = ();
+
+    ### for iptables FORWARD chain
+    my @forward_rules_dst = ();
+    my @forward_rules_chn = ();
 
     my $src = $hdr_href->{'src'};
     my $dst = $hdr_href->{'dst'};
@@ -527,21 +532,36 @@ sub ipt_build() {
         if ($intf_type{$intf_net{$config{$dst}}{'name'}} eq 'INTERNAL_INTF') {
             ### snort:      EXTERNAL   -> HOME
             ### iptables:   any source -> external intf  (for INPUT chain)
-            push @rules_dst, $intf_net{'EXTERNAL_INTF'}{'ip'};
-            push @rules_chns, "fwsnort_INPUT_${intf_net{'EXTERNAL_INTF'}{'name'}}";
+            push @input_rules_dst, $intf_net{'EXTERNAL_INTF'}{'ip'};
+            push @input_rules_chns,
+                "fwsnort_INPUT_${intf_net{'EXTERNAL_INTF'}{'name'}}";
+
+            ### snort:      EXTERNAL   -> HOME
+            ### iptables:   any source -> internal net (for INPUT chain)
+            push @forward_rules_dst, $intf_net{'INTERNAL_INTF'}{'net'};
+            push @forward_rules_chn, 'fwsnort_FORWARD';
         } elsif ($intf_type{$intf_net{$config{$dst}}{'name'}} eq 'EXTERNAL_INTF') {
             ### snort:      INTERNAL   -> EXTERNAL
             ### iptables:   any source -> internal intf  (for INPUT chain)
-            push @rules_dst, $intf_net{'INTERNAL_INTF'}{'ip'};
-            push @rules_chns, "fwsnort_INPUT_${intf_net{'INTERNAL_INTF'}{'name'}}";
+            push @input_rules_dst, $intf_net{'INTERNAL_INTF'}{'ip'};
+            push @input_rules_chns, "fwsnort_INPUT_${intf_net{'INTERNAL_INTF'}{'name'}}";
+
+            ### snort:      EXTERNAL   -> HOME
+            ### iptables:   any source -> internal net (for INPUT chain)
+            push @forward_rules_dst, '0.0.0.0/0';
+            push @forward_rules_chn, 'fwsnort_FORWARD';
         }
     } elsif ($dst eq 'any') {
         if ($src eq 'any') {
-            print "dup: $ipt_rule_ctr\n";
-            push @rules_dst, $intf_net{'EXTERNAL_INTF'}{'ip'};
-            push @rules_chns, "fwsnort_INPUT_$config{'EXTERNAL_INTF'}";
-            push @rules_dst, $intf_net{'INTERNAL_INTF'}{'ip'};
-            push @rules_chns, "fwsnort_INPUT_$config{'INTERNAL_INTF'}";
+            push @input_rules_dst, $intf_net{'EXTERNAL_INTF'}{'ip'};
+            push @input_rules_chns, "fwsnort_INPUT_$config{'EXTERNAL_INTF'}";
+            push @input_rules_dst, $intf_net{'INTERNAL_INTF'}{'ip'};
+            push @input_rules_chns, "fwsnort_INPUT_$config{'INTERNAL_INTF'}";
+
+            push @forward_rules_dst, $intf_net{'INTERNAL_INTF'}{'net'};
+            push @forward_rules_chn, 'fwsnort_FORWARD';
+            push @forward_rules_dst, $intf_net{'EXTERNAL_INTF'}{'net'};
+            push @forward_rules_chn, 'fwsnort_FORWARD';
         } else {
             print " ** src: $src, dst: $dst\n";
         }
@@ -550,11 +570,28 @@ sub ipt_build() {
     }
 
     my $ctr = 0;
-    for my $dst (@rules_dst) {
+
+    ### build iptables INPUT rules
+    for my $dst (@input_rules_dst) {
         ### build as many iptables rules as we need based on
         ### the source and destination
         &ipt_build_rule(
-            "$cmds{'iptables'} -A $rules_chns[$ctr]",
+            "$cmds{'iptables'} -A $input_rules_chns[$ctr]",
+            $hdr_href,
+            $opts_href,
+            '',
+            $dst
+        );
+        $ctr++;
+    }
+
+    $ctr = 0;
+    ### build iptables FORWARD rules
+    for my $dst (@forward_rules_dst) {
+        ### build as many iptables rules as we need based on
+        ### the source and destination
+        &ipt_build_rule(
+            "$cmds{'iptables'} -A $forward_rules_chn[$ctr]",
             $hdr_href,
             $opts_href,
             '',
