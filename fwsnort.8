@@ -14,9 +14,11 @@ bourne shell script that implements the resulting iptables ruleset.
 This ruleset allows network traffic that exhibits snort signatures to
 be logged and/or dropped by iptables directly without putting any interface
 into promiscuous mode or queuing packets from kernel to user space.  In
-addition to translating snort rules, fwsnort (optionally) uses the
-IPTables::Parse perl module to only translate snort rules that could
-potentially be passed by the existing iptables ruleset.
+addition, fwsnort (optionally) uses the IPTables::Parse module to parse
+the iptables ruleset on the machine to determine which snort rules are
+applicable to the specific iptables policy.  After all, if iptables is
+blocking all inbound http traffic from external addresses, it is probably
+not of much use to try detecting inbound attacks against against tcp/80.
 .B fwsnort
 relies on the iptables string match module to match snort content fields
 in the application portion of ip traffic.
