@@ -1254,7 +1254,7 @@ sub validate_conf() {
     $intf_type{$config{'INTERNAL_INTF'}} = 'INTERNAL_INTF';
     $intf_net{'INTERNAL_INTF'}{'name'} = $config{'INTERNAL_INTF'};
 
-    ### take the internal network from the command line if --external-net was
+    ### take the internal network from the command line if --internal-net was
     ### given (NOTE: the network tied to the external interface is never really
     ### used; the iptables rules are built instead with a source of the
     ### internal network).
@@ -1707,7 +1707,7 @@ fwsnort v$version
 
 Usage: fwsnort [-t <snort rule type>] [-l <logfile>] [-v] [-V] [-h]
        [-u] [-c <config file>] [--snort-sid=<sid>] [--ipt-apply]
-       [-e <external network] [-i <internal network] [-d <dmz network]
+       [--internal-net <internal network>] [--dmz-net <dmz network>]
        [--ipt-drop] [--ipt-script=<script>] [--no-ipt-sync]
        [--no-ipt-log] [--no-ipt-test] [--no-ipt-jumps] [--dump-conf]
        [--debug] [--strict]
