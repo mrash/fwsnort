@@ -1,0 +1,5 @@
+
+fwsnort has its own installer "install.pl".  Just run install.pl
+to install fwsnort.  After fwsnort has been installed, you will
+need to edit /etc/fwsnort/fwsnort.conf by hand the first time
+you run fwsnort.
