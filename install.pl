@@ -71,11 +71,25 @@ sub install() {
         mkdir $rules_dir, 0500;
     }
 
-    print " .. Installing the Net::IPv4Addr perl modules.\n";
+    ### install Net::IPv4Addr
+    print " .. Installing the Net::IPv4Addr perl module.\n";
     chdir 'Net-IPv4Addr-0.10' or die " ** Could not chdir to ",
-        "Net-IPv4Addr: $!";
+        "Net-IPv4Addr-0.10: $!";
     unless (-e 'Makefile.PL' && -e 'IPv4Addr.pm') {
-        die " ** Your Net::IPv4Addr is incomplete!";
+        die " ** Your Net::IPv4Addr sources are incomplete!";
+    }
+    system "$perlCmd Makefile.PL";
+    system $makeCmd;
+    system "$makeCmd test";
+    system "$makeCmd install";
+    chdir '..';
+
+    ### install Tie::IxHash
+    print " .. Installing the Tie::IxHash perl module.\n";
+    chdir 'Tie-IxHash-1.21' or die " ** Could not chdir to ",
+        "Tie-IxHash-1.21: $!";
+    unless (-e 'Makefile.PL') {
+        die " ** Your Tie-IxHash-1.21 is incomplete!";
     }
     system "$perlCmd Makefile.PL";
     system $makeCmd;
