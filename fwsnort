@@ -67,6 +67,7 @@
 #   classtype:     Rule classification identifier.
 #   priority:      Rule severity identifier.
 #   uricontent:    Search for a pattern in the URI portion of a packet
+#
 #   tag:           Advanced logging actions for rules.
 #   ip_proto:      IP header's protocol value.
 #   sameip:        Determines if source ip equals the destination ip.
@@ -525,16 +526,6 @@ sub parse_rule_options() {
             && ! defined $snort_opts{'ignore'}{$option}) {
             print "$line_num SID: $sid  bad option: \"$option\" ",
                 "-- $rule_options\n";
-        }
-    }
-    ### check to make sure the content field does not contain NULL
-    ### characters (not yet supported by the iptables interface to
-    ### the string match module).
-    if (defined $opts{'content'}) {
-        if (&content_chk_null($opts{'content'})) {
-            &logr(" ** SID: $sid  Unsupported NULL character in hex content " .
-                "line: $line_num.  Skipping rule.\n", $logfile);
-            return 0;
         }
     }
     return \%opts;
@@ -1047,33 +1038,6 @@ sub ipt_type() {
     &logr("\$ECHO \" .. Adding iptables $type rules.\"\n",
         $ipt_script);
     return;
-}
-
-sub content_chk_null() {
-    my $content = shift;
-    ### see if there are any NULL chars ("00") in the hex data
-    $content =~ s/\s//g;
-    my $hex_f = 0;
-    my @chars = split '', $content;
-    NULL: for (my $i=0; $i<=$#chars; $i++) {
-        if ($chars[$i] eq '|') {
-            $hex_f = 1;
-            $i++;
-        }
-        if ($hex_f) {
-            for (my $j=$i; $j<=$#chars; $j += 2) {
-                ### check every even pair of characters
-                if ($chars[$j] eq '0' && $chars[$j+1] eq '0') {
-                    return 1;
-                }
-                if ($chars[$j] eq '|') {
-                    $hex_f = 1;
-                    $i++;
-                }
-            }
-        }
-    }
-    return 0;
 }
 
 sub check_type() {
