@@ -1,4 +1,15 @@
-fwsnort-0.5 (12//2003):
+fwsnort-0.6 (01/04/2003):
+    - Speed increase and disk access decrease by writing iptables
+      commands to the iptables script only after all lines have been
+      generated.
+    - Bugfix for DMZ interface.
+    - Bugfix for multiple ip_proto fields.
+    - Removed the ip protocol as an allowed protocol for translation.
+    - Bugfix for negated port numbers.
+    - Removed "<-" rule direction since not even snort supports this.
+    - Fixed snort rule updates from snort.org.
+
+fwsnort-0.5 (12/21/2003):
     - Added "-j REJECT --reject-with tcp-reset" for tcp sessions
       if the --ipt-block option is specified.
     - Added ability to download latest snort rules from snort.org.
