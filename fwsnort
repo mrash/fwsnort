@@ -270,7 +270,7 @@ my %cmds;
 
 ### establish some default behavior
 my $ipt_apply  = 0;
-my $ipt_block  = 0;
+my $ipt_drop   = 0;
 my $ipt_reject = 0;
 my $help       = 0;
 my $stdout     = 0;
@@ -288,6 +288,7 @@ my $no_ipt_sync    = 0;
 my $no_ipt_log     = 0;
 my $no_ipt_test    = 0;
 my $no_ipt_jumps   = 0;
+my $add_deleted    = 0;
 my $rules_type     = '';
 my $snort_type     = '';
 my $int_net        = '';
@@ -298,7 +299,8 @@ Getopt::Long::Configure('no_ignore_case');
 
 &usage(1) unless (GetOptions(
     'ipt-apply'      => \$ipt_apply,    # Apply the generated ruleset.
-    'ipt-block'      => \$ipt_block,    # Add iptables DROP/REJECT rules.
+    'ipt-drop'       => \$ipt_drop,     # Add iptables DROP rules.
+    'ipt-reject'     => \$ipt_reject,   # Add iptables REJECT rules.
     'ipt-script=s'   => \$ipt_script,   # Manually specify the path to the
                                         # generated iptables script.
     'internal-net=s' => \$int_net,      # Manually specify internal net.
@@ -311,10 +313,11 @@ Getopt::Long::Configure('no_ignore_case');
     'no-ipt-sync'    => \$no_ipt_sync,  # Do not sync with the iptables policy.
     'no-ipt-log'     => \$no_ipt_log,   # Do not generate iptables logging rules.
     'no-ipt-test'    => \$no_ipt_test,  # Don't perform any checks against
-                                      # iptables.
+                                        # iptables.
     'no-ipt-jumps'   => \$no_ipt_jumps, # Don't jump packets from the INPUT or
                                         # FORWARD chains.
     'update-rules'   => \$update_rules, # Download latest snort rules.
+    'add-deleted'    => \$add_deleted,  # Add deleted rules.
     'strict'         => \$strict,       # Strict mode.
     'debug'          => \$debug,        # Debug mode.
     'dump-conf'      => \$dump_conf,    # Display config variables
@@ -334,9 +337,13 @@ if ($print_ver) {
     exit 0;
 }
 
-if ($no_ipt_log && !$ipt_block) {
-    print " ** --ipt-no-log option can only be used with --ipt-drop\n";
-    exit 1;
+if ($no_ipt_log && not ($ipt_drop or $ipt_reject)) {
+    die " ** --ipt-no-log option can only be used ",
+        "with --ipt-drop or --ipt-reject";
+}
+
+if ($ipt_drop and $ipt_reject) {
+    die " ** Cannot specify both --ipt-drop and --ipt-reject";
 }
 
 if ($strict) {
@@ -465,6 +472,9 @@ sub parse_snort_rules() {
         $ipt_print_type = 0;
         if ($rules_type) {
             next FILE unless $rfile =~ /^${rules_type}\.rules$/;
+        }
+        if ($rfile eq 'deleted.rules') {
+            next FILE unless $add_deleted;
         }
         ($snort_type) = ($rfile =~ /(\S+)\.rules/);
         printf("%-30s", " .. $rfile");
@@ -1087,11 +1097,19 @@ sub ipt_add_rule() {
     my ($hdr_href, $orig_snort_rule, $rule, $log_prefix, $comment) = @_;
 
     my $drop_rule;
-    if ($ipt_block) {
+    if ($ipt_drop or $ipt_reject) {
         if ($hdr_href->{'proto'} eq 'tcp') {
-            $drop_rule = "$rule -j REJECT --reject-with tcp-reset";
+            if ($ipt_drop) {
+                $drop_rule = "$rule -j DROP";
+            } else {
+                $drop_rule = "$rule -j REJECT --reject-with tcp-reset";
+            }
         } elsif ($hdr_href->{'proto'} eq 'udp') {
-            $drop_rule = "$rule -j REJECT --reject-with icmp-port-unreachable";
+            if ($ipt_drop) {
+                $drop_rule = "$rule -j DROP";
+            } else {
+                $drop_rule = "$rule -j REJECT --reject-with icmp-port-unreachable";
+            }
         } else {
             $drop_rule = "$rule -j DROP";
         }
@@ -1105,7 +1123,7 @@ sub ipt_add_rule() {
         push @ipt_script_lines, $comment;
     }
     push @ipt_script_lines, $rule unless $no_ipt_log;
-    push @ipt_script_lines, $drop_rule if $ipt_block;
+    push @ipt_script_lines, $drop_rule if $ipt_drop or $ipt_reject;
     $ipt_rule_ctr++;
     return;
 }
@@ -1408,7 +1426,7 @@ sub ipt_test() {
             "specify the --no-ipt-test option.  Exiting.\n";
     }
 
-    if ($ipt_block) {
+    if ($ipt_reject) {
         ### we are going to generate a policy that drops icmp and udp
         ### packets, and kills tcp sessions with tcp-reset.
         $rv = (system "$cmds{'iptables'} -I INPUT 1 -p tcp -s 127.0.0.2 " .
@@ -1417,7 +1435,7 @@ sub ipt_test() {
             system "$cmds{'iptables'} -D INPUT 1";
         } else {
             die " ** It does not appear that the REJECT target has ",
-                "been compiled into iptables.\n    The --ipt-block option ",
+                "been compiled into iptables.\n    The --ipt-reject option ",
                 "requires this option so that tcp sessions can be killed.\n",
                 "    Exiting.\n";
         }
@@ -1720,10 +1738,11 @@ Options:
                                 instead of the normal location at
                                 $ipt_script
     --ipt-apply               - Execute the fwsnort.sh script.
-    --ipt-block               - Add a protocol dependent REJECT rule
+    --ipt-reject              - Add a protocol dependent REJECT rule
                                 (tcp resets for tcp or icmp port
                                 unreachable for udp messages) for
                                 every logging rule.
+    --ipt-drop                - Add a DROP rule for every logging rule.
     --snort-sid=<sid>         - Generate an equivalent iptables rule
                                 for the specific snort id <sid>.
     --no-ipt-sync             - Add iptables rules for signatures that
