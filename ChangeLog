@@ -1,3 +1,10 @@
+fwsnort-0.6.3 (04/04/2004);
+    - Added ignore functionality for both IPs and networks
+    - Split --ipt-block into --ipt-drop and --ipt-reject to add DROP
+      or REJECT rules respectively.
+    - Added --add-deleted option to allow rules in the "deleted.rules"
+      file to be added.
+
 fwsnort-0.6.2 (03/19/2004);
     - Added --internal-net and --dmz-net options so that internal and
       dmz networks can be manually specified without having to parse
