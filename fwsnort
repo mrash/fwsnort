@@ -303,12 +303,17 @@ if ($strict) {
 ### specified on the command line
 &check_type() if $rules_type;
 
+&logr(" .. Begin parsing cycle ..\n", $logfile);
+
 ### parse snort rules (signatures)
 print "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=",
     "-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=\n",
-    sprintf("%-30s%-10s%-10s%-10s%-10s", '    File', 'Filter',
-        'Log-only', 'Failed', 'Total'), "\n\n";
+    sprintf("%-30s%-10s%-10s%-10s%-10s", '    Snort Rules File',
+        'Success', 'Fail', 'Total'), "\n\n";
 &parse_snort_rules();
+
+print "\n .. Logfile:         $logfile\n";
+print " .. Iptables script: $ipt_ruleset\n";
 print "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=",
     "-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=\n";
 
@@ -338,6 +343,7 @@ sub parse_snort_rules() {
         }
         my ($type) = ($rfile =~ /(\w+)\.rules/);
         printf("%-30s", " .. $rfile");
+        &logr(" .. Parsing $rfile\n", $logfile);
         &ipt_type($type);
         open R, "< ${rules_dir}/${rfile}" or die " ** Could not " .
             "open: ${rules_type}/${rfile}";
@@ -362,13 +368,13 @@ sub parse_snort_rules() {
             }
             my $hdr_href = &parse_rule_hdr($rule_hdr);
             unless ($hdr_href) {
-                print " ** Unrecognized rule header: \"$rule_hdr\" at ",
-                    "line: $line_num.  Skipping rule.\n";
+                &logr(" ** Unrecognized rule header: \"$rule_hdr\" at ",
+                    "line: $line_num.  Skipping rule.\n", $logfile);
                 $unsup_ctr++;
                 next RULE;
             }
             if ($debug) {
-                print " .. Header: Proto: $hdr_href->{'proto'}, Src: ",
+                print STDOUT " .. Header: Proto: $hdr_href->{'proto'}, Src: ",
                     "$hdr_href->{'src'}, Src_p: $hdr_href->{'src_p'}, ",
                     "bidir: $hdr_href->{'bidir'}, Dst: $hdr_href->{'dst'}, ",
                     "Dst_p: $hdr_href->{'dst_p'}\n";
@@ -441,7 +447,6 @@ sub parse_rule_hdr() {
                         \s+(\S+)\s+\$?(\S+)\s+\$?(\S+)|x) {
         if ($4 eq '<>') {
             $bidir = 1;
-            print " ** bidir\n";
         } elsif ($4 eq '<-') {
             return {
                 'proto' => $1,
@@ -960,7 +965,7 @@ sub archive() {
         my $newfile = $targetbase . '2';
         move $targetbase, $newfile;
     }
-    &logr(localtime() . " .. Archiving $file\n", $logfile);
+    &logr(" .. Archiving $file\n", $logfile);
     move $file, $targetbase;   ### move $file into the archive directory
     return;
 }
