@@ -3,3 +3,20 @@ fwsnort has its own installer "install.pl".  Just run install.pl
 to install fwsnort.  After fwsnort has been installed, you will
 need to edit /etc/fwsnort/fwsnort.conf by hand the first time
 you run fwsnort.
+
+** IMPORTANT **:
+
+fwsnort requires the iptables string match module in order to be able to
+detect application layer attacks.  In addition, fwsnort extends iptables by
+adding a "--hex-string" option with a patch against
+iptables/extensions/libipt_string.c.  The patch is against iptables 1.2.7a,
+and you will need to apply it in order for fwsnort to work properly.  The
+basic steps to do this are:
+
+-download iptables-1.2.7a.tar.bz2 from http://www.netfilter.org
+-tar xvfj iptables-1.2.7a.tar.bz2
+-cp fwsnort-0.1/libipt_string.c.patch iptables-1.2.7a/extensions
+-cd iptables-1.2.7a/extensions
+-patch libipt_string.c libipt_string.c.patch
+-compile and install iptables
+-edit /etc/fwsnort/fwsnort.conf to point to the new iptables binary.
