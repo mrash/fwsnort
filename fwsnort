@@ -83,7 +83,7 @@ use strict;
 
 #======================== config ========================
 my $fwsnort_dir = '/etc/fwsnort';
-my $rules_dir   = "${fwsnort_dir}/snort_rules";
+my $rules_dir   = "${fwsnort_dir}/snort-1.8.7_rules";
 my $logdir      = "${fwsnort_dir}/log";
 my $scripts_dir = "${fwsnort_dir}/fwscripts";
 my $archive_dir = "${fwsnort_dir}/archive";
@@ -902,9 +902,9 @@ sub setup() {
         mkdir $archive_dir, 0500 or die $!;
     }
 
-    ### archive old stuff
-#    &archive();
-    unlink $fwscript;
+    ### archive any existing fwscript file
+    &archive($fwscript);
+
     return;
 }
 
@@ -918,25 +918,25 @@ sub chk_commands() {
     return;
 }
 
-#sub archive() {
-#    my $file = shift;
-#    my ($filename) = ($file =~ m|.*/(.*)|);
-#    my $targetbase = "${CONF_ARCHIVE}/${filename}.old";
-#    for (my $i = 4; $i > 1; $i--) {  ### keep five copies of the old config files
-#        my $oldfile = $targetbase . $i;
-#        my $newfile = $targetbase . ($i+1);
-#        if (-e $oldfile) {
-#            move $oldfile, $newfile;
-#        }
-#    }
-#    if (-e $targetbase) {
-#        my $newfile = $targetbase . '2';
-#        move $targetbase, $newfile;
-#    }
-#    &logr(" .. Archiving $file -> $targetbase\n");
-#    copy $file, $targetbase;   ### move $file into the archive directory
-#    return;
-#}
+sub archive() {
+    my $file = shift;
+    my ($filename) = ($file =~ m|.*/(.*)|);
+    my $targetbase = "${archive_dir}/${filename}.old";
+    for (my $i = 4; $i > 1; $i--) {  ### keep five copies of the old config files
+        my $oldfile = $targetbase . $i;
+        my $newfile = $targetbase . ($i+1);
+        if (-e $oldfile) {
+            move $oldfile, $newfile;
+        }
+    }
+    if (-e $targetbase) {
+        my $newfile = $targetbase . '2';
+        move $targetbase, $newfile;
+    }
+    &logr(localtime() . " .. Archiving $file\n", $logfile);
+    copy $file, $targetbase;   ### move $file into the archive directory
+    return;
+}
 
 sub logr() {
     my ($msg, $file) = @_;
