@@ -253,27 +253,29 @@ my $snort_sid  = 0;
 my $dump_conf  = 0;
 my $verbose    = 0;
 my $ver        = 0;
-my $chk_ipt_policy = 1;
+my $ipt_print_type = 0;
 my $ipt_rule_ctr   = 1;
+my $ipt_sync       = 1;
+my $no_ipt_sync    = 0;
 my $rules_type     = '';
-my $no_ipt_chk     = 0;
+my $snort_type     = '';
 
 ### make Getopts case sensitive
 Getopt::Long::Configure('no_ignore_case');
 
 &usage(1) unless (GetOptions(
-    'fw-apply'     => \$fw_apply,   # apply the generated ruleset
+    'fw-apply'     => \$fw_apply,     # apply the generated ruleset
     'fw-log'       => \$fw_log,
     'fw-drop'      => \$fw_drop,
     'fw-reject'    => \$fw_reject,
-    'snort-sid=i'  => \$snort_sid,  # Parse only this particular snort rule
-    'type=s'       => \$rules_type, # process this type of snort rule (e.g. "ddos")
+    'snort-sid=i'  => \$snort_sid,    # Parse only this particular snort rule
+    'type=s'       => \$rules_type,   # process this type of snort rule (e.g. "ddos")
     'logfile=s'    => \$logfile,
-    'stdout'       => \$stdout,     # print the fw ruleset on STDOUT
-    'no-ipt-check' => \$no_ipt_chk, # do not check the iptables policy
+    'stdout'       => \$stdout,       # print the fw ruleset on STDOUT
+    'no-ipt-sync'  => \$no_ipt_sync,  # do not check the iptables policy
     'strict'       => \$strict,
     'debug'        => \$debug,
-    'dump-conf'    => \$dump_conf,  # display config variables
+    'dump-conf'    => \$dump_conf,    # display config variables
     'config=s'     => \$fwsnort_conf, # manually specify the config file
     'verbose'      => \$verbose,
     'Version'      => \$ver,
@@ -304,7 +306,7 @@ if ($strict) {
         = '[\s;]nocase\s*;';
 }
 
-$chk_ipt_policy = 0 if $no_ipt_chk;
+$ipt_sync = 0 if $no_ipt_sync;
 
 ### make sure some directories exist, etc.
 &setup();
@@ -321,7 +323,7 @@ $chk_ipt_policy = 0 if $no_ipt_chk;
 
 ### if we are running with $chk_ipt_policy, then cache
 ### the current iptables policy
-&cache_ipt_policy();
+&cache_ipt_policy() if $ipt_sync;
 
 ### cache all of the fwsnort iptables chains now that
 ### we know what all of the interfaces are
@@ -371,15 +373,16 @@ sub parse_snort_rules() {
     closedir D;
     shift @rfiles; shift @rfiles;
 
-    my $abs_num = 0;
+    my $abs_num  = 0;
     my $sabs_num = 0;
+    my $tot_ipt_apply = 0;
     FILE: for my $rfile (@rfiles) {
         next FILE unless $rfile =~ /\.rules$/;
-        my $printed_type = 0;
+        $ipt_print_type = 0;
         if ($rules_type) {
             next FILE unless $rfile =~ /^${rules_type}\.rules$/;
         }
-        my ($type) = ($rfile =~ /(\w+)\.rules/);
+        ($snort_type) = ($rfile =~ /(\w+)\.rules/);
         printf("%-30s", " .. $rfile");
         &logr(" .. Parsing $rfile\n", $logfile);
         open R, "< ${rules_dir}/${rfile}" or die " ** Could not ",
@@ -390,6 +393,7 @@ sub parse_snort_rules() {
         my $rule_num   = 0;
         my $parsed_ctr = 0;
         my $unsup_ctr  = 0;
+        my $ipt_apply  = 0;
         RULE: for my $rule (@lines) {
             chomp $rule;
             $line_num++;
@@ -424,15 +428,20 @@ sub parse_snort_rules() {
             }
 
             ### construct the iptables rule and add it to $ipt_script
-            unless ($printed_type) {
-                &ipt_type($type);
-                $printed_type = 1;
+            my $ipt_rv = &ipt_build($hdr_href, $opts_href, $rule);
+            if ($ipt_rv) {
+                $ipt_apply++;
+                $tot_ipt_apply++;
             }
-            &ipt_build($hdr_href, $opts_href, $rule);
             $parsed_ctr++;  ### keep track of successfully parsed rules
             $abs_num++;;
         }
-        printf("%-10s%-10s%-10s\n", $parsed_ctr, $unsup_ctr, $rule_num);
+        if ($ipt_sync) {
+            printf("%-10s%-10s%-10s%-10s\n", $parsed_ctr, $unsup_ctr,
+                $ipt_apply, $rule_num);
+        } else {
+            printf("%-10s%-10s%-10s\n", $parsed_ctr, $unsup_ctr, $rule_num);
+        }
     }
     print "\n";
     if ($abs_num) {  ### we parsed at least one rule
@@ -441,6 +450,10 @@ sub parse_snort_rules() {
             sprintf("%.2f", $abs_num/$sabs_num*100), "%\n";
     } else {
         print " .. No rules parsed.\n";
+    }
+    if ($ipt_sync) {
+        print " .. Found $tot_ipt_apply applicable snort rules to your " .
+            "current iptables\n    policy.\n";
     }
     return;
 }
@@ -727,16 +740,17 @@ sub ipt_build() {
     my $ctr = 0;
 
     ### build iptables INPUT rules
+    my $rv = 1;
     for my $sd (@input_rules_sd) {
         ### build as many iptables rules as we need based on
         ### the source and destination
-        &ipt_build_rule(
+        $rv = &ipt_build_rule(
             'INPUT',
             "$cmds{'iptables'} -A $input_rules_chns[$ctr]",
             $hdr_href,
             $opts_href,
             $sd,
-            $orig_snort_rule
+            $orig_snort_rule,
         );
         $ctr++;
     }
@@ -748,18 +762,18 @@ sub ipt_build() {
         for my $sd (@forward_rules_sd) {
             ### build as many iptables rules as we need based on
             ### the source and destination
-            &ipt_build_rule(
+            $rv = &ipt_build_rule(
                 'FORWARD',
                 "$cmds{'iptables'} -A $forward_rules_chn[$ctr]",
                 $hdr_href,
                 $opts_href,
                 $sd,
-                $orig_snort_rule
+                $orig_snort_rule,
             );
             $ctr++;
         }
     }
-    return;
+    return $rv;
 }
 
 sub ipt_build_rule() {
@@ -770,7 +784,7 @@ sub ipt_build_rule() {
     ### see whether or not we need to add the rule to the iptables
     ### script based on whether the build-in chain will pass the
     ### traffic in the first place.
-    if ($chk_ipt_policy) {
+    if ($ipt_sync) {
         if (! &ipt_allow_traffic($hdr_href, $chain)) {
             return 0;
         }
@@ -886,6 +900,12 @@ sub ipt_build_opts() {
         if defined $opts_href->{'reference'};
     $comment =~ s/,$//;
 
+    ### print the snort rules type header to the fwsnort.sh script
+    if ($verbose || ! $ipt_print_type) {
+        &ipt_type($snort_type);
+        $ipt_print_type = 1;
+    }
+
     ### write the rule out to the iptables script
     &logr("/bin/echo \" .. rule: $ipt_rule_ctr\"\n", $ipt_script);
     if ($verbose) {
@@ -964,7 +984,8 @@ sub ipt_type() {
     my $type = shift;
     &logr("\n###\n############ ${type}.rules ############\n###\n",
         $ipt_script);
-    &logr("/bin/echo \" .. Adding iptables $type rules.\"\n", $ipt_script);
+    &logr("/bin/echo \" .. Adding iptables $type rules.\"\n",
+        $ipt_script);
     return;
 }
 
