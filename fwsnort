@@ -124,10 +124,10 @@ tie %logprefix, 'Tie::IxHash';  ### need to maintain ordering
 %logprefix = (
     ### snort options that can be put into iptables
     ### ruleset, but only in log messages with --log-prefix
-    'msg'       => 'msg:\s*\"(.*?)\";',
-    'classtype' => '[\s;]classtype:\s*(.*?);',
-    'sid'       => '[\s;]sid:\s*(\d+);',
-    'reference' => '[\s;]reference:\s*(.*?);',
+    'msg'       => 'msg:\s*\"(.*?)\"\s*;',
+    'classtype' => '[\s;]classtype:\s*(.*?)\s*;',
+    'sid'       => '[\s;]sid:\s*(\d+)\s*;',
+    'reference' => '[\s;]reference:\s*(.*?)\s*;',
 );
 
 my %iptables_opts = (
@@ -151,23 +151,23 @@ my %snort_opts = (
     ### from the snort "header" which include protocol,
     ### source, destination, etc.)
     'filter' => {
-        'uricontent' => '[\s;]uricontent:\s*\"(.*?)\";',
-        'content' => '[\s;]content:\s*\"(.*?)\";',
-        'flags'   => '[\s;]flags:\s*(.*?);',
-        'itype'   => '[\s;]itype:\s*(\d+);',
-        'ttl'     => '[\s;]ttl:\s*(\d+);',
-        'tos'     => '[\s;]tos:\s*(\d+);'
+        'uricontent' => '[\s;]uricontent:\s*\"(.*?)\"\s*;',
+        'content' => '[\s;]content:\s*\"(.*?)\"\s*;',
+        'flags'   => '[\s;]flags:\s*(.*?)\s*;',
+        'itype'   => '[\s;]itype:\s*(\d+)\s*;',
+        'ttl'     => '[\s;]ttl:\s*(\d+)\s*;',
+        'tos'     => '[\s;]tos:\s*(\d+)\s*;'
     },
 
     ### snort options which are logged within iptables
     ### logging statements (so we can detect these values
     ### but just not filter them directly)
     'log_only' => {
-        'id'       => '[\s;]id:\s*(\d+);',
-        'seq'      => '[\s;]seq:\s*(\d+);',
-        'icmp_seq' => '[\s;]icmp_seq:\s*(\d+);',
-        'icmp_id'  => '[\s;]icmp_id:\s*(\d+);',
-        'icode'    => '[\s;]icode:\s*(\d+);'
+        'id'       => '[\s;]id:\s*(\d+)\s*;',
+        'seq'      => '[\s;]seq:\s*(\d+)\s*;',
+        'icmp_seq' => '[\s;]icmp_seq:\s*(\d+)\s*;',
+        'icmp_id'  => '[\s;]icmp_id:\s*(\d+)\s*;',
+        'icode'    => '[\s;]icode:\s*(\d+)\s*;'
     },
 
     ### snort options that can be put into iptables
@@ -177,20 +177,20 @@ my %snort_opts = (
     ### snort options that cannot be included directly
     ### within iptables filter statements (yet :)
     'unsupported' => {
-        'offset'       => '[\s;]offset:\s*\d+;',
-        'depth'        => '[\s;]depth:\s*\d+;',
-        'dsize'        => '[\s;]dsize:\s*\S+;',
-        'seq'          => '[\s;]seq:\s*\d+;',
-        'ack'          => '[\s;]ack:\s*\d+;',
-        'fragbits'     => '[\s;]fragbits:\s*\S+;',
-        'content-list' => '[\s;]content\-list:\s*\".*?\";',
-        'ipopts'       => '[\s;]ipopts:\s*.*?;',
-        'rpc'          => '[\s;]rpc:\s*\S+;',
+        'offset'       => '[\s;]offset:\s*\d+\s*;',
+        'depth'        => '[\s;]depth:\s*\d+\s*;',
+        'dsize'        => '[\s;]dsize:\s*\S+\s*;',
+        'seq'          => '[\s;]seq:\s*\d+\s*;',
+        'ack'          => '[\s;]ack:\s*\d+\s*;',
+        'fragbits'     => '[\s;]fragbits:\s*\S+\s*;',
+        'content-list' => '[\s;]content\-list:\s*\".*?\"\s*;',
+        'ipopts'       => '[\s;]ipopts:\s*.*?\s*;',
+        'rpc'          => '[\s;]rpc:\s*\S+\s*;',
     },
 
     ### snort options that fwsnort will ignore
     'ignore' => {
-        'rev'       => '[\s;]rev:\s*(\d+);'
+        'rev'       => '[\s;]rev:\s*(\d+)\s*;'
     }
 );
 
@@ -500,11 +500,6 @@ sub build_ipt_rule() {
         $rule .= " $iptables_opts{'dst_p'} $hdr_href->{'dst_p'}";
     }
 
-#    for my $opt (keys %$opts_href) {
-#        $rule .= " $opt $opts_href->{$opt}";
-#    }
-#
-
     ### handle tcp flags
     if ($hdr_href->{'proto'} eq 'tcp'
         && defined $opts_href->{'flags'}) {
@@ -551,6 +546,9 @@ sub build_ipt_rule() {
     my $pref_flag = 0;
     for my $opt (keys %{$snort_opts{'logprefix'}}) {
         if (defined $opts_href->{$opt}) {
+            ### make absolutely certain there are no commas in the log
+            ### message since we use commas to separate the various fields
+            $opts_href->{$opt} =~ s/,//g;
             $log_prefix .= "$opt: $opts_href->{$opt}, ";
             $pref_flag = 1;
         }
