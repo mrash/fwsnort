@@ -1174,7 +1174,9 @@ sub ipt_test() {
     } else {
         die " ** It does not appear that string match support is ",
             "compiled into\n    iptables.  fwsnort will not be of very ",
-            "much use without this.\n    Exiting.\n";
+            "much use without this.\n    ** NOTE: If you want to have ",
+            "fwsnort generate an iptables script anyway, ",
+            "specify the --no-ipt-test option.  Exiting.\n";
     }
 
     ### test for --hex-string
@@ -1185,11 +1187,12 @@ sub ipt_test() {
     } else {
         die " ** It does not appear that the --hex-string patch has ",
             "been applied.\n    fwsnort will not be of very much use ",
-            "without this.\n    Exiting.\n";
+            "without this.\n    ** NOTE: If you want to have ",
+            "fwsnort generate an iptables script anyway, ",
+            "specify the --no-ipt-test option. Exiting.\n";
     }
 
     ### more tests should be added
-
     return;
 }
 
