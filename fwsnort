@@ -146,7 +146,8 @@ my %snort_opts = (
         'itype'   => '[\s;]itype:\s*(\d+)\s*;',
         'ttl'     => '[\s;]ttl:\s*(\d+)\s*;',
         'tos'     => '[\s;]tos:\s*(\d+)\s*;',
-        'ipopts'  => '[\s;]ipopts:\s*(\w+)\s*;',
+#        'ipopts'  => '[\s;]ipopts:\s*(\w+)\s*;',
+        'ipopts'  => '[\s;]ipopts:\s*(rr|ssrr|lsrr)\s*;',
 #       'flow'    => ''  ### not implemented yet
     },
 
@@ -179,6 +180,8 @@ my %snort_opts = (
         'fragbits'     => '[\s;]fragbits:\s*\S+\s*;',
         'content-list' => '[\s;]content\-list:\s*\".*?\"\s*;',
         'rpc'          => '[\s;]rpc:\s*\S+\s*;',
+        'offset'       => '[\s;]offset:\s*\d+\s*;',
+        'depth'        => '[\s;]depth:\s*\d+\s*;',
 
         ### the following fields get logged by iptables but
         ### we cannot filter them directly (yet).
@@ -193,8 +196,8 @@ my %snort_opts = (
     ### snort options that fwsnort will ignore
     'ignore' => {
         'rev'    => '[\s;]rev:\s*(\d+)\s*;',
-        'offset' => '[\s;]offset:\s*\d+\s*;',
-        'depth'  => '[\s;]depth:\s*\d+\s*;',
+#        'offset' => '[\s;]offset:\s*\d+\s*;',
+#        'depth'  => '[\s;]depth:\s*\d+\s*;',
         'nocase' => '[\s;]nocase\s*;'
     }
 );
@@ -678,6 +681,11 @@ sub ipt_build_opts() {
         $rule .= " $iptables_opts{'itype'} $opts_href->{'itype'}"
     }
 
+    ### append ip options
+    if (defined $opts_href->{'ipopts'}) {
+        $rule .= " $iptables_opts{'ipopts'} $opts_href->{'ipopts'}"
+    }
+
     ### append snort content options
     my $content = '';
     if (defined $opts_href->{'uricontent'}) {
@@ -730,6 +738,10 @@ sub ipt_add_chains() {
                 $ipt_ruleset);
         }
     }
+    &logr("$cmds{'iptables'} -N fwsnort_FORWARD 2> /dev/null\n",
+        $ipt_ruleset);
+    &logr("$cmds{'iptables'} -F fwsnort_FORWARD\n\n",
+        $ipt_ruleset);
     return;
 }
 
@@ -742,6 +754,8 @@ sub ipt_jump_chain() {
                 "-j $fwsnort_chains{$type}{$intf}\n", $ipt_ruleset);
         }
     }
+    &logr("$cmds{'iptables'} -I FORWARD 1 -j fwsnort_FORWARD\n\n",
+        $ipt_ruleset);
     &logr("\n### EOF ###\n", $ipt_ruleset);
     return;
 }
