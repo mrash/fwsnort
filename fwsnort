@@ -29,6 +29,7 @@
 # $Id$
 #
 
+use IPTables::Parse;
 use Net::IPv4Addr qw(:all);
 use File::Copy;
 use Sys::Hostname;
@@ -116,8 +117,9 @@ my $verbose    = 0;
 my $snort_sid  = 0;
 my $rules_type = '';
 my $int_intf   = '';
-my $int_intf1  = '';
+my $dmz_intf   = '';
 my $ext_intf   = '';
+my @http_ports = ();
 
 my %snort_sigs;
 
@@ -133,20 +135,20 @@ my %config;
 my %cmds;
 
 &usage(1) unless (GetOptions(
-    'fw-apply'       => \$fw_apply,   # apply the generated ruleset
-    'fw-log'         => \$fw_log,
-    'fw-drop'        => \$fw_drop,
-    'fw-reject'      => \$fw_reject,
-    'snort-sid=i'    => \$snort_sid,  # Parse only this particular snort rule
-    'type=s'         => \$rules_type, # process this type of snort rule
-    'external-intf'  => \$ext_intf,   # manually specify the external interface
-    'internal-intf'  => \$int_intf,   # manually specify the internal interface
-    'internal-intf1' => \$int_intf1,  # manually specify the internal interface
-    'logfile=s'      => \$logfile,
-    'stdout'         => \$stdout,     # print the fw ruleset on STDOUT
-    'verbose'        => \$verbose,
-    'debug'          => \$debug,
-    'help'           => \$help
+    'fw-apply'      => \$fw_apply,   # apply the generated ruleset
+    'fw-log'        => \$fw_log,
+    'fw-drop'       => \$fw_drop,
+    'fw-reject'     => \$fw_reject,
+    'snort-sid=i'   => \$snort_sid,  # Parse only this particular snort rule
+    'type=s'        => \$rules_type, # process this type of snort rule
+    'external-intf' => \$ext_intf,   # manually specify the external interface
+    'internal-intf' => \$int_intf,   # manually specify the internal interface
+    'internal-dmz'  => \$dmz_intf,  # manually specify the internal interface
+    'logfile=s'     => \$logfile,
+    'stdout'        => \$stdout,     # print the fw ruleset on STDOUT
+    'verbose'       => \$verbose,
+    'debug'         => \$debug,
+    'help'          => \$help
 ));
 
 &usage(0) if $help;
@@ -159,7 +161,7 @@ my %cmds;
 
 ### take the interfaces from the command line if specified
 $config{'INTERNAL_INTF'} = $int_intf if $int_intf;
-$config{'INTERNAL_INTF1'} = $int_intf1 if $int_intf1;
+$config{'DMZ_INTF'}      = $dmz_intf if $dmz_intf;
 $config{'EXTERNAL_INTF'} = $ext_intf if $ext_intf;
 
 ### make sure the commands are where the
@@ -430,39 +432,58 @@ sub readconf() {
 sub validateconf() {
     die " ** The path to ifconfig is not in $fwsnort_conf.  Exiting.\n"
         unless defined $cmds{'ifconfig'};
-    if (defined $config{'INTERNAL_INTF'}) {
-        my $int_intf = $config{'INTERNAL_INTF'};
-        unless ($int_intf =~ /\w+\d+$/) {  ### eth0, ppp0, etc.
-            die " ** Edit the \"INTERNAL_INTF\" variable in $fwsnort_conf\n",
-                "    to point to a network interface (see ifconfig).\n";
+    for my $var (keys %config) {
+        if ($config{$var} eq '_CHANGEME_') {
+            die " ** $fwsnort_conf: The $var variable is set to\n",
+                "    \"_CHANGEME_\".  Edit $fwsnort_conf.\n";
         }
-        $snort_chains{$int_intf} = &get_intf_net($config{'INTERNAL_INTF'});
-#        $snort_chains{} = net
-        if (defined $config{'INTERNAL_INTF1'}) {
-            my $int_intf1 = $config{'INTERNAL_INTF1'};
-            unless ($int_intf1 =~ /\w+\d+$/) {
-                die " ** Edit the \"INTERNAL_INTF1\" variable in ",
-                    "$fwsnort_conf\n    to point to a network interface",
-                    "(see ifconfig).\n";
-            }
-            $snort_chains{$int_intf1}
-                = &get_intf_net($config{'INTERNAL_INTF1'});
-        }
-    } elsif (defined $config{'INTERNAL_INTF'}) {
-        die " ** Cannot have INTERNAL_INTF defined without also having ",
-            "    INTERNAL_INTF defined.  Exiting.\n";
-    } else {
-        die " ** Config variable \"INTERNAL_INTF\" is not in ",
-            "$fwsnort_conf.  Exiting.\n";
     }
-    if (defined $config{'EXTERNAL_INTF'}) {
-        unless ($config{'EXTERNAL_INTF'} =~ /\w+\d+$/) {  ### eth0, ppp0, etc.
-            die " ** Edit the \"EXTERNAL_INTF\" variable in $fwsnort_conf\n",
-                "    to point to a network interface (see ifconfig).\n";
-        }
+    if (defined $config{'NUM_INTERFACES'}) {
+        die " ** $fwsnort_conf: NUM_INTERFACES can be 1, 2, or 3.\n",
+            "    Edit $fwsnort_conf.\n" unless
+            $config{'NUM_INTERFACES'} =~ /^1$/ or
+            $config{'NUM_INTERFACES'} =~ /^2$/ or
+            $config{'NUM_INTERFACES'} =~ /^3$/;
     } else {
-        die " ** Config variable \"EXTERNAL_INTF\" is not in ",
-            "$fwsnort_conf.  Exiting.\n";
+        die " ** $fwsnort_conf: The NUM_INTERFACES variable is not\n",
+            "    defined. Exiting.\n";
+    }
+    if ($config{'NUM_INTERFACES'} == 3) {
+        die " ** $fwsnort_conf: EXTERNAL_INTF is not defined.  Exiting.\n"
+            unless defined $config{'EXTERNAL_INTF'};
+        die " ** $fwsnort_conf: INTERNAL_INTF is not defined.  Exiting.\n"
+            unless defined $config{'INTERNAL_INTF'};
+        die " ** $fwsnort_conf: DMZ_INTF is not defined.  Exiting.\n"
+            unless defined $config{'DMZ_INTF'};
+        $snort_chains{$config{'INTERNAL_INTF'}}
+            = &get_intf_net($config{'INTERNAL_INTF'});
+        $snort_chains{$config{'DMZ_INTF'}}
+            = &get_intf_net($config{'DMZ_INTF'});
+        $snort_chains{$config{'EXTERNAL_INTF'}}
+            = &get_intf_net($config{'EXTERNAL_INTF'});
+    } elsif ($config{'NUM_INTERFACES'} == 2) {
+        die " ** $fwsnort_conf: EXTERNAL_INTF is not defined.  Exiting.\n"
+            unless defined $config{'EXTERNAL_INTF'};
+        die " ** $fwsnort_conf: INTERNAL_INTF is not defined.  Exiting.\n"
+            unless defined $config{'INTERNAL_INTF'};
+        die " ** $fwsnort_conf: DMZ_INTF cannot be defined when ",
+            "NUM_INTERFACES is 2. Exiting.\n"
+            if defined $config{'DMZ_INTF'};
+        $snort_chains{$config{'INTERNAL_INTF'}}
+            = &get_intf_net($config{'INTERNAL_INTF'});
+        $snort_chains{$config{'EXTERNAL_INTF'}}
+            = &get_intf_net($config{'EXTERNAL_INTF'});
+    } elsif ($config{'NUM_INTERFACES'} == 1) {
+        die " ** $fwsnort_conf: EXTERNAL_INTF is not defined.  Exiting.\n"
+            unless defined $config{'EXTERNAL_INTF'};
+        die " ** $fwsnort_conf: INTERNAL_INTF cannot be defined when ",
+            "NUM_INTERFACES is 1. Exiting.\n"
+            if defined $config{'INTERNAL_INTF'};
+        die " ** $fwsnort_conf: DMZ_INTF cannot be defined when ",
+            "NUM_INTERFACES is 1. Exiting.\n"
+            if defined $config{'DMZ_INTF'};
+        $snort_chains{$config{'EXTERNAL_INTF'}}
+            = &get_intf_net($config{'EXTERNAL_INTF'});
     }
     return;
 }
@@ -477,7 +498,7 @@ sub get_intf_net() {
             return "${net}/${cidr}";
         }
     }
-    die " ** Could not get ip and netmask for $intf.  Is the ",
+    die " ** Could not get ip and netmask for interface $intf.  Is the ",
         "    interface up?\n";
 }
 
