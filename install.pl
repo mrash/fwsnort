@@ -40,6 +40,7 @@ my $rules_dir   = "${fwsnort_dir}/snort-1.8.7_rules";
 ### system binaries
 my $perlCmd = '/usr/bin/perl';
 my $makeCmd = '/usr/bin/make';
+my $gzipCmd = '/bin/gzip';
 #======================= end config ======================
 
 ### establish some defaults
@@ -125,6 +126,11 @@ sub install() {
         copy "snort-1.8.7_rules/${rfile}", "${rules_dir}/${rfile}";
     }
 
+    print "\n";
+
+    ### install the fwsnort.8 man page
+    &install_manpage();
+
     print " .. Copying fwsnort.conf -> ${fwsnort_dir}/fwsnort.conf\n";
     copy 'fwsnort.conf', "${fwsnort_dir}/fwsnort.conf";
     chmod 0600, "${fwsnort_dir}/fwsnort.conf";
@@ -142,6 +148,67 @@ sub install() {
 
 sub uninstall() {
     ### FIXME
+    return;
+}
+
+sub install_manpage() {
+    my $manpage = 'fwsnort.8';
+    ### remove old man page
+    unlink "/usr/local/man/man8/${manpage}" if
+        (-e "/usr/local/man/man8/${manpage}");
+
+    ### default location to put the psad man page, but check with
+    ### /etc/man.config
+    my $mpath = '/usr/share/man/man8';
+    if (-e '/etc/man.config') {
+        ### prefer to install $manpage in /usr/local/man/man8 if
+        ### this directory is configured in /etc/man.config
+        open M, '< /etc/man.config' or
+            die " ** Could not open /etc/man.config: $!";
+        my @lines = <M>;
+        close M;
+        ### prefer the path "/usr/share/man"
+        my $found = 0;
+        for my $line (@lines) {
+            chomp $line;
+            if ($line =~ m|^MANPATH\s+/usr/share/man|) {
+                $found = 1;
+                last;
+            }
+        }
+        ### try to find "/usr/local/man" if we didn't find /usr/share/man
+        unless ($found) {
+            for my $line (@lines) {
+                chomp $line;
+                if ($line =~ m|^MANPATH\s+/usr/local/man|) {
+                    $mpath = '/usr/local/man/man8';
+                    $found = 1;
+                    last;
+                }
+            }
+        }
+        ### if we still have not found one of the above man paths,
+        ### just select the first one out of /etc/man.config
+        unless ($found) {
+            for my $line (@lines) {
+                chomp $line;
+                if ($line =~ m|^MANPATH\s+(\S+)|) {
+                    $mpath = $1;
+                    last;
+                }
+            }
+        }
+    }
+    mkdir $mpath, 0755 unless -d $mpath;
+    my $mfile = "${mpath}/${manpage}";
+    print " .. Installing $manpage man page as $mfile\n";
+    copy $manpage, $mfile or die " ** Could not copy $manpage to " .
+        "$mfile: $!";
+    chmod 0644, $mfile;
+    print " .. Compressing manpage $mfile\n";
+    ### remove the old one so gzip doesn't prompt us
+    unlink "${mfile}.gz" if -e "${mfile}.gz";
+    system "$gzipCmd $mfile";
     return;
 }
 
