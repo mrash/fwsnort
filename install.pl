@@ -25,7 +25,8 @@ my $fwsnort_dir = '/etc/fwsnort';
 my $rules_dir   = "${fwsnort_dir}/snort_rules";
 
 ### system binaries
-my $iptablesCmd = '/sbin/iptables';
+my $perlCmd = '/usr/bin/perl';
+my $makeCmd = '/usr/bin/make';
 #======================= end config ======================
 
 ### establish some defaults
@@ -44,6 +45,9 @@ my $help      = 0;
 die " ** Cannot install and unistall.  Exiting."
     if $install && $uninstall;
 
+die " ** \"$perlCmd\" is not executable." unless -x $perlCmd;
+die " ** \"$makeCmd\" is not executable." unless -x $makeCmd;
+
 ### check to make sure we are running as root
 $< == 0 && $> == 0 or die "You need to be root (or equivalent UID 0" .
     " account) to install/uninstall fwsnort!\n";
@@ -56,7 +60,7 @@ exit 0;
 
 sub install() {
     die " ** You must run install.pl from the fwsnort " .
-        "sources directory." unless -e 'fwsnort';
+        "sources directory." unless -e 'fwsnort' && -e 'fwsnort.conf';
 
     unless (-d $fwsnort_dir) {
         print " .. mkdir $fwsnort_dir\n";
@@ -64,8 +68,20 @@ sub install() {
     }
     unless (-d $rules_dir) {
         print " .. mkdir $rules_dir\n";
-        mkdir $rules_dir, 0500
+        mkdir $rules_dir, 0500;
     }
+
+    print " .. Installing the Net::IPv4Addr perl modules.\n";
+    chdir 'Net-IPv4Addr-0.10' or die " ** Could not chdir to ",
+        "Net-IPv4Addr: $!";
+    unless (-e 'Makefile.PL' && -e 'IPv4Addr.pm') {
+        die " ** Your Net::IPv4Addr is incomplete!";
+    }
+    system "$perlCmd Makefile.PL";
+    system $makeCmd;
+    system "$makeCmd test";
+    system "$makeCmd install";
+    chdir '..';
 
     opendir D, 'snort_rules' or die " ** Could not open " .
         "the snort_rules directory";
@@ -78,6 +94,10 @@ sub install() {
             "-> ${rules_dir}/${rfile}\n";
         copy "snort_rules/${rfile}", "${rules_dir}/${rfile}";
     }
+
+    print " .. Copying fwsnort.conf -> ${fwsnort_dir}/fwsnort.conf\n";
+    copy 'fwsnort.conf', "${fwsnort_dir}/fwsnort.conf";
+    chmod 0600, "${fwsnort_dir}/fwsnort.conf";
 
     print " .. Copying fwsnort -> ${sbin_dir}/fwsnort\n";
     copy 'fwsnort', "${sbin_dir}/fwsnort";
