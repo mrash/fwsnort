@@ -418,7 +418,7 @@ sub parse_snort_rules() {
         if ($rules_type) {
             next FILE unless $rfile =~ /^${rules_type}\.rules$/;
         }
-        ($snort_type) = ($rfile =~ /(\w+)\.rules/);
+        ($snort_type) = ($rfile =~ /(\S+)\.rules/);
         printf("%-30s", " .. $rfile");
         &logr(" .. Parsing $rfile\n", $logfile);
         open R, "< ${rules_dir}/${rfile}" or die " ** Could not ",
