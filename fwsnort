@@ -181,8 +181,8 @@ my %snort_opts = (
         'fragbits'     => '[\s;]fragbits:\s*\S+\s*;',
         'content-list' => '[\s;]content\-list:\s*\".*?\"\s*;',
         'rpc'          => '[\s;]rpc:\s*\S+\s*;',
-        'offset'       => '[\s;]offset:\s*\d+\s*;',
-        'depth'        => '[\s;]depth:\s*\d+\s*;',
+#        'offset'       => '[\s;]offset:\s*\d+\s*;',
+#        'depth'        => '[\s;]depth:\s*\d+\s*;',
         'ipopts'  => '[\s;]ipopts:\s*(\w+)\s*;',
 
         ### the following fields get logged by iptables but
@@ -198,8 +198,8 @@ my %snort_opts = (
     ### snort options that fwsnort will ignore
     'ignore' => {
         'rev'    => '[\s;]rev:\s*(\d+)\s*;',
-#        'offset' => '[\s;]offset:\s*\d+\s*;',
-#        'depth'  => '[\s;]depth:\s*\d+\s*;',
+        'offset' => '[\s;]offset:\s*\d+\s*;',
+        'depth'  => '[\s;]depth:\s*\d+\s*;',
         'nocase' => '[\s;]nocase\s*;'
     }
 );
@@ -489,16 +489,19 @@ sub parse_rule_options() {
         }
     }
 
+    ### get the sid here for logging purposes
+    my ($sid) = ($rule_options =~ /$snort_opts{'logprefix'}{'sid'}/);
+
     for my $opt (keys %{$snort_opts{'unsupported'}}) {
         ### see if we match a regex belonging to an supported option
         if ($rule_options =~ /$snort_opts{'unsupported'}{$opt}/) {
-            &logr(" ** Unsupported option: \"$opt\" at " .
+            &logr(" ** SID: $sid  Unsupported option: \"$opt\" at " .
                 "line: $line_num.  Skipping rule.\n", $logfile);
             return 0;
         }
     }
     if ($rule_options =~ /content\s*:.*content\s*:/) {
-        &logr(" ** Unsupported multiple content fields at " .
+        &logr(" ** SID: $sid  Unsupported multiple content fields at " .
             "line: $line_num.  Skipping rule.\n", $logfile);
         return 0;
     }
@@ -520,7 +523,18 @@ sub parse_rule_options() {
         my $option = $1;
         if (! defined $opts{$option}
             && ! defined $snort_opts{'ignore'}{$option}) {
-            print "$line_num bad option: \"$option\" -- $rule_options\n";
+            print "$line_num SID: $sid  bad option: \"$option\" ",
+                "-- $rule_options\n";
+        }
+    }
+    ### check to make sure the content field does not contain NULL
+    ### characters (not yet supported by the iptables interface to
+    ### the string match module).
+    if (defined $opts{'content'}) {
+        if (&content_chk_null($opts{'content'})) {
+            &logr(" ** SID: $sid  Unsupported NULL character in hex content " .
+                "line: $line_num.  Skipping rule.\n", $logfile);
+            return 0;
         }
     }
     return \%opts;
@@ -617,6 +631,7 @@ sub match_port() {
     my ($ipt_port, $h_port) = @_;
     return 1 if $ipt_port eq '0:0';
     return 1 if $ipt_port eq $h_port;
+    return 1 if $h_port eq 0; ### bad traffic (port 0)
     if ($ipt_port =~ /(\d+):(\d+)/) {
         my $s = $1;
         my $e = $2;
@@ -1019,6 +1034,33 @@ sub ipt_type() {
     &logr("/bin/echo \" .. Adding iptables $type rules.\"\n",
         $ipt_script);
     return;
+}
+
+sub content_chk_null() {
+    my $content = shift;
+    ### see if there are any NULL chars ("00") in the hex data
+    $content =~ s/\s//g;
+    my $hex_f = 0;
+    my @chars = split '', $content;
+    NULL: for (my $i=0; $i<=$#chars; $i++) {
+        if ($chars[$i] eq '|') {
+            $hex_f = 1;
+            $i++;
+        }
+        if ($hex_f) {
+            for (my $j=$i; $j<=$#chars; $j += 2) {
+                ### check every even pair of characters
+                if ($chars[$j] eq '0' && $chars[$j+1] eq '0') {
+                    return 1;
+                }
+                if ($chars[$j] eq '|') {
+                    $hex_f = 1;
+                    $i++;
+                }
+            }
+        }
+    }
+    return 0;
 }
 
 sub check_type() {
