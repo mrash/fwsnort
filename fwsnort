@@ -6,27 +6,49 @@
 #
 # Purpose: To translate snort rules into equivalent iptables rules.
 #
-# Author: Michael B. Rash
+# Author: Michael B. Rash <mbr@cipherdyne.com>
 #
-# License: GPL
+# Copyright (C) 2003 Michael B. Rash (mbr@cipherdyne.com)
+#
+# License (GNU Public License):
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program; if not, write to the Free Software
+#    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307
+#    USA
 #
 #######################################################################
 #
 # $Id$
 #
 
-use Data::Dumper;
+use Net::IPv4Addr qw(:all);
+use File::Copy;
+use Sys::Hostname;
 use Getopt::Long;
 use strict;
 
 #======================== config ========================
 my $fwsnort_dir = '/etc/fwsnort';
 my $rules_dir   = "${fwsnort_dir}/snort_rules";
-my $fwrules     = "${fwsnort_dir}/fw_ruleset.sh";
+my $logdir      = "${fwsnort_dir}/log";
+my $scripts_dir = "${fwsnort_dir}/fwscripts";
+my $archive_dir = "${fwsnort_dir}/archive";
 
-### system binaries
-my $shCmd       = '/bin/sh';
-my $iptablesCmd = '/sbin/iptables';
+### config file
+my $fwsnort_conf = "${fwsnort_dir}/fwsnort.conf";
+
+### log and error files
+my $logfile    = "${logdir}/fwsnort.log";
+my $parse_errs = "${logdir}/parse_errs.log";
+
+### iptables script
+my $fwscript = "${scripts_dir}/fw_ruleset.sh";
 #====================== end config ======================
 
 ### version number
@@ -47,6 +69,7 @@ my %sopt_logprefix = (
 ### from the snort "header" which include protocol,
 ### source, destination, etc.)
 my %sopt_filter = (
+    'uricontent'   => '[\s;]uricontent:\s*\".*?\";',
     'content' => '[\s;]content:\s*\"(.*?)\";',
     'flags'   => '[\s;]flags:\s*(.*?);',
     'itype'   => '[\s;]itype:\s*(\d+);',
@@ -63,7 +86,6 @@ my %sopt_nofilter = (
     'seq'          => '[\s;]seq:\s*\d+;',
     'ack'          => '[\s;]ack:\s*\d+;',
     'fragbits'     => '[\s;]fragbits:\s*\S+;',
-    'uricontent'   => '[\s;]uricontent:\s*\".*?\";',
     'content-list' => '[\s;]content\-list:\s*\".*?\";',
     'ipopts'       => '[\s;]ipopts:\s*.*?;',
     'rpc'          => '[\s;]rpc:\s*\S+;',
@@ -90,15 +112,15 @@ my $stdout     = 0;
 my $debug      = 0;
 my $verbose    = 0;
 my $rules_type = '';
-my $logfile    = '';
+my $ext_net    = '';
+my $int_net    = '';
 
 my %snort_sigs;
 my $snort_sid;
 
-my %cmds = (
-    'iptables' => $iptablesCmd,
-    'sh'       => $shCmd
-);
+### config and commands hashes (constructed by readconf())
+my %config;
+my %cmds;
 
 &usage(1) unless (GetOptions(
     'fw-apply'    => \$fw_apply,    # apply the generated ruleset
@@ -107,6 +129,10 @@ my %cmds = (
     'fw-reject'   => \$fw_reject,
     'snort-sid=i' => \$snort_sid,   # Parse only this particular snort rule
     'type=s'      => \$rules_type,  # process this type of snort rule
+#    'ext-net'     => \$ext_int,     # manually specify the external network
+#    'home-net'    => \$home_int,    # manually specify the internal interface
+#    'ext-int'     => \$ext_int,     # manually specify the external interface
+#    'int-int'     => \$int_int,     # manually specify the internal interface
     'logfile=s'   => \$logfile,
     'stdout'      => \$stdout,      # print the fw ruleset on STDOUT
     'verbose'     => \$verbose,
@@ -116,18 +142,31 @@ my %cmds = (
 
 &usage(0) if $help;
 
-### make sure some things exist, etc.
+### make sure some directories exist, etc.
 &setup();
 
+### read in configuration info from the config file
+&readconf();
+
+### make sure the commands are where the
+### config file says they are
+&chk_commands();
+
 ### make sure the specified <type>.rules file exists
+### if --type was used
 &check_type() if $rules_type;
 
+### get the internal and external networks if they were
+### not specified with --
+
 ### parse snort rules (signatures)
-print "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=\n",
+print "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=",
+    "-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=\n",
     sprintf("%-30s%-10s%-10s%-10s%-10s", '    File', 'Filter',
-        'Log-only', 'None', 'Total'), "\n\n";
+        'Log-only', 'Failed', 'Total'), "\n\n";
 &parse_snort_rules();
-print "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=\n";
+print "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=",
+    "-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=\n";
 
 exit 0;
 ### write the equivalent iptables ruleset out to disk
@@ -149,7 +188,7 @@ sub parse_snort_rules() {
             next FILE unless $rfile =~ /${rules_type}\.rules$/;
         }
         my ($type) = ($rfile =~ /(\w+)\.rules/);
-        print sprintf("%-30s", " .. $rfile");
+        printf("%-30s", " .. $rfile");
         open R, "< ${rules_dir}/${rfile}" or die " ** Could not " .
             "open: ${rules_type}/${rfile}";
         my @lines = <R>;
@@ -187,8 +226,10 @@ sub parse_snort_rules() {
             my ($ipttype, $opt_filter_href, $opt_logprefix_href)
                 = &parse_rule_options($rule_options, $line_num);
             if ($ipttype == 1) {  ### we can filter
+#                &add_ipt_filter_rule($hdr_href, $opt_filter_href);
                 $parsed_ctr++;  ### keep track of successfully parsed rules
             } elsif ($ipttype == 2) {
+                &add_ipt_log_rule($hdr_href, $opt_logprefix_href);
                 $logonly_ctr++;
             } else {
                 $unsup_ctr++;
@@ -196,8 +237,8 @@ sub parse_snort_rules() {
             }
             $abs_num++;;
         }
-        print sprintf("%-10s%-10s%-10s%-10s", $parsed_ctr, $logonly_ctr,
-            $unsup_ctr, $rule_num) . "\n";
+        printf("%-10s%-10s%-10s%-10s\n", $parsed_ctr, $logonly_ctr,
+            $unsup_ctr, $rule_num);
     }
     print "\n";
     if ($abs_num) {  ### we parse at least one rule
@@ -297,6 +338,31 @@ sub parse_rule_hdr() {
     }
 }
 
+sub add_ipt_filter_rule() {
+    my ($hdr_href, $opt_filter_href) = @_;
+    my $src_port = '';
+    my $dst_port = '';
+    unless ($hdr_href->{'src_p'} eq 'any') {
+        $src_port = "--sport $hdr_href->{'src_p'}";
+    }
+    unless ($hdr_href->{'dst_p'} eq 'any') {
+        $src_port = "--dport $hdr_href->{'dst_p'}";
+    }
+    ### iptables  -A INPUT -p tcp --sport 3999 -m string
+    ###     --hex-string "fsdf" -j LOG
+#    if ($hdr_href->{'src'} eq '$EXTERNAL_NET' &&
+#        $hdr_href->{'dst'} eq '$HOME_NET') {
+        print "$cmds{'iptables'} -A SnortRules -p $hdr_href->{'proto'} ",
+            "$src_port $dst_port -i eth0 -j LOG\n";
+#    }
+    return;
+}
+
+sub add_ipt_log_rule() {
+    my ($hdr_href, $opt_logprefix_href) = @_;
+    return;
+}
+
 sub check_type() {
     unless (-e "${rules_dir}/${rules_type}.rules") {
         print " ** \"$rules_type\" is not a valid type.\n",
@@ -316,14 +382,48 @@ sub check_type() {
     return;
 }
 
+sub readconf() {
+    open C, "< $fwsnort_conf" or die $!;
+    my @lines = <C>;
+    close C;
+    for my $line (@lines) {
+        chomp $line;
+        next if $line =~ /^\s*#/;
+        next unless $line =~ /\S/;
+        if ($line =~ /^\s*(\w+)Cmd\s+(\S+);/) {  ### e.g. "iptableCmd"
+            $cmds{$1} = $2;
+        } elsif ($line =~ /^\s*(\S+)\s+(\S+);/) {
+            $config{$1} = $2;
+        }
+    }
+    return;
+}
+
 sub setup() {
+
+    ### turn off buffering
+    $| = 1;
+
+    ### these two directories must already exist for
+    ### things to work
     die " ** No fwsnort directory: $fwsnort_dir"
         unless -d $fwsnort_dir;
     die " ** No snort rules directory: $rules_dir"
         unless -d $rules_dir;
 
-    ### make sure the command are where they are supposed to be
-    &chk_commands();
+    ### these directories can be created a runtime
+    unless (-d $logdir) {
+        mkdir $logdir, 0500 or die $!;
+    }
+    unless (-d $scripts_dir) {
+        mkdir $scripts_dir, 0500 or die $!;
+    }
+    unless (-d $archive_dir) {
+        mkdir $archive_dir, 0500 or die $!;
+    }
+
+    ### archive old stuff
+#    &archive();
     return;
 }
 
@@ -336,6 +436,26 @@ sub chk_commands() {
     }
     return;
 }
+
+#sub archive() {
+#    my $file = shift;
+#    my ($filename) = ($file =~ m|.*/(.*)|);
+#    my $targetbase = "${CONF_ARCHIVE}/${filename}.old";
+#    for (my $i = 4; $i > 1; $i--) {  ### keep five copies of the old config files
+#        my $oldfile = $targetbase . $i;
+#        my $newfile = $targetbase . ($i+1);
+#        if (-e $oldfile) {
+#            move $oldfile, $newfile;
+#        }
+#    }
+#    if (-e $targetbase) {
+#        my $newfile = $targetbase . '2';
+#        move $targetbase, $newfile;
+#    }
+#    &logr(" .. Archiving $file -> $targetbase\n");
+#    copy $file, $targetbase;   ### move $file into the archive directory
+#    return;
+#}
 
 sub logr() {
     my $msg = shift;
