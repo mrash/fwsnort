@@ -234,10 +234,10 @@ my $fw_reject  = 0;
 my $help       = 0;
 my $stdout     = 0;
 my $debug      = 0;
-my $verbose    = 0;
 my $strict     = 0;
 my $snort_sid  = 0;
 my $dump_conf  = 0;
+my $ver        = 0;
 my $rules_type = '';
 
 &usage(1) unless (GetOptions(
@@ -250,14 +250,20 @@ my $rules_type = '';
     'logfile=s'   => \$logfile,
     'stdout'      => \$stdout,     # print the fw ruleset on STDOUT
     'strict'      => \$strict,
-    'verbose'     => \$verbose,
     'debug'       => \$debug,
     'dump-conf'   => \$dump_conf,  # display config variables
     'config=s'    => \$fwsnort_conf, # manually specify the config file
+    'Version'     => \$ver,
     'help'        => \$help
 ));
 
 &usage(0) if $help;
+
+### Print the version number and exit if -V given on the command line.
+if ($ver) {
+    print " .. fwsnort v$version, by Michael Rash (mbr\@cipherdyne.com)\n";
+    exit 0;
+}
 
 if ($strict) {
     ### make the snort options parser very strict
@@ -417,8 +423,8 @@ sub parse_rule_options() {
     for my $opt (keys %{$snort_opts{'unsupported'}}) {
         ### see if we match a regex belonging to an supported option
         if ($rule_options =~ /$snort_opts{'unsupported'}{$opt}/) {
-            print " ** Unsupported option: \"$opt\" at " .
-                "line: $line_num.  Skipping rule.\n" if $verbose;
+            &logr(" ** Unsupported option: \"$opt\" at " .
+                "line: $line_num.  Skipping rule.\n", $logfile);
             return 0;
         }
     }
