@@ -57,7 +57,8 @@ my %cmds = (
     'perl' => $perlCmd,
     'make' => $makeCmd,
     'gzip' => $gzipCmd,
-    'wget' => $wgetCmd
+    'wget' => $wgetCmd,
+    'tar'  => $tarCmd
 );
 
 &usage(1) unless (GetOptions(
