@@ -151,14 +151,14 @@ external interface, one internal interface, and one dmz interface.
 EXTERNAL_INTF specifies the external interface and must match the name
 of one interface on the Linux system as reported under
 .B ifconfig,
-e.g. "eth0".  The external interface is the only required interface.
-Systems with only one interface such as an individual host will define
-EXTERNAL_INTF and leave the INTERNAL_INTF and DMZ_INTF variables
-commented out of /etc/fwsnort/fwsnort.conf.
+e.g. "eth0".  Both the external and interfaces must be defined, but if
+fwsnort is deployed on a single-interface host, then define the external
+and internal interfaces to be the same.
 .TP
 
 .BR INTERNAL_INTF
-Defines an (optional) internal interface, e.g. "eth1".
+Defines the internal interface, e.g. "eth1".  (May be the same as the
+external interface if the host has only one interface).
 .TP
 
 .BR DMZ_INTF
