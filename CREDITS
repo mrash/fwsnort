@@ -1,4 +1,7 @@
 Thomas Bullinger        Contributed patches for the --no-jumps option, and
                         wrote the makefwsnort.sh script to download the
                         latest stable snort rules.  Bugfix for correct ip
-                        protocol number.
+                        protocol number.  Bugfix for missed --ipt-script
+                        option.
+
+Paul O'Neil             Discovered missed DMZ interface code bug.
