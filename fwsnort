@@ -1627,8 +1627,8 @@ fwsnort v$version
  .. By Michael Rash <mbr\@cipherdyne.org>, http://www.cipherdyne.org/
 
 Usage: fwsnort [-t <snort rule type>] [-l <logfile>] [-v] [-V] [-h]
-       [-u] [-c <config file>] [--snort-sid <sid>] [--ipt-apply]
-       [--ipt-drop] [--ipt-script <script>] [--no-ipt-sync]
+       [-u] [-c <config file>] [--snort-sid=<sid>] [--ipt-apply]
+       [--ipt-drop] [--ipt-script=<script>] [--no-ipt-sync]
        [--no-ipt-log] [--no-ipt-test] [--no-ipt-jumps] [--dump-conf]
        [--debug] [--strict]
 
@@ -1636,11 +1636,13 @@ Options:
     --strict                - Make snort parser very strict about
                               which options it will translate into
                               iptables rules.
-    --ipt-script <script>   - Print iptables script to <script>.
+    --ipt-script=<script>   - Print iptables script to <script>
+                              instead of the normal location at
+                              $ipt_script
     --ipt-apply             - Execute the fwsnort.sh script.
     --ipt-block             - Add a protocol-dependent DROP or REJECT
                               rule for every logging rule.
-    --snort-sid  <sid>      - Generate an equivalent iptables rule
+    --snort-sid=<sid>       - Generate an equivalent iptables rule
                               for the specific snort id <sid>.
     --no-ipt-sync           - Add iptables rules for signatures that
                               are already blocked by iptables.
@@ -1653,11 +1655,14 @@ Options:
                               chains created by fwsnort.
     -u   --update-rules     - Download latest snort rules from
                               http://$snort_website/
-    -t   --type <type>      - Only process snort rules of type <type>
+    -t   --type=<type>      - Only process snort rules of type <type>
                               (e.g. "ddos" or "backdoor")
-    -c   --config <config>  - Use <config> instead of the normal
+    -c   --config=<config>  - Use <config> instead of the normal
                               config file located at
-                              $fwsnort_conf.
+                              $fwsnort_conf
+    -l   --logfile=<file>   - Log messages to <file> instead of the
+                              normal location at
+                              $logfile
     --dump-conf             - Dump configuration on STDOUT and exit.
     --debug                 - Run in debug mode.
     -v   --verbose          - Run in verbose mode.
