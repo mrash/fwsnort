@@ -209,18 +209,27 @@ sub parse_rule_options() {
         }
     }
 
+    ### if we match one of these options we cannot write filter
+    ### rules directly but we can still detect the signature in
+    ### iptables log messages.
     for my $option (keys %sopt_log) {
         my $regex = $sopt_log{$option};
         if ($rule_options =~ /$regex/) {
             $opt_log{$option} = $1;
         }
     }
+
+    ### match snort options such as "msg" and "sid" that should
+    ### go in --log-prefix.
     for my $option (keys %sopt_logprefix) {
         my $regex = $sopt_logprefix{$option};
         if ($rule_options =~ /$regex/) {
             $opt_logprefix{$option} = $1;
         }
     }
+
+    ### match snort options such as "content" and "ttl" that we
+    ### can write filter rules for directly.
     for my $option (keys %sopt_filter) {
         my $regex = $sopt_filter{$option};
         if ($rule_options =~ /$regex/) {
@@ -233,7 +242,7 @@ sub parse_rule_options() {
         if (! defined $sopt_filter{$option} &&
             ! defined $sopt_logprefix{$option} &&
             ! defined $sopt_log{$option}) {
-            print "$line_num option: $option -- $rule_options\n";
+            print "$line_num option: \"$option\" -- $rule_options\n";
         }
     }
     return \%opt_filter, \%opt_logprefix;
