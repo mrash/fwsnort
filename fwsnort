@@ -182,7 +182,8 @@ my %snort_opts = (
         'seq'      => '[\s;]seq:\s*(\d+)\s*;',
         'icmp_seq' => '[\s;]icmp_seq:\s*(\d+)\s*;',
         'icmp_id'  => '[\s;]icmp_id:\s*(\d+)\s*;',
-        'icode'    => '[\s;]icode:\s*(\d+)\s*;'
+        'icode'    => '[\s;]icode:\s*(\d+)\s*;',
+        'sameip'   => '[\s;]sameip\s*;'
     },
 
     ### snort options that fwsnort will ignore
@@ -214,7 +215,9 @@ my @sql_servers    = ();
 my @telnet_servers = ();
 my @aim_servers    = ();
 
-my %snort_sigs;
+### contains the names of user-defined iptables chains for
+### fwsnort rules
+my %fwsnort_chains;
 
 ### For each internal interface fwsnort will create two associated iptables
 ### chains.  For example, suppose eth0 is the external interface and
@@ -238,6 +241,7 @@ my $strict     = 0;
 my $snort_sid  = 0;
 my $dump_conf  = 0;
 my $ver        = 0;
+my $ipt_rule_ctr = 1;
 my $rules_type = '';
 
 &usage(1) unless (GetOptions(
@@ -294,6 +298,10 @@ if ($strict) {
 ### make sure the config is correct
 &validateconf();
 
+### cache all of the fwsnort iptables chains now that
+### we know what all of the interfaces are
+&build_fwsnort_chains();
+
 ### print a header at the top of the iptables ruleset
 ### script
 &ipt_hdr();
@@ -324,7 +332,7 @@ print "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=",
     "-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=\n";
 
 ### jump packets (as appropriate) from the INPUT and
-### FORWARD chains to our chains
+### FORWARD chains to our fwsnort chains
 &ipt_jump_chain();
 
 chmod 0500, $ipt_ruleset;
@@ -384,13 +392,15 @@ sub parse_snort_rules() {
                     "Dst_p: $hdr_href->{'dst_p'}\n";
             }
             my $opts_href = &parse_rule_options($rule_options, $line_num);
-            if ($opts_href) {
-                &ipt_build_rule($hdr_href, $opts_href);
-                $parsed_ctr++;  ### keep track of successfully parsed rules
-            } else {
+            unless ($opts_href) {
                 $unsup_ctr++;
                 next RULE;
             }
+
+            ### construct the iptables rule and add it to $ipt_ruleset
+            &ipt_build($hdr_href, $opts_href);
+
+            $parsed_ctr++;  ### keep track of successfully parsed rules
             $abs_num++;;
         }
         printf("%-10s%-10s%-10s\n", $parsed_ctr, $unsup_ctr, $rule_num);
@@ -482,73 +492,135 @@ sub parse_rule_hdr() {
     }
 }
 
-sub ipt_build_rule() {
+sub build_fwsnort_chains() {
+
+    ### this one is always defined
+    $fwsnort_chains{'INPUT'}{$config{'EXTERNAL_INTF'}}
+        = "fwsnort_INPUT_$config{'EXTERNAL_INTF'}";
+
+    $fwsnort_chains{'INPUT'}{$config{'INTERNAL_INTF'}}
+        = "fwsnort_INPUT_$config{'INTERNAL_INTF'}"
+        if defined $config{'INTERNAL_INTF'};
+
+    $fwsnort_chains{'INPUT'}{$config{'DMZ_INTF'}}
+        = "fwsnort_INPUT_$config{'DMZ_INTF'}"
+        if defined $config{'DMZ_INTF'};
+
+    return;
+}
+
+sub ipt_build() {
     my ($hdr_href, $opts_href) = @_;
 
     ### start the rule
-    my $rule = $cmds{'iptables'};
+    my $rule = '';
 
     ### determine which chain the rule should be added to (default
     ### to the fwsnort_<EXTERNAL_INTF> chain).
-    my $chain = " -A fwsnort_${config{'EXTERNAL_INTF'}}";
-    if ($config{'NUM_INTERFACES'} > 1) {
-        if (defined $config{$hdr_href->{'src'}}
-            && defined $intf_net{$config{$hdr_href->{'src'}}}) {
-            $chain =
-                " -A fwsnort_${intf_net{$config{$hdr_href->{'src'}}}{'name'}}";
-        } elsif (defined $config{$hdr_href->{'dst'}}
-            && defined $intf_net{$hdr_href->{'dst'}}) {
-            $chain =
-                " -A fwsnort_${intf_net{$config{$hdr_href->{'dst'}}}{'name'}}";
-        }
+#    my $chain = " -A fwsnort_${config{'EXTERNAL_INTF'}}";
+#    if ($config{'NUM_INTERFACES'} > 1) {
+#        if (defined $config{$hdr_href->{'src'}}
+#            && defined $intf_net{$config{$hdr_href->{'src'}}}) {
+#            $chain =
+#                " -A fwsnort_${intf_net{$config{$hdr_href->{'src'}}}{'name'}}";
+#        } elsif (defined $config{$hdr_href->{'dst'}}
+#            && defined $intf_net{$hdr_href->{'dst'}}) {
+#            $chain =
+#                " -A fwsnort_${intf_net{$config{$hdr_href->{'dst'}}}{'name'}}";
+#        }
+#    }
+
+
+    my $src = $hdr_href->{'src'};
+    my $dst = $hdr_href->{'dst'};
+
+    if (($src eq 'EXTERNAL_NET'|| $src eq 'any')
+        && $dst eq 'HOME_NET') {
+
+        $rule = &ipt_build_rule(
+            "$cmds{'iptables'} -A fwsnort_INPUT_$config{'EXTERNAL_INTF'}",
+            $hdr_href,
+            $opts_href,
+            '',
+            $intf_net{'EXTERNAL_INTF'}{'ip'}
+        );
+    } elsif ($src eq 'HOME_NET'
+        && ($dst eq 'EXTERNAL_NET' || $dst eq 'any')) {
+
+        &ipt_build_rule(
+            "$cmds{'iptables'} -A fwsnort_INPUT_$config{'INTERNAL_INTF'}",
+            $hdr_href,
+            $opts_href,
+            '',
+            $intf_net{'INTERNAL_INTF'}{'ip'}
+        );
+
+    } elsif ($src eq 'any' && $dst eq 'any') {
+        print "dup: $ipt_rule_ctr\n";
+        $rule = &ipt_build_rule(
+            "$cmds{'iptables'} -A fwsnort_INPUT_$config{'EXTERNAL_INTF'}",
+            $hdr_href,
+            $opts_href,
+            '',
+            $intf_net{'EXTERNAL_INTF'}{'ip'}
+        );
+
+        &ipt_build_rule(
+            "$cmds{'iptables'} -A fwsnort_INPUT_$config{'INTERNAL_INTF'}",
+            $hdr_href,
+            $opts_href,
+            '',
+            $intf_net{'INTERNAL_INTF'}{'ip'}
+        );
+
+    } else {
+        print "src: $src, dst: $dst\n";
     }
 
-    ### append the chain to the rule
-    $rule .= $chain;
+    return;
+}
+
+sub ipt_build_rule() {
+    my ($rule, $hdr_href, $opts_href, $src, $dst) = @_;
 
     ### append the protocol to the rule
     $rule .= " $iptables_opts{'proto'} $hdr_href->{'proto'}";
 
     ### append the source
-    if (defined $config{$hdr_href->{'src'}}) {
-        if (! defined $intf_net{$config{$hdr_href->{'src'}}}) {
-            $rule .= " $iptables_opts{'src'} $hdr_href->{'src'}";
-        }
-    } elsif ($hdr_href->{'src'} ne 'any') {
-        $rule .= " $iptables_opts{'src'} $hdr_href->{'src'}";
+    if ($src) {
+        $rule .= " $iptables_opts{'src'} $src";
     }
 
     ### append the source port
     if (defined $config{$hdr_href->{'src_p'}}) {
         $rule .= " $iptables_opts{'src_p'} $config{$hdr_href->{'src_p'}}";
     } elsif ($hdr_href->{'src_p'} ne 'any') {
+        $hdr_href->{'src_p'} =~ s/\!/! /;
         $rule .= " $iptables_opts{'src_p'} $hdr_href->{'src_p'}";
     }
 
     ### append the destination
-    if ($hdr_href->{'dst'} eq 'EXTERNAL_NET') {  ### special case
-        $rule .= " $iptables_opts{'dst'} 0.0.0.0/0";
-    } elsif (defined $config{$hdr_href->{'dst'}}) {
-        if (defined $intf_net{$config{$hdr_href->{'dst'}}}) {
-            $rule .= " $iptables_opts{'dst'} " .
-                "$intf_net{$config{$hdr_href->{'dst'}}}{'net'}";
-        } else {
-            $rule .= " $iptables_opts{'dst'} $hdr_href->{'dst'}";
-        }
-    } elsif ($hdr_href->{'dst'} ne 'any') {
-        $rule .= " $iptables_opts{'dst'} $hdr_href->{'dst'}";
+    if ($dst) {
+        $rule .= " $iptables_opts{'dst'} $dst";
     }
 
     ### append the destination port
     if (defined $config{$hdr_href->{'dst_p'}}) {
         $rule .= " $iptables_opts{'dst_p'} $config{$hdr_href->{'dst_p'}}";
     } elsif ($hdr_href->{'dst_p'} ne 'any') {
+        $hdr_href->{'src_p'} =~ s/\!/! /;
         $rule .= " $iptables_opts{'dst_p'} $hdr_href->{'dst_p'}";
     }
 
+    &ipt_build_opts($rule, $opts_href);
+    return;
+}
+
+sub ipt_build_opts() {
+    my ($rule, $opts_href) = @_;
+
     ### append tcp flags
-    if ($hdr_href->{'proto'} eq 'tcp'
-        && defined $opts_href->{'flags'}) {
+    if (defined $opts_href->{'flags'}) {
         my $f_str = '';
 
         $f_str .= 'URG,' if $opts_href->{'flags'} =~ /U/;
@@ -606,7 +678,7 @@ sub ipt_build_rule() {
 
     ### print the rest of the logprefix snort options in a comment
     ### one line above the rule
-    my $comment = "###";
+    my $comment = '###';
     $comment .= " msg: \"$opts_href->{'msg'}\","
         if defined $opts_href->{'msg'};
     $comment .= " classtype: \"$opts_href->{'classtype'}\","
@@ -615,19 +687,25 @@ sub ipt_build_rule() {
         if defined $opts_href->{'reference'};
     $comment =~ s/,$//;
 
+    ### write the rule out to the iptables script
+    &logr("/bin/echo \" .. rule $ipt_rule_ctr\"\n", $ipt_ruleset);
     &logr("$comment\n", $ipt_ruleset);
     &logr("$rule\n", $ipt_ruleset);
+    $ipt_rule_ctr++;
+
     return;
 }
 
 sub ipt_add_chains() {
-    for my $intf (keys %intf_net) {
-        &logr("### create and flush the \"fwsnort_${intf_net{$intf}{'name'}}\" " .
-            "chain.\n", $ipt_ruleset);
-        &logr("$cmds{'iptables'} -N fwsnort_${intf_net{$intf}{'name'}}\n",
-            $ipt_ruleset);
-        &logr("$cmds{'iptables'} -F fwsnort_${intf_net{$intf}{'name'}}\n\n",
-            $ipt_ruleset);
+    &logr("\n###\n############ Create fwsnort iptables chains. " .
+        "############\n###\n", $ipt_ruleset);
+    for my $type (keys %fwsnort_chains) {
+        for my $intf (keys %{$fwsnort_chains{$type}}) {
+            &logr("$cmds{'iptables'} -N $fwsnort_chains{$type}{$intf} " .
+                "2> /dev/null\n", $ipt_ruleset);
+            &logr("$cmds{'iptables'} -F $fwsnort_chains{$type}{$intf}\n\n",
+                $ipt_ruleset);
+        }
     }
     return;
 }
@@ -673,7 +751,7 @@ sub ipt_hdr() {
 
 sub ipt_type() {
     my $type = shift;
-    &logr("\n###\n############ ${type}.rules ############\n###\n\n",
+    &logr("\n###\n############ ${type}.rules ############\n###\n",
         $ipt_ruleset);
     return;
 }
@@ -724,48 +802,28 @@ sub readconf() {
 sub validateconf() {
     die " ** The path to ifconfig is not in $fwsnort_conf. Exiting.\n"
         unless defined $cmds{'ifconfig'};
-    if (defined $config{'NUM_INTERFACES'}) {
-        die " ** $fwsnort_conf: NUM_INTERFACES can be 1, 2, or 3.\n",
-            "    Edit $fwsnort_conf.\n" unless
-            $config{'NUM_INTERFACES'} =~ /^1$/ or
-            $config{'NUM_INTERFACES'} =~ /^2$/ or
-            $config{'NUM_INTERFACES'} =~ /^3$/;
-    } else {
-        die " ** $fwsnort_conf: The NUM_INTERFACES variable is not\n",
-            "    defined. Exiting.\n";
-    }
-    if ($config{'NUM_INTERFACES'} == 3) {
-        die " ** $fwsnort_conf: DMZ_INTF is not defined. Exiting.\n"
-            unless defined $config{'DMZ_INTF'};
-        $intf_type{$config{'DMZ_INTF'}} = 'DMZ_INTF';
-        $intf_net{'DMZ_INTF'}{'name'} = $config{'DMZ_INTF'};
-        ($intf_net{'DMZ_INTF'}{'ip'}, $intf_net{'DMZ_INTF'}{'net'})
-            = &get_intf_net($config{'DMZ_INTF'});
-    }
-    if ($config{'NUM_INTERFACES'} == 2 || $config{'NUM_INTERFACES'} == 3) {
-        die " ** $fwsnort_conf: INTERNAL_INTF is not defined. Exiting.\n"
-            unless defined $config{'INTERNAL_INTF'};
-        die " ** $fwsnort_conf: DMZ_INTF cannot be defined when ",
-            "NUM_INTERFACES is 2. Exiting.\n"
-            if defined $config{'DMZ_INTF'};
-        $intf_type{$config{'INTERNAL_INTF'}} = 'INTERNAL_INTF';
-        $intf_net{'INTERNAL_INTF'}{'name'} = $config{'INTERNAL_INTF'};
-        ($intf_net{'INTERNAL_INTF'}{'ip'}, $intf_net{'INTERNAL_INTF'}{'net'})
-            = &get_intf_net($config{'INTERNAL_INTF'});
-    } elsif ($config{'NUM_INTERFACES'} == 1) {
-        die " ** $fwsnort_conf: INTERNAL_INTF cannot be defined when ",
-            "NUM_INTERFACES is 1. Exiting.\n"
-            if defined $config{'INTERNAL_INTF'};
-        die " ** $fwsnort_conf: DMZ_INTF cannot be defined when ",
-            "NUM_INTERFACES is 1. Exiting.\n"
-            if defined $config{'DMZ_INTF'};
-    }
+
     die " ** $fwsnort_conf: EXTERNAL_INTF is not defined. Exiting.\n"
         unless defined $config{'EXTERNAL_INTF'};
     $intf_type{$config{'EXTERNAL_INTF'}} = 'EXTERNAL_INTF';
     $intf_net{'EXTERNAL_INTF'}{'name'} = $config{'EXTERNAL_INTF'};
     ($intf_net{'EXTERNAL_INTF'}{'ip'}, $intf_net{'EXTERNAL_INTF'}{'net'})
         = &get_intf_net($config{'EXTERNAL_INTF'});
+
+    if (defined $config{'INTERNAL_INTF'}) {
+        $intf_type{$config{'INTERNAL_INTF'}} = 'INTERNAL_INTF';
+        $intf_net{'INTERNAL_INTF'}{'name'} = $config{'INTERNAL_INTF'};
+        ($intf_net{'INTERNAL_INTF'}{'ip'}, $intf_net{'INTERNAL_INTF'}{'net'})
+            = &get_intf_net($config{'INTERNAL_INTF'});
+    }
+    if (defined $config{'DMZ_INTF'}) {
+        die " ** $fwsnort_conf: DMZ_INTF cannot be defined without ",
+            "also defining INTERNAL_INTF. Exiting.\n";
+        $intf_type{$config{'DMZ_INTF'}} = 'DMZ_INTF';
+        $intf_net{'DMZ_INTF'}{'name'} = $config{'DMZ_INTF'};
+        ($intf_net{'DMZ_INTF'}{'ip'}, $intf_net{'DMZ_INTF'}{'net'})
+            = &get_intf_net($config{'DMZ_INTF'});
+    }
 
     ### build ip arrays for the server variables
     &build_ip_arr('HTTP_SERVERS', \@http_servers);
