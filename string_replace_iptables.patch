@@ -1,0 +1,179 @@
+Index: extensions/libipt_string.c
+===================================================================
+RCS file: /cvspublic/iptables/extensions/libipt_string.c,v
+retrieving revision 1.11
+diff -u -r1.11 libipt_string.c
+--- extensions/libipt_string.c	5 Jan 2004 09:50:12 -0000	1.11
++++ extensions/libipt_string.c	23 Mar 2004 05:05:38 -0000
+@@ -32,8 +32,10 @@
+ {
+ 	printf(
+ "STRING match v%s options:\n"
+-"--string [!] string          Match a string in a packet\n"
+-"--hex-string [!] string      Match a hex string in a packet\n",
++"--string [!] string          Match a string in a packet.\n"
++"--hex-string [!] string      Match a hex string in a packet.\n"
++"--replace-string             Replace matching string with a new string.\n"
++"--replace-hex-string         Replace matching string with a new hex string.\n",
+ IPTABLES_VERSION);
+ }
+ 
+@@ -41,6 +43,8 @@
+ static struct option opts[] = {
+ 	{ .name = "string",     .has_arg = 1, .flag = 0, .val = '1' },
+ 	{ .name = "hex-string", .has_arg = 1, .flag = 0, .val = '2' },
++	{ .name = "replace-string", .has_arg = 1, .flag = 0, .val = '3' },
++	{ .name = "replace-hex-string", .has_arg = 1, .flag = 0, .val = '4' },
+ 	{ .name = 0 }
+ };
+ 
+@@ -54,15 +58,15 @@
+ 
+ 
+ static void
+-parse_string(const unsigned char *s, struct ipt_string_info *info)
++parse_string(const unsigned char *s, char *string)
+ {	
+-	if (strlen(s) <= BM_MAX_NLEN) strcpy(info->string, s);
++	if (strlen(s) <= BM_MAX_NLEN) strcpy(string, s);
+ 	else exit_error(PARAMETER_PROBLEM, "STRING too long `%s'", s);
+ }
+ 
+ 
+ static void
+-parse_hex_string(const unsigned char *s, struct ipt_string_info *info)
++parse_hex_string(const unsigned char *s, char *string, u_int16_t *len)
+ {
+ 	int i=0, slen, sindex=0, schar;
+ 	short hex_f = 0, literal_f = 0;
+@@ -101,7 +105,7 @@
+ 				exit_error(PARAMETER_PROBLEM,
+ 					"Bad literal placement at end of string");
+ 			}
+-			info->string[sindex] = s[i+1];
++			string[sindex] = s[i+1];
+ 			i += 2;  /* skip over literal char */
+ 			literal_f = 0;
+ 		} else if (hex_f) {
+@@ -123,20 +127,20 @@
+ 			if (! sscanf(hextmp, "%x", &schar))
+ 				exit_error(PARAMETER_PROBLEM,
+ 					"Invalid hex char `%c'", s[i]);
+-			info->string[sindex] = (char) schar;
++			string[sindex] = (char) schar;
+ 			if (s[i+2] == ' ')
+ 				i += 3;  /* spaces included in the hex block */
+ 			else
+ 				i += 2;
+ 		} else {  /* the char is not part of hex data, so just copy */
+-			info->string[sindex] = s[i];
++			string[sindex] = s[i];
+ 			i++;
+ 		}
+ 		if (sindex > BM_MAX_NLEN)
+ 			exit_error(PARAMETER_PROBLEM, "STRING too long `%s'", s);
+ 		sindex++;
+ 	}
+-	info->len = sindex;
++	*len = sindex;
+ }
+ 
+ 
+@@ -157,7 +161,7 @@
+ 				   "Can't specify multiple strings");
+ 
+ 		check_inverse(optarg, &invert, &optind, 0);
+-		parse_string(argv[optind-1], stringinfo);
++		parse_string(argv[optind-1], stringinfo->string);
+ 		if (invert)
+ 			stringinfo->invert = 1;
+ 		stringinfo->len=strlen((char *)&stringinfo->string);
+@@ -167,15 +171,51 @@
+ 	case '2':
+ 		if (*flags)
+ 			exit_error(PARAMETER_PROBLEM,
+-				   "Can't specify multiple strings");
++				   "Can't specify multiple hex strings");
+ 
+ 		check_inverse(optarg, &invert, &optind, 0);
+-		parse_hex_string(argv[optind-1], stringinfo);  /* sets length */
++		parse_hex_string(argv[optind-1], stringinfo->string, &stringinfo->len);
+ 		if (invert)
+ 			stringinfo->invert = 1;
+ 		*flags = 1;
+ 		break;
+ 
++	case '3':
++		if (! *flags)
++			exit_error(PARAMETER_PROBLEM,
++				"Must specify a string to replace with --string or --hex-string");
++
++		check_inverse(optarg, &invert, &optind, 0);
++		if (invert)
++			exit_error(PARAMETER_PROBLEM,
++				"Can't negate --replace-string");
++		parse_string(argv[optind-1], stringinfo->replace_str);
++		stringinfo->replace_len=strlen((char *)&stringinfo->replace_str);
++		/* make absolutely sure the replace string length is less than
++		 * or equal to the length of the string to be replaced */
++		if (stringinfo->replace_len > stringinfo->len)
++			exit_error(PARAMETER_PROBLEM,
++				"Length of replace string must be <= length of string to be replaced");
++		break;
++
++	case '4':
++		if (! *flags)
++			exit_error(PARAMETER_PROBLEM,
++				"Must specify a string to replace with --string or --hex-string");
++
++		check_inverse(optarg, &invert, &optind, 0);
++		if (invert)
++			exit_error(PARAMETER_PROBLEM,
++				"Can't negate --replace-hex-string");
++		parse_hex_string(argv[optind-1], stringinfo->replace_str,
++			&stringinfo->replace_len);
++		/* make absolutely sure the replace string length is less than
++		 * or equal to the length of the string to be replaced */
++		if (stringinfo->replace_len > stringinfo->len)
++			exit_error(PARAMETER_PROBLEM,
++				"Length of replace string must be <= length of string to be replaced");
++		break;
++
+ 	default:
+ 		return 0;
+ 	}
+@@ -253,6 +293,16 @@
+ 		printf("STRING match %s", (info->invert) ? "!" : "");
+ 		print_string(info->string, info->len);
+ 	}
++	/* print replace string (if any) */
++	if (info->replace_len > 0) {
++		if (is_hex_string(info->replace_str, info->replace_len)) {
++			printf("REPLACE ");
++			print_hex_string(info->replace_str, info->replace_len);
++		} else {
++			printf("REPLACE ");
++			print_string(info->replace_str, info->replace_len);
++		}
++	}
+ }
+ 
+ 
+@@ -269,6 +319,16 @@
+ 	} else {
+ 		printf("--string %s", (info->invert) ? "! ": "");
+ 		print_string(info->string, info->len);
++	}
++	/* print out --replace-string args (if necessary) */
++	if (info->replace_len > 0) {
++		if (is_hex_string(info->replace_str, info->replace_len)) {
++			printf("--replace-hex-string ");
++			print_hex_string(info->replace_str, info->replace_len);
++		} else {
++			printf("--replace-string ");
++			print_string(info->replace_str, info->replace_len);
++		}
+ 	}
+ }
+ 
+

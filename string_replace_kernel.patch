@@ -1,0 +1,130 @@
+--- linux-2.4.24.orig/include/linux/netfilter_ipv4/ipt_string.h	2004-03-23 00:24:17.000000000 -0500
++++ linux-2.4.24/include/linux/netfilter_ipv4/ipt_string.h	2004-03-22 22:04:50.000000000 -0500
+@@ -14,8 +14,10 @@
+ 
+ struct ipt_string_info {
+     char string[BM_MAX_NLEN];
++    char replace_str[BM_MAX_NLEN];
+     u_int16_t invert;
+     u_int16_t len;
++    u_int16_t replace_len;
+ };
+ 
+ #endif /* _IPT_STRING_H */
+--- linux-2.4.24.orig/net/ipv4/netfilter/ipt_string.c	2004-03-23 00:24:17.000000000 -0500
++++ linux-2.4.24/net/ipv4/netfilter/ipt_string.c	2004-03-23 01:25:07.000000000 -0500
+@@ -3,6 +3,10 @@
+  * Copyright (C) 2000 Emmanuel Roger  <winfield@freegates.be>
+  * 
+  * ChangeLog
++ *	22.03.2004: Michael Rash <mbr@cipherdyne.org>
++ *		Added ability to replace a matching string in packet data
++ *		with a new string (checksum automatically recalculated for
++ *		tcp).
+  *	19.02.2002: Gianni Tedesco <gianni@ecsc.co.uk>
+  *		Fixed SMP re-entrancy problem using per-cpu data areas
+  *		for the skip/shift tables.
+@@ -22,6 +26,8 @@
+ #include <linux/skbuff.h>
+ #include <linux/file.h>
+ #include <net/sock.h>
++#include <net/tcp.h>
++#include <net/udp.h>
+ 
+ #include <linux/netfilter_ipv4/ip_tables.h>
+ #include <linux/netfilter_ipv4/ipt_string.h>
+@@ -52,7 +58,7 @@
+ 	/* Setup skip/shift tables */
+ 	M1 = right_end = needle_len-1;
+ 	for (i = 0; i < BM_MAX_HLEN; i++) skip[i] = needle_len;  
+-	for (i = 0; needle[i]; i++) skip[needle[i]] = M1 - i;  
++	for (i = 0; (int) needle[i]; i++) skip[(int) needle[i]] = M1 - i;  
+ 
+ 	for (i = 1; i < needle_len; i++) {   
+ 		for (j = 0; j < needle_len && needle[M1 - j] == needle[M1 - i - j]; j++);  
+@@ -77,7 +83,7 @@
+ 			return haystack+(right_end - M1);
+ 		}
+ 		
+-		sk = skip[haystack[right_end - i]];  
++		sk = skip[(int) haystack[right_end - i]];  
+ 		sh = shift[i];
+ 		right_end = max(right_end - i + sk, right_end + sh);  
+ 	}
+@@ -113,18 +119,27 @@
+ {
+ 	const struct ipt_string_info *info = matchinfo;
+ 	struct iphdr *ip = skb->nh.iph;
+-	int hlen, nlen;
+-	char *needle, *haystack;
++	struct tcphdr *tcph;
++	struct udphdr *udph;
++	int hlen, nlen, rlen, rctr;
++	char *needle, *haystack, *repl_str, *repl_ptr;
+ 	proc_ipt_search search=search_linear;
+ 
+ 	if ( !ip ) return 0;
+ 
+-	/* get lenghts, and validate them */
++	/* get lengths, and validate them */
+ 	nlen=info->len;
++	rlen=info->replace_len;
+ 	hlen=ntohs(ip->tot_len)-(ip->ihl*4);
+ 	if ( nlen > hlen ) return 0;
+ 
++	/* if we are altering packet data, make absolutely sure
++	 * replace length is less than or equal to needle length.
++	 * We cannot start breaking protocols! */
++	if ( rlen > 0 && rlen > nlen ) return 0;
++
+ 	needle=(char *)&info->string;
++	repl_str=(char *)&info->replace_str;
+ 	haystack=(char *)ip+(ip->ihl*4);
+ 
+ 	/* The sublinear search comes in to its own
+@@ -141,7 +156,44 @@
+ 		}
+ 	}
+ 	
+-    return ((search(needle, haystack, nlen, hlen)!=NULL) ^ info->invert);
++	repl_ptr = search(needle, haystack, nlen, hlen);
++
++	if (repl_ptr != NULL && rlen > 0) {
++		/* if we change the data portion of the packet we recalculate
++		 * the transport layer checksum (mandatory for TCP). */
++		if (skb->nh.iph->protocol == IPPROTO_TCP) {
++			/* repl_ptr points to the start of the needle
++			 * in the packet, and we know the entire needle
++			 * is there so we can just replace. */
++			for (rctr=0; rctr < rlen; rctr++)
++				repl_ptr[rctr] = repl_str[rctr];
++
++			tcph = (struct tcphdr *)((u_int32_t*)skb->nh.iph + skb->nh.iph->ihl);
++			unsigned int tcplen = skb->len - (skb->nh.iph->ihl<<2);
++			tcph->check = 0;
++			tcph->check = tcp_v4_check(tcph, tcplen, skb->nh.iph->saddr,
++							skb->nh.iph->daddr,
++							csum_partial((char *)tcph, tcplen, 0));
++		} else if (skb->nh.iph->protocol == IPPROTO_UDP) {
++			/* repl_ptr points to the start of the needle
++			 * in the packet, and we know the entire needle
++			 * is there so we can just replace. */
++			for (rctr=0; rctr < rlen; rctr++)
++				repl_ptr[rctr] = repl_str[rctr];
++			/* recalculate UDP checksum only if it was previously
++			 * calculated */
++			udph = (struct udphdr *)((char *)skb->nh.iph + (skb->nh.iph->ihl<<2));
++			unsigned int udplen = skb->len - (skb->nh.iph->ihl<<2);
++			if (udph->check) {
++				udph->check = 0;
++				udph->check = csum_tcpudp_magic(skb->nh.iph->saddr,
++								skb->nh.iph->daddr,
++								udplen, IPPROTO_UDP,
++								csum_partial((char *)udph, udplen, 0));
++			}
++		}
++	}
++    return ((repl_ptr!=NULL) ^ info->invert);
+ }
+ 
+ static int
