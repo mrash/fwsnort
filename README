@@ -1,5 +1,5 @@
 fwsnort   (Firewall Snort)
-Version:  0.6.2
+Version:  0.6.4
 Author:   Michael Rash <mbr@cipherdyne.org>
 Website:  http://www.cipherdyne.org/fwsnort/
 
@@ -33,7 +33,7 @@ DESCRIPTION:
 fwsnort is a perl script that translates snort rules into equivalent iptables
 rules.  Some snort rule options such as "content-list", and "sameip" have no
 direct translation into iptables options so not all snort rules can be
-translated.  However approximately 80% of all snort signatures can be
+translated.  However approximately 65% of all snort signatures can be
 successfully translated through the use of the iptables string match module.
 Also, included with the fwsnort sources is a patch for the user space portion
 of iptables that adds a new option "--hex-string" which accepts an argument
@@ -42,11 +42,21 @@ directly input into iptables rulesets from the command line.  fwsnort parses
 the running iptables policy on the machine in order to determine which snort
 rules are applicable to the specific policy loaded on the machine.
 
+NOTE: The Netfilter string match extension has not yet been ported to the
+2.6 Linux kernel, and so fwsnort is yet not compatible with the 2.6 kernel.
+
+Also, note that string_replace_iptables.patch and
+string_replace_iptables.patch are included in the fwsnort sources, but they
+are not actually used by fwsnort.  These patches provide the ability to
+alter application layer data in a manner similar to the "replace" keyword
+in Snort_inline by adding two new iptables command line options
+"--replace-string" and "--replace-hex-string".
+
 =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 PLATFORMS:
 
 fwsnort is compatible with iptables only, hence fwsnort will exclusively run
-on Linux running a 2.4.x series (or later) kernel.
+on Linux running a 2.4.x series kernel.
 
 =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 COPYRIGHT:
