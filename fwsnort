@@ -366,7 +366,7 @@ $ipt_sync = 0 if $no_ipt_sync;
 ### specified on the command line
 &check_type() if $rules_type;
 
-&logr(" .. Begin parsing cycle ..\n", $logfile);
+&logr(localtime() . " .. Begin parsing cycle ..\n", $logfile);
 
 ### parse snort rules (signatures)
 if ($ipt_sync) {
@@ -446,7 +446,7 @@ sub parse_snort_rules() {
             }
             my $hdr_href = &parse_rule_hdr($rule_hdr);
             unless ($hdr_href) {
-                &logr(" ** Unrecognized rule header: \"$rule_hdr\" at ",
+                &logr(" ** Unrecognized rule header: \"$rule_hdr\" at " .
                     "line: $line_num.  Skipping rule.\n", $logfile);
                 $unsup_ctr++;
                 $tot_unsup_ctr++;
