@@ -5,7 +5,7 @@
 #
 # Purpose: Perl interface to parse iptables rulesets.
 #
-# Author: Michael Rash (mbr@cipherdyne.com)
+# Author: Michael Rash (mbr@cipherdyne.org)
 #
 # Version: 0.1
 #
@@ -20,8 +20,9 @@ use 5.006;
 use Carp;
 use strict;
 use warnings;
+use vars qw($VERSION);
 
-my $VERSION = '0.1';
+$VERSION = '0.1';
 
 sub new() {
     my $class = shift;
@@ -44,7 +45,13 @@ sub chain_action_rules() {
     my $action = shift || croak " ** Specify either ",
         "\"ACCEPT, DROP, or LOG\"";
     my $iptables  = $self->{'_iptables'};
-    my @ipt_lines = `$iptables -t $table -nL $chain`;
+    my @ipt_lines;
+    eval {
+        open IPT, "$iptables -t $table -nL $chain |"
+            or croak " ** Could not execute $iptables -t $table -nL $chain";
+        @ipt_lines = <IPT>;
+        close IPT;
+    };
     my $rule_ctr = 0;
     my %chain = ();
 
@@ -89,39 +96,72 @@ sub default_drop() {
     my $self  = shift;
     my $table = shift || croak " ** Specify a table, e.g. \"nat\"";
     my $chain = shift || croak " ** Specify a chain, e.g. \"OUTPUT\"";
+    my $file  = shift || '';
     my $iptables  = $self->{'_iptables'};
-    my @ipt_lines = `$iptables -t $table -nL $chain`;
-    my %protocols = ();
-    my $rule_ctr = 0;
-    my $prefix;
-    my $any_ip = '(?:0\.){3}0/0';
+    my @ipt_lines;
+
+    if ($file) {
+        ### read the iptables rules out of $file instead of executing
+        ### the iptables command.
+        open F, "< $file" or croak " ** Could not open file $file: $!";
+        @ipt_lines = <F>;
+        close F;
+    } else {
+        eval {
+            open IPT, "$iptables -t $table -nL $chain |"
+                or croak " ** Could not execute $iptables -t $table -nL $chain";
+            @ipt_lines = <IPT>;
+            close IPT;
+        };
+    }
 
     unless (@ipt_lines) {
         return ' ** Could not get iptables output!', 0;
     }
 
+    my %protocols = ();
+    my $found_chain = 0;
+    my $rule_ctr = 0;
+    my $prefix;
+    my $policy = 'ACCEPT';
+    my $any_ip_re = '(?:0\.){3}0/0';
+
     for my $line (@ipt_lines) {
         $rule_ctr++;
         chomp $line;
 
+        last if ($found_chain and $line =~ /^Chain\s+/);
+
+        ### Chain INPUT (policy DROP)
+        ### Chain FORWARD (policy ACCEPT)
+        if ($line =~ /^Chain\s+$chain\s+\(policy\s+(\w+)\)/) {
+            $policy = $1;
+            $found_chain = 1;
+        }
+        next unless $found_chain;
         if ($line =~ m|^LOG\s+(\w+)\s+\-\-\s+
-            $any_ip\s+$any_ip\s+(.*)|x) {
+            $any_ip_re\s+$any_ip_re\s+(.*)|x) {
             my $proto  = $1;
             my $p_tmp  = $2;
             my $prefix = 'NONE';
             ### LOG flags 0 level 4 prefix `DROP '
-            if ($p_tmp && $p_tmp =~ m|LOG\s+flags\s+0.*prefix\s+
+            if ($p_tmp && $p_tmp =~ m|LOG.*\s+prefix\s+
                 \`\s*(.+?)\s*\'|x) {
                 $prefix = $1;
             }
             ### $proto may equal 'all' here
             $protocols{$proto}{'LOG'}{'prefix'} = $prefix;
             $protocols{$proto}{'LOG'}{'rulenum'} = $rule_ctr;
-        } elsif ($line =~ m|^DROP\s+(\w+)\s+\-\-\s+
-            $any_ip\s+$any_ip\s*$|x) {
+        } elsif ($policy eq 'ACCEPT' and $line =~ m|^DROP\s+(\w+)\s+\-\-\s+
+            $any_ip_re\s+$any_ip_re\s*$|x) {
             ### DROP    all  --  0.0.0.0/0     0.0.0.0/0
             $protocols{$1}{'DROP'} = $rule_ctr;
         }
+    }
+    ### if the policy in the chain is DROP, then we don't
+    ### necessarily need to find a default DROP rule.
+    if ($policy eq 'DROP') {
+        $protocols{'all'}{'DROP'} = 0;
     }
     return \%protocols;
 }
@@ -151,7 +191,7 @@ IPTables::Parse provides a perl module interface to parse iptables rulesets.
 
 =head1 AUTHOR
 
-Michael B. Rash, E<lt>mbr@cipherdyne.comE<gt>
+Michael Rash, E<lt>mbr@cipherdyne.orgE<gt>
 
 =head1 SEE ALSO
 
