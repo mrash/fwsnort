@@ -89,7 +89,6 @@ use File::Copy;
 use File::Path;
 use Sys::Hostname;
 use Getopt::Long;
-use Data::Dumper;
 use strict;
 
 #======================== config ========================
@@ -728,8 +727,6 @@ sub cache_ipt_policy() {
         $ipt_policy{'FORWARD'} = $ipt->chain_action_rules('filter',
             'FORWARD', 'ACCEPT');
     }
-
-print Dumper %ipt_policy;
     return;
 }
 
