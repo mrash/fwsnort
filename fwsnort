@@ -917,9 +917,10 @@ sub ipt_build_rule() {
 
     ### append the source port
     if (defined $config{$hdr_href->{'src_p'}}) {
+        $config{$hdr_href->{'src_p'}} =~ s/\!(\d)/! $1/;
         $rule .= " $iptables_opts{'src_p'} $config{$hdr_href->{'src_p'}}";
     } elsif ($hdr_href->{'src_p'} ne 'any') {
-        $hdr_href->{'src_p'} =~ s/\!/! /;
+        $hdr_href->{'src_p'} =~ s/\!(\d)/! $1/;
         $rule .= " $iptables_opts{'src_p'} $hdr_href->{'src_p'}";
     }
 
@@ -930,9 +931,10 @@ sub ipt_build_rule() {
 
     ### append the destination port
     if (defined $config{$hdr_href->{'dst_p'}}) {
+        $config{$hdr_href->{'dst_p'}} =~ s/\!(\d)/! $1/;
         $rule .= " $iptables_opts{'dst_p'} $config{$hdr_href->{'dst_p'}}";
     } elsif ($hdr_href->{'dst_p'} ne 'any') {
-        $hdr_href->{'src_p'} =~ s/\!/! /;
+        $hdr_href->{'src_p'} =~ s/\!(\d)/! $1/;
         $rule .= " $iptables_opts{'dst_p'} $hdr_href->{'dst_p'}";
     }
 
