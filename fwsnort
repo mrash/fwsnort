@@ -89,7 +89,7 @@ use strict;
 
 #======================== config ========================
 my $fwsnort_dir = '/etc/fwsnort';
-my $rules_dir   = "${fwsnort_dir}/snort-1.8.7_rules";
+my $rules_dir   = "${fwsnort_dir}/snort_rules";
 my $archive_dir = "${fwsnort_dir}/archive";
 my $log_dir     = '/var/log';
 
