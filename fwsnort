@@ -368,7 +368,7 @@ $ipt_sync = 0 if $no_ipt_sync;
 ### specified on the command line
 &check_type() if $rules_type;
 
-&logr(localtime() . " .. Begin parsing cycle ..\n");
+&logr(localtime() . " .. Begin parsing cycle ..");
 
 ### parse snort rules (signatures)
 if ($ipt_sync) {
@@ -422,7 +422,7 @@ sub parse_snort_rules() {
         }
         ($snort_type) = ($rfile =~ /(\S+)\.rules/);
         printf("%-30s", " .. $rfile");
-        &logr(" .. Parsing $rfile\n");
+        &logr(" .. Parsing $rfile");
         open R, "< ${rules_dir}/${rfile}" or die " ** Could not ",
             "open: ${rules_type}/${rfile}";
         my @lines = <R>;
@@ -449,7 +449,7 @@ sub parse_snort_rules() {
             my $hdr_href = &parse_rule_hdr($rule_hdr);
             unless ($hdr_href) {
                 &logr(" ** Unrecognized rule header: \"$rule_hdr\" at " .
-                    "line: $line_num.  Skipping rule.\n");
+                    "line: $line_num.  Skipping rule.");
                 $unsup_ctr++;
                 $tot_unsup_ctr++;
                 next RULE;
@@ -517,7 +517,7 @@ sub parse_rule_options() {
 
     if ($snort_sid) {
         if ($rule_options =~ /sid:\s*$snort_sid\s*;/) {
-            &logr(" .. matched sid:$snort_sid: $rule_options\n");
+            &logr(" .. matched sid:$snort_sid: $rule_options");
         } else {
             return 0;
         }
@@ -530,13 +530,13 @@ sub parse_rule_options() {
         ### see if we match a regex belonging to an supported option
         if ($rule_options =~ /$snort_opts{'unsupported'}{$opt}/) {
             &logr(" ** SID: $sid  Unsupported option: \"$opt\" at " .
-                "line: $line_num.  Skipping rule.\n");
+                "line: $line_num.  Skipping rule.");
             return 0;
         }
     }
     if ($rule_options =~ /content\s*:.*content\s*:/) {
         &logr(" ** SID: $sid  Unsupported multiple content fields at " .
-            "line: $line_num.  Skipping rule.\n");
+            "line: $line_num.  Skipping rule.");
         return 0;
     }
 
@@ -1012,13 +1012,13 @@ sub ipt_add_rule() {
     $rule .= $log_prefix;
 
     if ($verbose) {
-        &write_ipt_script("### snort rule: $orig_snort_rule\n");
-        &write_ipt_script("\$ECHO \" .. rule: $ipt_rule_ctr\"\n");
+        &write_ipt_script("### snort rule: $orig_snort_rule");
+        &write_ipt_script("\$ECHO \" .. rule: $ipt_rule_ctr\"");
     } else {
-        &write_ipt_script("$comment\n");
+        &write_ipt_script($comment);
     }
-    &write_ipt_script("$rule\n") unless $no_ipt_log;
-    &write_ipt_script("$drop_rule\n") if $ipt_drop;
+    &write_ipt_script($rule) unless $no_ipt_log;
+    &write_ipt_script($drop_rule) if $ipt_drop;
     $ipt_rule_ctr++;
 
     return;
@@ -1026,69 +1026,69 @@ sub ipt_add_rule() {
 
 sub ipt_add_chains() {
     &write_ipt_script("\n###\n############ Create fwsnort iptables chains. " .
-        "############\n###\n");
+        "############\n###");
     for my $type (keys %fwsnort_chains) {
         for my $intf (keys %{$fwsnort_chains{$type}}) {
             &write_ipt_script("\$IPTABLES -N $fwsnort_chains{$type}{$intf} " .
-                "2> /dev/null\n");
+                "2> /dev/null");
             &write_ipt_script("\$IPTABLES -F " .
-                "$fwsnort_chains{$type}{$intf}\n\n");
+                "$fwsnort_chains{$type}{$intf}\n");
         }
     }
     my $added_forward = 0;
     if (defined $config{'INTERNAL_INTF'}
         && $config{'INTERNAL_INTF'} ne $config{'EXTERNAL_INTF'}) {
-        &write_ipt_script("\$IPTABLES -N fwsnort_FORWARD 2> /dev/null\n");
-        &write_ipt_script("\$IPTABLES -F fwsnort_FORWARD\n\n");
+        &write_ipt_script("\$IPTABLES -N fwsnort_FORWARD 2> /dev/null");
+        &write_ipt_script("\$IPTABLES -F fwsnort_FORWARD\n");
         $added_forward = 1;
 
     }
     if (defined $config{'DMZ_INTF'} && ! $added_forward) {
-        &write_ipt_script("\$IPTABLES -N fwsnort_FORWARD 2> /dev/null\n");
-        &write_ipt_script("\$IPTABLES -F fwsnort_FORWARD\n\n");
+        &write_ipt_script("\$IPTABLES -N fwsnort_FORWARD 2> /dev/null");
+        &write_ipt_script("\$IPTABLES -F fwsnort_FORWARD\n");
     }
     return;
 }
 
 sub ipt_jump_chain() {
-    &write_ipt_script("\n###\n############ Jump traffic to the fwsnort chains. " .
-        "############\n###\n");
+    &write_ipt_script("\n###\n############ Jump traffic to the fwsnort " .
+        "chains. ############\n###");
     for my $type (keys %fwsnort_chains) {
         for my $intf (keys %{$fwsnort_chains{$type}}) {
             &write_ipt_script("\$IPTABLES -I $type 1 -i $intf " .
-                "-j $fwsnort_chains{$type}{$intf}\n");
+                "-j $fwsnort_chains{$type}{$intf}");
         }
     }
     my $added_jump = 0;
     if (defined $config{'INTERNAL_INTF'}
         && $config{'INTERNAL_INTF'} ne $config{'EXTERNAL_INTF'}) {
-        &write_ipt_script("\$IPTABLES -I FORWARD 1 -j fwsnort_FORWARD\n\n");
+        &write_ipt_script("\$IPTABLES -I FORWARD 1 -j fwsnort_FORWARD\n");
         $added_jump = 1;
     }
     if (defined $config{'DMZ_INTF'} && ! $added_jump) {
-        &write_ipt_script("\$IPTABLES -I FORWARD 1 -j fwsnort_FORWARD\n\n");
+        &write_ipt_script("\$IPTABLES -I FORWARD 1 -j fwsnort_FORWARD\n");
     }
-    &write_ipt_script("\n### EOF ###\n");
+    &write_ipt_script("\n### EOF ###");
     return;
 }
 
 sub ipt_hdr() {
-    &write_ipt_script("#!$cmds{'sh'}\n#\n");
+    &write_ipt_script("#!$cmds{'sh'}\n#");
     &write_ipt_script("####################################################" .
-        "####################\n");
-    &write_ipt_script("#\n# File:  $ipt_script\n");
+        "####################");
+    &write_ipt_script("#\n# File:  $ipt_script");
     &write_ipt_script("#\n# Purpose:  This script was auto generated by " .
-        "fwsnort, and implements\n");
+        "fwsnort, and implements");
     &write_ipt_script("#           an iptables ruleset based upon Snort " .
-        "rules.  For more\n");
+        "rules.  For more");
     &write_ipt_script("#           information see the fwsnort man page or " .
-        "the documentation\n");
+        "the documentation");
     &write_ipt_script("#           available at " .
-        "http://www.cipherdyne.org/fwsnort/\n");
-    &write_ipt_script("#\n# Author:  Michael Rash <mbr\@cipherdyne.org>\n");
-    &write_ipt_script("#\n");
+        "http://www.cipherdyne.org/fwsnort/");
+    &write_ipt_script("#\n# Author:  Michael Rash <mbr\@cipherdyne.org>");
+    &write_ipt_script("#");
     &write_ipt_script("####################################################" .
-        "####################\n#\n\n");
+        "####################\n#\n");
 
     &ipt_config_section();
     return;
@@ -1096,17 +1096,17 @@ sub ipt_hdr() {
 
 sub ipt_config_section() {
     ### build the config section of the iptables script
-    &write_ipt_script("#==================== config ====================\n");
-    &write_ipt_script("ECHO=$cmds{'echo'}\n");
-    &write_ipt_script("IPTABLES=$cmds{'iptables'}\n");
-    &write_ipt_script("#================== end config ==================\n\n");
+    &write_ipt_script("#==================== config ====================");
+    &write_ipt_script("ECHO=$cmds{'echo'}");
+    &write_ipt_script("IPTABLES=$cmds{'iptables'}");
+    &write_ipt_script("#================== end config ==================\n");
     return;
 }
 
 sub ipt_type() {
     my $type = shift;
-    &write_ipt_script("\n###\n############ ${type}.rules ############\n###\n");
-    &write_ipt_script("\$ECHO \" .. Adding iptables $type rules.\"\n");
+    &write_ipt_script("\n###\n############ ${type}.rules ############\n###");
+    &write_ipt_script("\$ECHO \" .. Adding iptables $type rules.\"");
     return;
 }
 
@@ -1430,7 +1430,7 @@ sub archive() {
         my $newfile = $targetbase . '2';
         move $targetbase, $newfile;
     }
-    &logr(" .. Archiving $file\n");
+    &logr(" .. Archiving $file");
     move $file, $targetbase;   ### move $file into the archive directory
     return;
 }
@@ -1438,7 +1438,7 @@ sub archive() {
 sub write_ipt_script() {
     my $line = shift;
     open F, ">> $ipt_script" or die " ** Could not open $ipt_script: $!";
-    print F $line;
+    print F "$line\n";
     close F;
     return;
 }
@@ -1446,10 +1446,10 @@ sub write_ipt_script() {
 sub logr() {
     my $msg = shift;
     if ($stdout) {
-        print STDOUT $msg;
+        print STDOUT "$msg\n";
     } else {
         open F, ">> $logfile" or die " ** Could not open $logfile: $!";
-        print F $msg;
+        print F "$msg\n";
         close F;
     }
     return;
