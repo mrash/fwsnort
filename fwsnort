@@ -24,6 +24,10 @@
 #    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307
 #    USA
 #
+# TODO:
+#   - Add the ability to remove rules from a real snort config in the same
+#     we remove them from iptables rulesets in fwsnort.
+#
 # Snort Rule Options:
 #
 #   msg:           Prints a message in alerts and packet logs.
@@ -512,21 +516,6 @@ sub build_fwsnort_chains() {
 sub ipt_build() {
     my ($hdr_href, $opts_href) = @_;
 
-    ### determine which chain the rule should be added to (default
-    ### to the fwsnort_<EXTERNAL_INTF> chain).
-#    my $chain = " -A fwsnort_${config{'EXTERNAL_INTF'}}";
-#    if ($config{'NUM_INTERFACES'} > 1) {
-#        if (defined $config{$hdr_href->{'src'}}
-#            && defined $intf_net{$config{$hdr_href->{'src'}}}) {
-#            $chain =
-#                " -A fwsnort_${intf_net{$config{$hdr_href->{'src'}}}{'name'}}";
-#        } elsif (defined $config{$hdr_href->{'dst'}}
-#            && defined $intf_net{$hdr_href->{'dst'}}) {
-#            $chain =
-#                " -A fwsnort_${intf_net{$config{$hdr_href->{'dst'}}}{'name'}}";
-#        }
-#    }
-
     my @rules_dst  = ();
     my @rules_chns = ();
 
@@ -708,23 +697,14 @@ sub ipt_add_chains() {
 }
 
 sub ipt_jump_chain() {
-    &logr("\n\n### jump traffic from the INPUT chain to the " .
-        "$intf_net{'EXTERNAL_INTF'}{'name'} chain.\n", $ipt_ruleset);
-    &logr("$cmds{'iptables'} -I INPUT 1 " .
-        "-i $intf_net{'EXTERNAL_INTF'}{'name'} " .
-        "-j fwsnort_${intf_net{'EXTERNAL_INTF'}{'name'}}\n", $ipt_ruleset);
-    if (defined $intf_net{'INTERNAL_INTF'}) {
-        &logr("\n\n### jump traffic from the FORWARD chain to the " .
-            "$intf_net{'EXTERNAL_INTF'}{'name'} chain.\n", $ipt_ruleset);
-        &logr("$cmds{'iptables'} -I FORWARD 1 " .
-            "-i $intf_net{'EXTERNAL_INTF'}{'name'} " .
-            "-j fwsnort_${intf_net{'EXTERNAL_INTF'}{'name'}}\n", $ipt_ruleset);
+    &logr("\n###\n############ Jump traffic to the fwsnort chains. " .
+        "############\n###\n", $ipt_ruleset);
+    for my $type (keys %fwsnort_chains) {
+        for my $intf (keys %{$fwsnort_chains{$type}}) {
+            &logr("$cmds{'iptables'} -I $type 1 -i $intf " .
+                "-j $fwsnort_chains{$type}{$intf}\n", $ipt_ruleset);
+        }
     }
-#    if (defined $intf_net{'DMZ_INTF'}) {
-#        print "$cmds{'iptables'} -I INPUT 1 ",
-#            "-i $intf_net{'DMZ_INTF'}{'name'} ",
-#            "-j fwsnort_${intf_net{'EXTERNAL_INTF'}{'name'}";
-
     &logr("\n### EOF ###\n", $ipt_ruleset);
     return;
 }
