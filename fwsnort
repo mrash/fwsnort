@@ -657,11 +657,19 @@ sub cache_ipt_policy() {
     my $ipt = new IPTables::Parse;
     $ipt_policy{'INPUT'} = $ipt->chain_action_rules('filter',
         'INPUT', 'ACCEPT');
+    my $cached_forward = 0;
     if (defined $config{'INTERNAL_INTF'}
-        || defined $config{'DMZ_INTF'}) {
+        && $config{'INTERNAL_INTF'} ne $config{'EXTERNAL_INTF'}) {
+        $ipt_policy{'FORWARD'} = $ipt->chain_action_rules('filter',
+            'FORWARD', 'ACCEPT');
+        $cached_forward = 1;
+
+    }
+    if (defined $config{'DMZ_INTF'} && ! $cached_forward) {
         $ipt_policy{'FORWARD'} = $ipt->chain_action_rules('filter',
             'FORWARD', 'ACCEPT');
     }
+
     return;
 }
 
@@ -690,7 +698,8 @@ sub ipt_build() {
 
             ### snort:      EXTERNAL   -> HOME
             ### iptables:   any source -> internal net (for FORWARD chain)
-            if (defined $config{'INTERNAL_INTF'}) {
+            if (defined $config{'INTERNAL_INTF'}
+                && $config{'INTERNAL_INTF'} ne $config{'EXTERNAL_INTF'}) {
                 push @forward_rules_sd, "$iptables_opts{'dst'} " .
                     $intf_net{'INTERNAL_INTF'}{'net'};
                 push @forward_rules_chn, 'fwsnort_FORWARD';
@@ -710,10 +719,11 @@ sub ipt_build() {
 
             ### snort:      HOME -> EXTERNAL
             ### iptables:   internal net -> any destination (for FORWARD chain)
-            push @forward_rules_sd, "$iptables_opts{'src'} " .
-                $intf_net{'INTERNAL_INTF'}{'net'};
-            push @forward_rules_chn, 'fwsnort_FORWARD';
-
+            if ($config{'INTERNAL_INTF'} ne $config{'EXTERNAL_INTF'}) {
+                push @forward_rules_sd, "$iptables_opts{'src'} " .
+                    $intf_net{'INTERNAL_INTF'}{'net'};
+                push @forward_rules_chn, 'fwsnort_FORWARD';
+            }
             if (defined $config{'DMZ_INTF'}) {
                 push @forward_rules_sd, "$iptables_opts{'src'} " .
                     $intf_net{'DMZ_INTF'}{'net'};
@@ -735,7 +745,8 @@ sub ipt_build() {
             }
             ### traffic through the FORWARD chain originating from either
             ### the internal or external nets
-            if (defined $config{'INTERNAL_INTF'}) {
+            if (defined $config{'INTERNAL_INTF'}
+                && $config{'INTERNAL_INTF'} ne $config{'EXTERNAL_INTF'}) {
                 push @forward_rules_sd, "$iptables_opts{'dst'} " .
                     $intf_net{'INTERNAL_INTF'}{'net'};
                 push @forward_rules_chn, 'fwsnort_FORWARD';
@@ -969,8 +980,17 @@ sub ipt_add_chains() {
                 $ipt_script);
         }
     }
+    my $added_forward = 0;
     if (defined $config{'INTERNAL_INTF'}
-        || defined $config{'DMZ_INTF'}) {
+        && $config{'INTERNAL_INTF'} ne $config{'EXTERNAL_INTF'}) {
+        &logr("\$IPTABLES -N fwsnort_FORWARD 2> /dev/null\n",
+            $ipt_script);
+        &logr("\$IPTABLES -F fwsnort_FORWARD\n\n",
+            $ipt_script);
+        $added_forward = 1;
+
+    }
+    if (defined $config{'DMZ_INTF'} && ! $added_forward) {
         &logr("\$IPTABLES -N fwsnort_FORWARD 2> /dev/null\n",
             $ipt_script);
         &logr("\$IPTABLES -F fwsnort_FORWARD\n\n",
@@ -988,8 +1008,14 @@ sub ipt_jump_chain() {
                 "-j $fwsnort_chains{$type}{$intf}\n", $ipt_script);
         }
     }
+    my $added_jump = 0;
     if (defined $config{'INTERNAL_INTF'}
-        || defined $config{'DMZ_INTF'}) {
+        && $config{'INTERNAL_INTF'} ne $config{'EXTERNAL_INTF'}) {
+        &logr("\$IPTABLES -I FORWARD 1 -j fwsnort_FORWARD\n\n",
+            $ipt_script);
+        $added_jump = 1;
+    }
+    if (defined $config{'DMZ_INTF'} && ! $added_jump) {
         &logr("\$IPTABLES -I FORWARD 1 -j fwsnort_FORWARD\n\n",
             $ipt_script);
     }
@@ -1104,6 +1130,11 @@ sub validateconf() {
     if (defined $config{'DMZ_INTF'}) {
         die " ** $fwsnort_conf: DMZ_INTF cannot be defined without ",
             "also defining INTERNAL_INTF. Exiting.\n";
+        if ($config{'DMZ_INTF'} eq $config{'INTERNAL_INTF'}
+            || $config{'DMZ_INTF'} eq $config{'EXTERNAL_INTF'}) {
+            die " ** $fwsnort_conf: DMZ_INTF cannot be either the internal ",
+                "or external interface.  Exiting.\n";
+        }
         $intf_type{$config{'DMZ_INTF'}} = 'DMZ_INTF';
         $intf_net{'DMZ_INTF'}{'name'} = $config{'DMZ_INTF'};
         ($intf_net{'DMZ_INTF'}{'ip'}, $intf_net{'DMZ_INTF'}{'net'})
