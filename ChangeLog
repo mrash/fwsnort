@@ -1,3 +1,11 @@
+fwsnort-0.6.2 (03/19/2004);
+    - Added --internal-net and --dmz-net options so that internal and
+      dmz networks can be manually specified without having to parse
+      the output of ifconfig.  This is most useful for running fwsnort
+      on a linux system that is acting as a bridge where no ip addresses
+      are assigned to the interfaces.
+    - Bugfix for missing icmp-port-unreachable rejects for UDP packets.
+
 fwsnort-0.6.1 (02/01/2004):
     - Bugfix for not adding dmz interface rules to INPUT chain.
     - Bugfix for not getting the DMZ interface network.
