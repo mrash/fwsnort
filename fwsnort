@@ -152,6 +152,9 @@ my %cmds;
 ### config file says they are
 &chk_commands();
 
+### make sure the config is correct
+&validateconf();
+
 ### make sure the specified <type>.rules file exists
 ### if --type was used
 &check_type() if $rules_type;
@@ -394,6 +397,55 @@ sub readconf() {
             $cmds{$1} = $2;
         } elsif ($line =~ /^\s*(\S+)\s+(\S+);/) {
             $config{$1} = $2;
+        }
+    }
+    return;
+}
+
+sub validateconf() {
+    die " ** The path to ifconfig is not in $fwsnort_conf.  Exiting.\n"
+        unless defined $cmds{'ifconfig'};
+    if (defined $config{'INTERNAL_INTF'}) {
+        unless ($config{'INTERNAL_INTF'} =~ /\w+\d+$/) {  ### eth0, ppp0, etc.
+            die " ** Edit the \"INTERNAL_INTF\" variable in $fwsnort_conf\n",
+                "    to point to a network interface (see ifconfig).\n";
+        }
+        &get_intf_net($config{'INTERNAL_INTF'});
+#        $snort_chains{} = net
+        if ($config{'INTERNAL_INTF1'}) {
+            unless ($config{'INTERNAL_INTF1'} =~ /\w+\d+$/) {
+                die " ** Edit the \"INTERNAL_INTF1\" variable in ",
+                    "$fwsnort_conf\n    to point to a network interface",
+                    "(see ifconfig).\n";
+            }
+            &get_intf_net($config{'INTERNAL_INTF1'});
+        }
+    } elsif (defined $config{'INTERNAL_INTF'}) {
+        die " ** Cannot have INTERNAL_INTF defined without also having ",
+            "    INTERNAL_INTF defined.  Exiting.\n";
+    } else {
+        die " ** Config variable \"INTERNAL_INTF\" is not in ",
+            "$fwsnort_conf.  Exiting.\n";
+    }
+    if (defined $config{'EXTERNAL_INTF'}) {
+        unless ($config{'EXTERNAL_INTF'} =~ /\w+\d+$/) {  ### eth0, ppp0, etc.
+            die " ** Edit the \"EXTERNAL_INTF\" variable in $fwsnort_conf\n",
+                "    to point to a network interface (see ifconfig).\n";
+        }
+    } else {
+        die " ** Config variable \"EXTERNAL_INTF\" is not in ",
+            "$fwsnort_conf.  Exiting.\n";
+    }
+    return;
+}
+
+sub get_intf_net() {
+    my $intf = shift;
+    my @if_lines = `$cmds{'ifconfig'} $intf`;
+    for my $line (@if_lines) {
+        if ($line =~ /^\s+inet\s+addr:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})
+            \s+Bcast:\S+\s+\s+Mask:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/ix) {
+            print "$intf  $1   $2\n";
         }
     }
     return;
