@@ -633,11 +633,11 @@ sub ipt_build() {
     my ($hdr_href, $opts_href, $orig_snort_rule) = @_;
 
     ### for iptables INPUT chain
-    my @input_rules_dst  = ();
+    my @input_rules_sd  = ();
     my @input_rules_chns = ();
 
     ### for iptables FORWARD chain
-    my @forward_rules_dst = ();
+    my @forward_rules_sd = ();
     my @forward_rules_chn = ();
 
     my $src = $hdr_href->{'src'};
@@ -649,48 +649,54 @@ sub ipt_build() {
             eq 'INTERNAL_INTF') {
             ### snort:      EXTERNAL   -> HOME
             ### iptables:   any source -> external intf  (for INPUT chain)
-            push @input_rules_dst, $intf_net{'EXTERNAL_INTF'}{'ip'};
+            push @input_rules_sd, $intf_net{'EXTERNAL_INTF'}{'ip'};
             push @input_rules_chns,
                 "fwsnort_INPUT_${intf_net{'EXTERNAL_INTF'}{'name'}}";
 
             ### snort:      EXTERNAL   -> HOME
-            ### iptables:   any source -> internal net (for INPUT chain)
+            ### iptables:   any source -> internal net (for FORWARD chain)
             if (defined $config{'INTERNAL_INTF'}
                 || defined $config{'DMZ_INTF'}) {
-                push @forward_rules_dst, $intf_net{'INTERNAL_INTF'}{'net'};
+                push @forward_rules_sd, "$iptables_opts{'dst'} " .
+                    $intf_net{'INTERNAL_INTF'}{'net'};
                 push @forward_rules_chn, 'fwsnort_FORWARD';
             }
         } elsif ($intf_type{$intf_net{$config{$dst}}{'name'}}
             eq 'EXTERNAL_INTF') {
             ### snort:      INTERNAL   -> EXTERNAL
             ### iptables:   any source -> internal intf  (for INPUT chain)
-            push @input_rules_dst, $intf_net{'INTERNAL_INTF'}{'ip'};
+            push @input_rules_sd, $intf_net{'INTERNAL_INTF'}{'ip'};
             push @input_rules_chns,
                 "fwsnort_INPUT_${intf_net{'INTERNAL_INTF'}{'name'}}";
 
-            ### snort:      EXTERNAL   -> HOME
-            ### iptables:   any source -> internal net (for INPUT chain)
+            ### snort:      HOME -> EXTERNAL
+            ### iptables:   internal net -> any destination (for FORWARD chain)
             if (defined $config{'INTERNAL_INTF'}
                 || defined $config{'DMZ_INTF'}) {
-                push @forward_rules_dst, '0.0.0.0/0';
+                push @forward_rules_sd, "$iptables_opts{'src'} " .
+                    $intf_net{'INTERNAL_INTF'}{'net'};
                 push @forward_rules_chn, 'fwsnort_FORWARD';
             }
         }
     } elsif ($dst eq 'any') {
         if ($src eq 'any') {
             ### traffic in the INPUT chain on _both_ interfaces
-            push @input_rules_dst, $intf_net{'EXTERNAL_INTF'}{'ip'};
+            push @input_rules_sd, "$iptables_opts{'dst'} " .
+                $intf_net{'EXTERNAL_INTF'}{'ip'};
             push @input_rules_chns, "fwsnort_INPUT_$config{'EXTERNAL_INTF'}";
-            push @input_rules_dst, $intf_net{'INTERNAL_INTF'}{'ip'};
+            push @input_rules_sd, "$iptables_opts{'dst'} " .
+                $intf_net{'INTERNAL_INTF'}{'ip'};
             push @input_rules_chns, "fwsnort_INPUT_$config{'INTERNAL_INTF'}";
 
             ### traffic through the FORWARD chain originating from either
             ### the internal or external nets
             if (defined $config{'INTERNAL_INTF'}
                 || defined $config{'DMZ_INTF'}) {
-                push @forward_rules_dst, $intf_net{'INTERNAL_INTF'}{'net'};
+                push @forward_rules_sd, "$iptables_opts{'dst'} " .
+                    $intf_net{'INTERNAL_INTF'}{'net'};
                 push @forward_rules_chn, 'fwsnort_FORWARD';
-                push @forward_rules_dst, '0.0.0.0/0';
+                push @forward_rules_sd, "$iptables_opts{'src'} " .
+                    $intf_net{'INTERNAL_INTF'}{'net'};
                 push @forward_rules_chn, 'fwsnort_FORWARD';
             }
         } else {
@@ -703,7 +709,7 @@ sub ipt_build() {
     my $ctr = 0;
 
     ### build iptables INPUT rules
-    for my $dst (@input_rules_dst) {
+    for my $sd (@input_rules_sd) {
         ### build as many iptables rules as we need based on
         ### the source and destination
         &ipt_build_rule(
@@ -711,8 +717,7 @@ sub ipt_build() {
             "$cmds{'iptables'} -A $input_rules_chns[$ctr]",
             $hdr_href,
             $opts_href,
-            '',
-            $dst,
+            $sd,
             $orig_snort_rule
         );
         $ctr++;
@@ -722,7 +727,7 @@ sub ipt_build() {
     ### build iptables FORWARD rules
     if (defined $config{'INTERNAL_INTF'}
         || defined $config{'DMZ_INTF'}) {
-        for my $dst (@forward_rules_dst) {
+        for my $sd (@forward_rules_sd) {
             ### build as many iptables rules as we need based on
             ### the source and destination
             &ipt_build_rule(
@@ -730,8 +735,7 @@ sub ipt_build() {
                 "$cmds{'iptables'} -A $forward_rules_chn[$ctr]",
                 $hdr_href,
                 $opts_href,
-                '',
-                $dst,
+                $sd,
                 $orig_snort_rule
             );
             $ctr++;
@@ -742,7 +746,7 @@ sub ipt_build() {
 
 sub ipt_build_rule() {
     my ($chain, $rule, $hdr_href, $opts_href,
-        $src, $dst, $orig_snort_rule) = @_;
+        $src_dst, $orig_snort_rule) = @_;
 
     ### $chain is either INPUT or FORWARD, and is used only to
     ### see whether or not we need to add the rule to the iptables
@@ -757,9 +761,10 @@ sub ipt_build_rule() {
     ### append the protocol to the rule
     $rule .= " $iptables_opts{'proto'} $hdr_href->{'proto'}";
 
-    ### append the source
-    if ($src) {
-        $rule .= " $iptables_opts{'src'} $src";
+    ### append the source (this will always be
+    ### either "-s <net>" or "-d <net>"
+    if ($src_dst =~ m|$iptables_opts{'src'}|) {
+        $rule .= " $src_dst";
     }
 
     ### append the source port
@@ -771,8 +776,8 @@ sub ipt_build_rule() {
     }
 
     ### append the destination
-    if ($dst) {
-        $rule .= " $iptables_opts{'dst'} $dst";
+    if ($src_dst =~ m|$iptables_opts{'dst'}|) {
+        $rule .= " $src_dst";
     }
 
     ### append the destination port
