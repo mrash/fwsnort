@@ -778,7 +778,7 @@ sub ipt_build() {
         ### the source and destination
         my $rv = &ipt_build_rule(
             'INPUT',
-            "$cmds{'iptables'} -A $input_rules_chns[$ctr]",
+            "\$IPTABLES -A $input_rules_chns[$ctr]",
             $hdr_href,
             $opts_href,
             $sd,
@@ -797,7 +797,7 @@ sub ipt_build() {
             ### the source and destination
             my $rv = &ipt_build_rule(
                 'FORWARD',
-                "$cmds{'iptables'} -A $forward_rules_chn[$ctr]",
+                "\$IPTABLES -A $forward_rules_chn[$ctr]",
                 $hdr_href,
                 $opts_href,
                 $sd,
@@ -955,7 +955,7 @@ sub ipt_add_rule() {
 
     if ($verbose) {
         &logr("### snort rule: $orig_snort_rule\n", $ipt_script);
-        &logr("/bin/echo \" .. rule: $ipt_rule_ctr\"\n", $ipt_script)
+        &logr("\$ECHO \" .. rule: $ipt_rule_ctr\"\n", $ipt_script)
     } else {
         &logr("$comment\n", $ipt_script);
     }
@@ -971,17 +971,17 @@ sub ipt_add_chains() {
         "############\n###\n", $ipt_script);
     for my $type (keys %fwsnort_chains) {
         for my $intf (keys %{$fwsnort_chains{$type}}) {
-            &logr("$cmds{'iptables'} -N $fwsnort_chains{$type}{$intf} " .
+            &logr("\$IPTABLES -N $fwsnort_chains{$type}{$intf} " .
                 "2> /dev/null\n", $ipt_script);
-            &logr("$cmds{'iptables'} -F $fwsnort_chains{$type}{$intf}\n\n",
+            &logr("\$IPTABLES -F $fwsnort_chains{$type}{$intf}\n\n",
                 $ipt_script);
         }
     }
     if (defined $config{'INTERNAL_INTF'}
         || defined $config{'DMZ_INTF'}) {
-        &logr("$cmds{'iptables'} -N fwsnort_FORWARD 2> /dev/null\n",
+        &logr("\$IPTABLES -N fwsnort_FORWARD 2> /dev/null\n",
             $ipt_script);
-        &logr("$cmds{'iptables'} -F fwsnort_FORWARD\n\n",
+        &logr("\$IPTABLES -F fwsnort_FORWARD\n\n",
             $ipt_script);
     }
     return;
@@ -992,13 +992,13 @@ sub ipt_jump_chain() {
         "############\n###\n", $ipt_script);
     for my $type (keys %fwsnort_chains) {
         for my $intf (keys %{$fwsnort_chains{$type}}) {
-            &logr("$cmds{'iptables'} -I $type 1 -i $intf " .
+            &logr("\$IPTABLES -I $type 1 -i $intf " .
                 "-j $fwsnort_chains{$type}{$intf}\n", $ipt_script);
         }
     }
     if (defined $config{'INTERNAL_INTF'}
         || defined $config{'DMZ_INTF'}) {
-        &logr("$cmds{'iptables'} -I FORWARD 1 -j fwsnort_FORWARD\n\n",
+        &logr("\$IPTABLES -I FORWARD 1 -j fwsnort_FORWARD\n\n",
             $ipt_script);
     }
     &logr("\n### EOF ###\n", $ipt_script);
@@ -1024,6 +1024,19 @@ sub ipt_hdr() {
     &logr("#\n", $ipt_script);
     &logr("###########################################################" .
         "#############\n#\n\n", $ipt_script);
+
+    &ipt_config_section();
+    return;
+}
+
+sub ipt_config_section() {
+    ### build the config section of the iptables script
+    &logr("#==================== config ====================\n",
+        $ipt_script);
+    &logr("ECHO=$cmds{'echo'}\n", $ipt_script);
+    &logr("IPTABLES=$cmds{'iptables'}\n", $ipt_script);
+    &logr("#================== end config ==================\n\n",
+        $ipt_script);
     return;
 }
 
@@ -1031,7 +1044,7 @@ sub ipt_type() {
     my $type = shift;
     &logr("\n###\n############ ${type}.rules ############\n###\n",
         $ipt_script);
-    &logr("/bin/echo \" .. Adding iptables $type rules.\"\n",
+    &logr("\$ECHO \" .. Adding iptables $type rules.\"\n",
         $ipt_script);
     return;
 }
