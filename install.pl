@@ -22,7 +22,7 @@ use strict;
 #========================= config ========================
 my $sbin_dir    = '/usr/sbin';
 my $fwsnort_dir = '/etc/fwsnort';
-my $rules_dir   = "${fwsnort_dir}/snort_rules";
+my $rules_dir   = "${fwsnort_dir}/snort-1.8.7_rules";
 
 ### system binaries
 my $perlCmd = '/usr/bin/perl';
@@ -84,16 +84,16 @@ sub install() {
     system "$makeCmd install";
     chdir '..';
 
-    opendir D, 'snort_rules' or die " ** Could not open " .
-        "the snort_rules directory";
+    opendir D, 'snort-1.8.7_rules' or die " ** Could not open " .
+        'the snort-1.8.7_rules directory';
     my @rfiles = readdir D;
     closedir D;
     shift @rfiles; shift @rfiles;
     for my $rfile (@rfiles) {
         next unless $rfile =~ /\.rules$/;
-        print " .. Copying snort_rules/${rfile} " .
+        print " .. Copying snort-1.8.7_rules/${rfile} " .
             "-> ${rules_dir}/${rfile}\n";
-        copy "snort_rules/${rfile}", "${rules_dir}/${rfile}";
+        copy "snort-1.8.7_rules/${rfile}", "${rules_dir}/${rfile}";
     }
 
     print " .. Copying fwsnort.conf -> ${fwsnort_dir}/fwsnort.conf\n";
