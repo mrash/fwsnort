@@ -76,7 +76,6 @@
 
 use IPTables::Parse;
 use Net::IPv4Addr qw(:all);
-use Tie::IxHash;
 use File::Copy;
 use Sys::Hostname;
 use Getopt::Long;
@@ -118,31 +117,20 @@ my %snort_vars = (
     'ORACLE_PORTS'    => ''
 );
 
-my %logprefix;
-tie %logprefix, 'Tie::IxHash';  ### need to maintain ordering
-
-%logprefix = (
-    ### snort options that can be put into iptables
-    ### ruleset, but only in log messages with --log-prefix
-    'msg'       => 'msg:\s*\"(.*?)\"\s*;',
-    'classtype' => '[\s;]classtype:\s*(.*?)\s*;',
-    'sid'       => '[\s;]sid:\s*(\d+)\s*;',
-    'reference' => '[\s;]reference:\s*(.*?)\s*;',
-);
-
 my %iptables_opts = (
     'uricontent' => '-m string',
-    'content'    => '-m string',
-    'flags'      => '--tcp-flags',
-    'itype'      => '--icmp-type',
-    'ttl'        => '--ttl',
-    'tos'        => '--tos',
-    'seq'        => '--log-tcp-sequence',
-    'src'        => '-s',
-    'src_p'      => '--sport',
-    'dst'        => '-d',
-    'dst_p'      => '--dport',
-    'proto'      => '-p'
+    'content' => '-m string',
+    'ipopts'  => '-m ipv4options',
+    'flags'   => '--tcp-flags',
+    'itype'   => '--icmp-type',
+    'ttl'     => '--ttl',
+    'tos'     => '--tos',
+    'seq'     => '--log-tcp-sequence',
+    'src'     => '-s',
+    'src_p'   => '--sport',
+    'dst'     => '-d',
+    'dst_p'   => '--dport',
+    'proto'   => '-p'
 );
 
 my %snort_opts = (
@@ -156,7 +144,8 @@ my %snort_opts = (
         'flags'   => '[\s;]flags:\s*(.*?)\s*;',
         'itype'   => '[\s;]itype:\s*(\d+)\s*;',
         'ttl'     => '[\s;]ttl:\s*(\d+)\s*;',
-        'tos'     => '[\s;]tos:\s*(\d+)\s*;'
+        'tos'     => '[\s;]tos:\s*(\d+)\s*;',
+        'ipopts'  => '[\s;]ipopts:\s*.*?\s*;',
     },
 
     ### snort options which are logged within iptables
@@ -172,20 +161,22 @@ my %snort_opts = (
 
     ### snort options that can be put into iptables
     ### ruleset, but only in log messages with --log-prefix
-    'logprefix' => \%logprefix,
+    'logprefix' =>  {
+        'sid'       => '[\s;]sid:\s*(\d+)\s*;',
+        'msg'       => 'msg:\s*\"(.*?)\"\s*;',
+        'classtype' => '[\s;]classtype:\s*(.*?)\s*;',
+        'reference' => '[\s;]reference:\s*(.*?)\s*;'
+    },
 
     ### snort options that cannot be included directly
     ### within iptables filter statements (yet :)
     'unsupported' => {
-        'offset'       => '[\s;]offset:\s*\d+\s*;',
-        'depth'        => '[\s;]depth:\s*\d+\s*;',
         'dsize'        => '[\s;]dsize:\s*\S+\s*;',
         'seq'          => '[\s;]seq:\s*\d+\s*;',
         'ack'          => '[\s;]ack:\s*\d+\s*;',
         'fragbits'     => '[\s;]fragbits:\s*\S+\s*;',
         'content-list' => '[\s;]content\-list:\s*\".*?\"\s*;',
-        'ipopts'       => '[\s;]ipopts:\s*.*?\s*;',
-        'rpc'          => '[\s;]rpc:\s*\S+\s*;',
+        'rpc'          => '[\s;]rpc:\s*\S+\s*;'
     },
 
     ### snort options that fwsnort will ignore
@@ -221,7 +212,6 @@ my %snort_sigs;
 ### eth1 is the internal interface:
 ###   jump int: eth0   dst: internal network  (src doesn't matter)
 ###   jump int: eth1   src: internal network  (dst doesn't matter)
-my %snort_chains;
 
 ### config and commands hashes (constructed by readconf())
 my %config;
@@ -236,27 +226,40 @@ my $help       = 0;
 my $stdout     = 0;
 my $debug      = 0;
 my $verbose    = 0;
+my $strict     = 0;
 my $snort_sid  = 0;
 my $dump_conf  = 0;
 my $rules_type = '';
 
 &usage(1) unless (GetOptions(
-    'fw-apply'      => \$fw_apply,   # apply the generated ruleset
-    'fw-log'        => \$fw_log,
-    'fw-drop'       => \$fw_drop,
-    'fw-reject'     => \$fw_reject,
-    'snort-sid=i'   => \$snort_sid,  # Parse only this particular snort rule
-    'type=s'        => \$rules_type, # process this type of snort rule
-    'logfile=s'     => \$logfile,
-    'stdout'        => \$stdout,     # print the fw ruleset on STDOUT
-    'verbose'       => \$verbose,
-    'debug'         => \$debug,
-    'dump-conf'     => \$dump_conf,  # display config variables
-    'config=s'      => \$fwsnort_conf, # manually specify the config file
-    'help'          => \$help
+    'fw-apply'    => \$fw_apply,   # apply the generated ruleset
+    'fw-log'      => \$fw_log,
+    'fw-drop'     => \$fw_drop,
+    'fw-reject'   => \$fw_reject,
+    'snort-sid=i' => \$snort_sid,  # Parse only this particular snort rule
+    'type=s'      => \$rules_type, # process this type of snort rule
+    'logfile=s'   => \$logfile,
+    'stdout'      => \$stdout,     # print the fw ruleset on STDOUT
+    'strict'      => \$strict,
+    'verbose'     => \$verbose,
+    'debug'       => \$debug,
+    'dump-conf'   => \$dump_conf,  # display config variables
+    'config=s'    => \$fwsnort_conf, # manually specify the config file
+    'help'        => \$help
 ));
 
 &usage(0) if $help;
+
+if ($strict) {
+    ### make the snort options parser very strict
+    delete $snort_opts{'filter'}{'uricontent'};
+    $snort_opts{'unsupported'}{'uricontent'}
+        = '[\s;]uricontent:\s*\"(.*?)\"\s*;';
+    $snort_opts{'unsupported'}{'offset'}
+        = '[\s;]offset:\s*\d+\s*;';
+    $snort_opts{'unsupported'}{'depth'}
+        = '[\s;]depth:\s*\d+\s*;';
+}
 
 ### make sure some directories exist, etc.
 &setup();
@@ -399,7 +402,7 @@ sub parse_rule_options() {
         my $option = $1;
         if (! defined $opts{$option}
             && ! defined $snort_opts{'ignore'}{$option}) {
-            print "$line_num option: \"$option\" -- $rule_options\n";
+            print "$line_num bad option: \"$option\" -- $rule_options\n";
         }
     }
     return \%opts;
@@ -500,7 +503,7 @@ sub build_ipt_rule() {
         $rule .= " $iptables_opts{'dst_p'} $hdr_href->{'dst_p'}";
     }
 
-    ### handle tcp flags
+    ### append tcp flags
     if ($hdr_href->{'proto'} eq 'tcp'
         && defined $opts_href->{'flags'}) {
         my $f_str = '';
@@ -513,11 +516,27 @@ sub build_ipt_rule() {
         $f_str .= 'FIN,' if $opts_href->{'flags'} =~ /F/;
         $f_str =~ s/\,$//;
 
-        ### e.g.  --tcp-flags ACK ACK
-        $rule .= " $iptables_opts{'flags'} $f_str $f_str";
+        ### --tcp-flags ACK ACK
+        ### --tcp-flags URG,PSH,SYN,FIN URG,PSH,SYN,FIN
+        $rule .= " $iptables_opts{'flags'} ALL $f_str";
     }
 
-    ### handle snort content options
+    ### append tos
+    if (defined $opts_href->{'tos'}) {
+        $rule .= " $iptables_opts{'tos'} $opts_href->{'tos'}"
+    }
+
+    ### append ttl
+    if (defined $opts_href->{'ttl'}) {
+        $rule .= " $iptables_opts{'ttl'} $opts_href->{'ttl'}"
+    }
+
+    ### append icmp type
+    if (defined $opts_href->{'itype'}) {
+        $rule .= " $iptables_opts{'itype'} $opts_href->{'itype'}"
+    }
+
+    ### append snort content options
     my $content = '';
     if (defined $opts_href->{'uricontent'}) {
         $content = $opts_href->{'uricontent'};
@@ -537,30 +556,23 @@ sub build_ipt_rule() {
 #        if (defined $opts_href->{$opt}) {
 #            $log_only_flag = 1;
 
-    ### construct the log-prefix
-    my $log_prefix = " -j LOG --log-prefix \"";
+    ### construct the log-prefix (should only contain the sid in
+    ### order to conserve kernel memory).
+    my $log_prefix = " -j LOG --log-prefix \"SID$opts_href->{'sid'} \""
+        if defined $opts_href->{'sid'};
+    $rule .= $log_prefix;
 
-    ### the ordering was preserved for the logprefix hash
-    ### reference, so "msg" will always appear first in the
-    ### --log-prefix output, followed by "classtype:", etc.
-    my $pref_flag = 0;
-    for my $opt (keys %{$snort_opts{'logprefix'}}) {
-        if (defined $opts_href->{$opt}) {
-            ### make absolutely certain there are no commas in the log
-            ### message since we use commas to separate the various fields
-            $opts_href->{$opt} =~ s/,//g;
-            $log_prefix .= "$opt: $opts_href->{$opt}, ";
-            $pref_flag = 1;
-        }
-    }
-    if ($pref_flag) {
-        ### all snort signatures should have an option
-        ### that should be included within a --log-prefix
-        ### string, e.g. "msg" and "sid"
-        $log_prefix =~ s/\,\s$//;
-        $log_prefix .= "\"";
-        $rule .= $log_prefix;
-    }
+    ### print the rest of the logprefix snort options in a comment
+    ### one line above the rule
+    my $comment = "###";
+    $comment .= " msg: \"$opts_href->{'msg'}\","
+        if defined $opts_href->{'msg'};
+    $comment .= " classtype: \"$opts_href->{'classtype'}\","
+        if defined $opts_href->{'classtype'};
+    $comment .= " reference: \"$opts_href->{'reference'}\","
+        if defined $opts_href->{'reference'};
+    $comment =~ s/,$//;
+    print $comment, "\n";
 
     print $rule, "\n";
     return 1;
