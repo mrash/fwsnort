@@ -119,10 +119,10 @@ sub install() {
     my @rfiles = readdir D;
     closedir D;
     shift @rfiles; shift @rfiles;
+    print " .. Copying all rules files to $rules_dir\n";
     for my $rfile (@rfiles) {
         next unless $rfile =~ /\.rules$/;
-        print " .. Copying snort-1.8.7_rules/${rfile} " .
-            "-> ${rules_dir}/${rfile}\n";
+        print " .. Installing ${rules_dir}/${rfile}\n";
         copy "snort-1.8.7_rules/${rfile}", "${rules_dir}/${rfile}";
     }
 
