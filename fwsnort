@@ -560,7 +560,7 @@ sub ipt_build() {
 
             push @forward_rules_dst, $intf_net{'INTERNAL_INTF'}{'net'};
             push @forward_rules_chn, 'fwsnort_FORWARD';
-            push @forward_rules_dst, $intf_net{'EXTERNAL_INTF'}{'net'};
+            push @forward_rules_dst, '0.0.0.0/0';
             push @forward_rules_chn, 'fwsnort_FORWARD';
         } else {
             print " ** src: $src, dst: $dst\n";
