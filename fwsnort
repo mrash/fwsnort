@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 #
-############################################################################
+###############################################################################
 #
 # File: fwsnort
 #
@@ -26,42 +26,49 @@
 #
 # Snort Rule Options:
 #
-#   msg:     Prints a message in alerts and packet logs.
-#   logto:   Log the packet to a user specified filename instead of the
-#            standard output file.
-#   ttl:     Test the IP header's TTL field value.
-#   tos:     test the IP header's TOS field value 
-#   id:      test the IP header's fragment ID field for a specific value 
-#   ipoption:  watch the IP option fields for specific codes 
-#   fragbits:  test the fragmentation bits of the IP header 
-#   dsize:     test the packet's payload size against a value 
-#   flags      test the TCP flags for certain values 
-#   seq:       test the TCP sequence number field for a specific value 
-#   ack:       test the TCP acknowledgement field for a specific value 
-#   itype:     test the ICMP type field against a specific value 
-#   icode:     test the ICMP code field against a specific value 
-#   icmp_id:   test the ICMP ECHO ID field against a specific value 
-#   icmp_seq:  test the ICMP ECHO sequence number against a specific value 
-#   content:   search for a pattern in the packet's payload 
-#   content-list:  search for a set of patterns in the packet's payload 
-#   offset:    modifier for the content option, sets the offset to begin attempting a pattern match 
-#   depth:     modifier for the content option, sets the maximum search depth for a pattern match attempt 
-#   nocase:   match the preceding content string with case insensitivity 
-#   session   dumps the application layer information for a given session 
-#   rpc:       watch RPC services for specific application/procedure calls 
-#   resp:      active response (knock down connections, etc) 
-#   react:     active response (block web sites) 
-#   reference:   external attack reference ids 
-#   sid:         Snort rule id 
-#   rev:     rule revision number 
-#   classtype:  rule classification identifier 
-#   priority:   rule severity identifier 
-#   uricontent: search for a pattern in the URI portion of a packet
-#   tag:        advanced logging actions for rules 
-#   ip_proto:   IP header's protocol value 
-#   sameip:      determines if source ip equals the destination ip 
-#   stateless:  valid regardless of stream state 
-#   regex:       wildcard pattern matching 
+#   msg:           Prints a message in alerts and packet logs.
+#   logto:         Log the packet to a user specified filename instead of the
+#                  standard output file.
+#   ttl:           Test the IP header's TTL field value.
+#   tos:           Test the IP header's TOS field value.
+#   id:            Test the IP header's fragment ID field for a specific
+#                  value.
+#   ipoption:      Watch the IP option fields for specific codes.
+#   fragbits:      Test the fragmentation bits of the IP header.
+#   dsize:         Test the packet's payload size against a value.
+#   flags          Test the TCP flags for certain values.
+#   seq:           Test the TCP sequence number field for a specific value.
+#   ack:           Test the TCP acknowledgement field for a specific value.
+#   itype:         Test the ICMP type field against a specific value.
+#   icode:         Test the ICMP code field against a specific value.
+#   icmp_id:       Test the ICMP ECHO ID field against a specific value.
+#   icmp_seq:      Test the ICMP ECHO sequence number against a specific
+#                  value.
+#   content:       Search for a pattern in the packet's payload.
+#   content-list:  Search for a set of patterns in the packet's payload.
+#   offset:        Modifier for the content option, sets the offset to begin
+#                  attempting a pattern match.
+#   depth:         Modifier for the content option, sets the maximum search
+#                  depth for a pattern match attempt.
+#   nocase:        Match the preceding content string with case insensitivity.
+#   session        Dumps the application layer information for a given
+#                  session.
+#   rpc:           Watch RPC services for specific application/procedure
+#                  calls.
+#   resp:          Active response (knock down connections, etc).
+#   react:         Active response (block web sites).
+#   reference:     External attack reference ids.
+#   sid:           snort rule id.
+#   rev:           Rule revision number.
+#   classtype:     Rule classification identifier.
+#   priority:      Rule severity identifier.
+#   uricontent:    Search for a pattern in the URI portion of a packet
+#   tag:           Advanced logging actions for rules.
+#   ip_proto:      IP header's protocol value.
+#   sameip:        Determines if source ip equals the destination ip.
+#   stateless:     Valid regardless of stream state.
+#   regex:         Wildcard pattern matching.
+#
 ############################################################################
 #
 # $Id$
@@ -110,52 +117,51 @@ my %snort_vars = (
     'ORACLE_PORTS'    => ''
 );
 
-### snort options that should be put into iptables
-### ruleset, but only in log messages with --log-prefix
-my %sopt_logprefix = (
-    'msg'       => 'msg:\s*\"(.*?)\";',
-    'reference' => '[\s;]reference:\s*(.*?);',
-    'sid'       => '[\s;]sid:\s*(\d+);',
-    'rev'       => '[\s;]rev:\s*(\d+);',
-    'classtype' => '[\s;]classtype:\s*(.*?);'
-);
-
-### snort options that we can directly filter on
-### in iptables rulesets (snort options are separate
-### from the snort "header" which include protocol,
-### source, destination, etc.)
-my %sopt_filter = (
-    'uricontent'   => '[\s;]uricontent:\s*\"(.*?)\";',
-    'content' => '[\s;]content:\s*\"(.*?)\";',
-    'flags'   => '[\s;]flags:\s*(.*?);',
-    'itype'   => '[\s;]itype:\s*(\d+);',
-    'ttl'     => '[\s;]ttl:\s*(\d+);',
-    'tos'     => '[\s;]tos:\s*(\d+);'
-);
-
-### snort options that cannot be included directly
-### within iptables filter statements (yet :)
-my %sopt_nofilter = (
-    'offset'       => '[\s;]offset:\s*\d+;',
-    'depth'        => '[\s;]depth:\s*\d+;',
-    'dsize'        => '[\s;]dsize:\s*\S+;',
-    'seq'          => '[\s;]seq:\s*\d+;',
-    'ack'          => '[\s;]ack:\s*\d+;',
-    'fragbits'     => '[\s;]fragbits:\s*\S+;',
-    'content-list' => '[\s;]content\-list:\s*\".*?\";',
-    'ipopts'       => '[\s;]ipopts:\s*.*?;',
-    'rpc'          => '[\s;]rpc:\s*\S+;',
-);
-
-### snort options which are logged within iptables
-### logging statements (so we can detect these values
-### but just not filter them directly)
-my %sopt_log = (
-    'id'       => '[\s;]id:\s*(\d+);',
-    'seq'      => '[\s;]seq:\s*(\d+);',
-    'icmp_seq' => '[\s;]icmp_seq:\s*(\d+);',
-    'icmp_id'  => '[\s;]icmp_id:\s*(\d+);',
-    'icode'    => '[\s;]icode:\s*(\d+);',
+my %snort_opts = (
+    ### snort options that we can directly filter on
+    ### in iptables rulesets (snort options are separate
+    ### from the snort "header" which include protocol,
+    ### source, destination, etc.)
+    'filter' => {
+        'uricontent' => '[\s;]uricontent:\s*\"(.*?)\";',
+        'content' => '[\s;]content:\s*\"(.*?)\";',
+        'flags'   => '[\s;]flags:\s*(.*?);',
+        'itype'   => '[\s;]itype:\s*(\d+);',
+        'ttl'     => '[\s;]ttl:\s*(\d+);',
+        'tos'     => '[\s;]tos:\s*(\d+);'
+    },
+    ### snort options which are logged within iptables
+    ### logging statements (so we can detect these values
+    ### but just not filter them directly)
+    'log' => {
+        'id'       => '[\s;]id:\s*(\d+);',
+        'seq'      => '[\s;]seq:\s*(\d+);',
+        'icmp_seq' => '[\s;]icmp_seq:\s*(\d+);',
+        'icmp_id'  => '[\s;]icmp_id:\s*(\d+);',
+        'icode'    => '[\s;]icode:\s*(\d+);',
+    },
+    ### snort options that can be put into iptables
+    ### ruleset, but only in log messages with --log-prefix
+    'logprefix' => {
+        'msg'       => 'msg:\s*\"(.*?)\";',
+        'reference' => '[\s;]reference:\s*(.*?);',
+        'sid'       => '[\s;]sid:\s*(\d+);',
+        'rev'       => '[\s;]rev:\s*(\d+);',
+        'classtype' => '[\s;]classtype:\s*(.*?);'
+    },
+    ### snort options that cannot be included directly
+    ### within iptables filter statements (yet :)
+    'unsupported' => {
+        'offset'       => '[\s;]offset:\s*\d+;',
+        'depth'        => '[\s;]depth:\s*\d+;',
+        'dsize'        => '[\s;]dsize:\s*\S+;',
+        'seq'          => '[\s;]seq:\s*\d+;',
+        'ack'          => '[\s;]ack:\s*\d+;',
+        'fragbits'     => '[\s;]fragbits:\s*\S+;',
+        'content-list' => '[\s;]content\-list:\s*\".*?\";',
+        'ipopts'       => '[\s;]ipopts:\s*.*?;',
+        'rpc'          => '[\s;]rpc:\s*\S+;',
+    }
 );
 
 ### variables that are supported by the fwsnort config
@@ -307,14 +313,14 @@ sub parse_snort_rules() {
                     "bidir: $hdr_href->{'bidir'}, Dst: $hdr_href->{'dst'}, ",
                     "Dst_p: $hdr_href->{'dst_p'}\n";
             }
-            my ($ipttype, $opt_filter_href, $opt_logprefix_href)
-                = &parse_rule_options($rule_options, $line_num);
-            if ($ipttype == 1) {  ### we can filter
-                &add_ipt_rule($hdr_href, $opt_filter_href, 'filter');
-                $parsed_ctr++;  ### keep track of successfully parsed rules
-            } elsif ($ipttype == 2) {
-                &add_ipt_rule($hdr_href, $opt_logprefix_href, 'log');
-                $logonly_ctr++;
+            my $opts_href = &parse_rule_options($rule_options, $line_num);
+            if ($opts_href) {
+                my $rv = &build_ipt_rule($hdr_href, $opts_href);
+                if ($rv == 1) {
+                    $parsed_ctr++;  ### keep track of successfully parsed rules
+                } elsif ($rv == 2) {
+                    $logonly_ctr++;
+                }
             } else {
                 $unsup_ctr++;
                 next RULE;
@@ -338,58 +344,34 @@ sub parse_snort_rules() {
 sub parse_rule_options() {
     my ($rule_options, $line_num) = @_;
 
-    my %opt_logprefix;
-    my %opt_filter;
-    my %opt_log;
-    my $status = 1;   ### 1 => can filter with iptables, 2 => iptables logs
+    ### tmp hash we will return
+    my %opts;
 
-    for my $option (keys %sopt_nofilter) {
-        my $regex = $sopt_nofilter{$option};
-        if ($rule_options =~ /$regex/) {
-            print " ** Unsupported option: \"$option\" at " .
+    for my $opt (keys %{$snort_opts{'unsupported'}}) {
+        ### see if we match a regex belonging to an supported option
+        if ($rule_options =~ /$snort_opts{'unsupported'}{$opt}/) {
+            print " ** Unsupported option: \"$opt\" at " .
                 "line: $line_num.  Skipping rule.\n" if $verbose;
             return 0;
         }
     }
 
-    ### if we match one of these options we cannot write filter
-    ### rules directly but we can still detect the signature in
-    ### iptables log messages.
-    for my $option (keys %sopt_log) {
-        my $regex = $sopt_log{$option};
-        if ($rule_options =~ /$regex/) {
-            $opt_log{$option} = $1;
-            $status = 2;
-        }
-    }
-
-    ### match snort options such as "msg" and "sid" that should
-    ### go in --log-prefix.
-    for my $option (keys %sopt_logprefix) {
-        my $regex = $sopt_logprefix{$option};
-        if ($rule_options =~ /$regex/) {
-            $opt_logprefix{$option} = $1;
-        }
-    }
-
-    ### match snort options such as "content" and "ttl" that we
-    ### can write filter rules for directly.
-    for my $option (keys %sopt_filter) {
-        my $regex = $sopt_filter{$option};
-        if ($rule_options =~ /$regex/) {
-            $opt_filter{$option} = $1;
+    for my $type ('filter', 'log', 'logprefix') {
+        for my $opt (keys %{$snort_opts{$type}}) {
+            ### see if we match the option regex
+            if ($rule_options =~ /$snort_opts{$type}{$opt}/) {
+                $opts{$opt} = $1;
+            }
         }
     }
 
     while ($rule_options =~ /(\w+):\s*.*?;/g) {
         my $option = $1;
-        if (! defined $sopt_filter{$option} &&
-            ! defined $sopt_logprefix{$option} &&
-            ! defined $sopt_log{$option}) {
+        if (! defined $opts{$option}) {
             print "$line_num option: \"$option\" -- $rule_options\n";
         }
     }
-    return $status, \%opt_filter, \%opt_logprefix;
+    return \%opts;
 }
 
 sub parse_rule_hdr() {
@@ -423,7 +405,7 @@ sub parse_rule_hdr() {
     }
 }
 
-sub add_ipt_rule() {
+sub build_ipt_rule() {
     my ($hdr_href, $opt_href) = @_;
 
     ### start the rule
@@ -491,7 +473,7 @@ sub add_ipt_rule() {
     }
 
     print $rule, "\n";
-    return;
+    return 1;
 
 
 #    if (defined $config{$hdr_href->{'dst'}}) {
