@@ -1,4 +1,13 @@
-fwsnort-0.6.4 (12/18/2004);
+fwsnort-0.6.5 (03/20/2005):
+    - Updated to not attempt to download Snort rules from snort.org
+      because the rules are no longer available for automatic downloads
+    - Changed the install.pl script and the --update-rules mode for
+      fwsnort to download the latest signature set from
+      http://www.bleedingsnort.com/.
+      (Snort.org is now offering pay-service around their rule sets).
+    - Added signature test for the "flowbits" keyword.
+
+fwsnort-0.6.4 (12/18/2004):
     - Updated to Snort-2.3 rules.  FWSnort can convert a total of 1710
       out of 2559 total Snort-2.3 rules.
     - Updated to new Snort rules download link for --update-rules mode:
@@ -7,14 +16,14 @@ fwsnort-0.6.4 (12/18/2004);
       and die logging messages.
     - Added --replace-string patches.
 
-fwsnort-0.6.3 (04/04/2004);
+fwsnort-0.6.3 (04/04/2004):
     - Added ignore functionality for both IPs and networks
     - Split --ipt-block into --ipt-drop and --ipt-reject to add DROP
       or REJECT rules respectively.
     - Added --add-deleted option to allow rules in the "deleted.rules"
       file to be added.
 
-fwsnort-0.6.2 (03/19/2004);
+fwsnort-0.6.2 (03/19/2004):
     - Added --internal-net and --dmz-net options so that internal and
       dmz networks can be manually specified without having to parse
       the output of ifconfig.  This is most useful for running fwsnort

@@ -40,8 +40,8 @@ my $lib_dir     = '/usr/lib/fwsnort';
 my $fwsnort_dir = '/etc/fwsnort';
 my $rules_dir   = "${fwsnort_dir}/snort_rules";
 
-my $snort_website = 'www.snort.org';
-my $download_rules_file = 'snortrules-snapshot-CURRENT.tar.gz';
+### Snort.org no longer allows auto downloads of signatures
+my $bleeding_snort_website = 'www.bleedingsnort.com';
 
 ### system binaries
 my $perlCmd = '/usr/bin/perl';
@@ -132,37 +132,26 @@ sub install() {
     print "\n\n";
 
     my $local_rules_dir = 'snort_rules';
-    if (&query_get_latest_snort_rules()) {
-        ### make sure we can actually reach snort.org.
-        if (&test_snort_website()) {
-            if (-e $download_rules_file) {
-                unlink $download_rules_file or die "[*] Could not remove ",
-                    "$download_rules_file: $!";
-            }
-            system "$cmds{'wget'} http://$snort_website/dl/rules/" .
-                $download_rules_file;
-            if (-e $download_rules_file) {
-                system "$cmds{'tar'} xvfz $download_rules_file";
-                if (-d 'rules') {
-                    rmtree 'downloaded_snort_rules'
-                        if -d 'downloaded_snort_rules';
-                    move 'rules', 'downloaded_snort_rules'
-                        or die "[*] Could not move rules -> ",
-                            "downloaded_snort_rules: $!";
-                    $local_rules_dir = 'downloaded_snort_rules';
-                } else {
-                    print "[-] $download_rules_file did not appear to ",
-                        "contain a\n    \"rules\" directory.  Defaulting to ",
-                        "existing snort-2.3 rules.\n";
-                }
-            } else {
-                print "[-] Could not download $download_rules_file\n",
-                    "    Defaulting to existing snort-2.3 rules.\n";
-            }
-        } else {
-            print "[-] Could not connect to $snort_website on tcp/80.\n",
-                "    Defaulting to existing snort-2.3 rules.\n";
+    if (&query_get_bleeding_snort()) {
+        chdir $local_rules_dir or die "[*] Could not chdir $local_rules_dir";
+        if (-e 'bleeding-all.rules') {
+            move 'bleeding-all.rules', 'bleeding-all.rules.tmp'
+                or die "[*] Could not move bleeding-all.rules -> ",
+                "bleeding-all.rules.tmp";
         }
+        system "$cmds{'wget'} http://$bleeding_snort_website/bleeding-all.rules";
+        if (-e 'bleeding-all.rules') {  ### successful download
+            unlink 'bleeding-all.rules.tmp';
+        } else {
+            print "[-] Could not download bleeding-all.rules file.\n";
+            if (-e 'bleeding-all.rules.tmp') {
+                ### move the original back
+                move 'bleeding-all.rules', 'bleeding-all.rules.tmp'
+                    or die "[*] Could not move bleeding-all.rules -> ",
+                    "bleeding-all.rules.tmp";
+            }
+        }
+        chdir '..';
     }
 
     opendir D, $local_rules_dir or die "[*] Could not open ",
@@ -174,7 +163,9 @@ sub install() {
     for my $rfile (@rfiles) {
         next unless $rfile =~ /\.rules$/;
         print "[+] Installing $rfile\n";
-        copy "snort_rules/${rfile}", "${rules_dir}/${rfile}";
+        copy "snort_rules/${rfile}", "${rules_dir}/${rfile}" or
+            die "[*] Could not copy snort_rules/${rfile} ",
+                "-> ${rules_dir}/${rfile}";
     }
 
     print "\n";
@@ -273,12 +264,10 @@ sub install_manpage() {
     return;
 }
 
-sub query_get_latest_snort_rules() {
+sub query_get_bleeding_snort() {
     my $ans = '';
-    print "[+] Would you like to download the latest snort rules from \n",
-        "    http://$snort_website/?  If you not (or if you aren't connected\n",
-        "    to the Net, then the installation will default to using \n",
-        "    snort-2.3 signatures.\n";
+    print "[+] Would you like to download the latest Snort rules from \n",
+        "    http://$bleeding_snort_website/?\n";
     while ($ans ne 'y' && $ans ne 'n') {
         print "    ([y]/n)?  ";
         $ans = <STDIN>;
@@ -286,20 +275,6 @@ sub query_get_latest_snort_rules() {
         chomp $ans;
     }
     if ($ans eq 'y') {
-        return 1;
-    }
-    return 0;
-}
-
-sub test_snort_website() {
-    my $sock = new IO::Socket::INET(
-        PeerAddr => $snort_website,
-        PeerPort => 80,
-        Proto    => 'tcp',
-        Timeout  => 7
-    );
-    if (defined($sock)) {
-        close $sock;
         return 1;
     }
     return 0;

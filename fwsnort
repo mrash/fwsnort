@@ -12,7 +12,7 @@
 #
 # Credits: (see the CREDITS file)
 #
-# Version: 0.6.4
+# Version: 0.6.5
 #
 # Copyright (C) 2003 Michael Rash (mbr@cipherdyne.org)
 #
@@ -104,8 +104,8 @@ my $rules_dir   = "${fwsnort_dir}/snort_rules";
 my $archive_dir = "${fwsnort_dir}/archive";
 my $log_dir     = '/var/log';
 
-my $snort_website = 'www.snort.org';
-my $download_rules_file = 'snortrules-snapshot-CURRENT.tar.gz';
+### Snort.org no longer allows auto downloads of signatures
+my $bleeding_snort_website = 'www.bleedingsnort.com';
 
 ### config file
 my $fwsnort_conf = "${fwsnort_dir}/fwsnort.conf";
@@ -118,7 +118,7 @@ my $ipt_script = "${fwsnort_dir}/fwsnort.sh";
 #===================== end config =======================
 
 ### version number
-my $version = '0.6.4';
+my $version = '0.6.5';
 
 ### supported variables in snort signatures
 my %snort_vars = (
@@ -203,6 +203,7 @@ my %snort_opts = (
         'byte_jump'    => '[\s;]byte_jump\s*.*?\s*;',
         'distance'     => '[\s;]distance:\s*(\d+)\s*;',
         'within'       => '[\s;]within:\s*(\d+)\s*;',
+        'flowbits'     => '[\s;]flowbits:\s*\S+\s*;',
 #        'offset'       => '[\s;]offset:\s*\d+\s*;',
 #        'depth'        => '[\s;]depth:\s*\d+\s*;',
 #        'ipopts'  => '[\s;]ipopts:\s*(\w+)\s*;',
@@ -1694,49 +1695,27 @@ sub setup() {
 sub update_rules() {
     ### make sure we can actually reach snort.org.
     print "[+] Downloading latest rules:\n",
-        "    http://$snort_website/dl/rules/$download_rules_file\n";
-    if (&test_snort_website()) {
-        chdir $fwsnort_dir or die "[*] Could not chdir $fwsnort_dir: $!";
-        if (-e $download_rules_file) {
-            unlink $download_rules_file or die "[*] Could not remove ",
-                "$download_rules_file: $!";
-        }
-        system "$cmds{'wget'} http://$snort_website/dl/rules/" .
-            "$download_rules_file";
-        system "$cmds{'tar'} xvfz $download_rules_file";
-        if (-d 'rules') {
-            if (-d 'snort_rules') {
-                rmtree 'snort_rules.orig' if -d 'snort_rules.orig';
-                move 'snort_rules', 'snort_rules.orig';
-            }
-            move 'rules', 'snort_rules' or die "[*] Could not ",
-                "move rules -> snort_rules: $!";
-        } else {
-            print "[-] $download_rules_file did not appear to ",
-                "contain a\n    \"rules\" directory.  Defaulting to ",
-                "existing snort-2.0 rules.\n";
-        }
+        "    http://$bleeding_snort_website/bleeding-all.rules\n";
+    chdir $rules_dir or die "[*] Could not chdir $rules_dir: $!";
+    if (-e 'bleeding-all.rules') {
+        move 'bleeding-all.rules', 'bleeding-all.rules.tmp'
+            or die "[*] Could not move bleeding-all.rules -> ",
+            "bleeding-all.rules.tmp";
+    }
+    system "$cmds{'wget'} http://$bleeding_snort_website/bleeding-all.rules";
+    if (-e 'bleeding-all.rules') {  ### successful download
+        unlink 'bleeding-all.rules.tmp';
     } else {
-        print "[-] Could not connect to $snort_website on tcp/80.\n",
-            "    Defaulting to existing snort-2.0 rules.\n";
+        print "[-] Could not download bleeding-all.rules file.\n";
+        if (-e 'bleeding-all.rules.tmp') {
+            ### move the original back
+            move 'bleeding-all.rules', 'bleeding-all.rules.tmp'
+                or die "[*] Could not move bleeding-all.rules -> ",
+                "bleeding-all.rules.tmp";
+        }
     }
-    print "[+] Moving rules files to $fwsnort_dir/snort_rules/\n",
-        "[+] Finished.\n";
+    print "[+] Finished.\n";
     exit 0;
-}
-
-sub test_snort_website() {
-    my $sock = new IO::Socket::INET(
-        PeerAddr => $snort_website,
-        PeerPort => 80,
-        Proto    => 'tcp',
-        Timeout  => 7
-    );
-    if (defined($sock)) {
-        close $sock;
-        return 1;
-    }
-    return 0;
 }
 
 sub chk_commands() {
@@ -1832,8 +1811,8 @@ Options:
                                 (CIDR or standard notation).
     --dmz-net <net/mask>      - Manually specify a dmz network
                                 (CIDR or standard notation).
-    -u   --update-rules       - Download latest snort rules from
-                                http://$snort_website/
+    -u   --update-rules       - Download latest Bleeding-Snort rules
+                                from http://$bleeding_snort_website/
     -t   --type=<type>        - Only process snort rules of type <type>
                                 (e.g. "ddos" or "backdoor")
     -c   --config=<config>    - Use <config> instead of the normal
