@@ -934,7 +934,7 @@ sub ipt_build_rule() {
         $config{$hdr_href->{'dst_p'}} =~ s/\!(\d)/! $1/;
         $rule .= " $iptables_opts{'dst_p'} $config{$hdr_href->{'dst_p'}}";
     } elsif ($hdr_href->{'dst_p'} ne 'any') {
-        $hdr_href->{'src_p'} =~ s/\!(\d)/! $1/;
+        $hdr_href->{'dst_p'} =~ s/\!(\d)/! $1/;
         $rule .= " $iptables_opts{'dst_p'} $hdr_href->{'dst_p'}";
     }
 
