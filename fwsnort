@@ -534,47 +534,89 @@ sub ipt_build() {
     my $src = $hdr_href->{'src'};
     my $dst = $hdr_href->{'dst'};
 
-    if (($src eq 'EXTERNAL_NET'|| $src eq 'any')
-        && $dst eq 'HOME_NET') {
+    if ($src eq 'EXTERNAL_NET') {
+        if ($dst eq 'HOME_NET') {
+            &ipt_build_rule(
+                "$cmds{'iptables'} -A fwsnort_INPUT_$config{'EXTERNAL_INTF'}",
+                $hdr_href,
+                $opts_href,
+                '',
+                $intf_net{'EXTERNAL_INTF'}{'ip'}
+            );
+        } elsif ($dst eq 'any') {
+            &ipt_build_rule(
+                "$cmds{'iptables'} -A fwsnort_INPUT_$config{'EXTERNAL_INTF'}",
+                $hdr_href,
+                $opts_href,
+                '',
+                $intf_net{'EXTERNAL_INTF'}{'ip'}
+            );
+        } else {
+            print " ** src: $src, dst: $dst\n";
+        }
+    } elsif ($dst eq 'EXTERNAL_NET') {
+        if ($src eq 'HOME_NET') {
+            &ipt_build_rule(
+                "$cmds{'iptables'} -A fwsnort_INPUT_$config{'INTERNAL_INTF'}",
+                $hdr_href,
+                $opts_href,
+                '',
+                $intf_net{'INTERNAL_INTF'}{'ip'}
+            );
+        } elsif ($src eq 'any') {
+            &ipt_build_rule(
+                "$cmds{'iptables'} -A fwsnort_INPUT_$config{'INTERNAL_INTF'}",
+                $hdr_href,
+                $opts_href,
+                '',
+                $intf_net{'INTERNAL_INTF'}{'ip'}
+            );
+        } else {
+            print " ** src: $src, dst: $dst\n";
+        }
+    } elsif ($src eq 'any') {
+        if ($dst eq 'any') {
+            print "dup: $ipt_rule_ctr\n";
+            &ipt_build_rule(
+                "$cmds{'iptables'} -A fwsnort_INPUT_$config{'EXTERNAL_INTF'}",
+                $hdr_href,
+                $opts_href,
+                '',
+                $intf_net{'EXTERNAL_INTF'}{'ip'}
+            );
 
-        $rule = &ipt_build_rule(
-            "$cmds{'iptables'} -A fwsnort_INPUT_$config{'EXTERNAL_INTF'}",
-            $hdr_href,
-            $opts_href,
-            '',
-            $intf_net{'EXTERNAL_INTF'}{'ip'}
-        );
-    } elsif ($src eq 'HOME_NET'
-        && ($dst eq 'EXTERNAL_NET' || $dst eq 'any')) {
-
-        &ipt_build_rule(
-            "$cmds{'iptables'} -A fwsnort_INPUT_$config{'INTERNAL_INTF'}",
-            $hdr_href,
-            $opts_href,
-            '',
-            $intf_net{'INTERNAL_INTF'}{'ip'}
-        );
-
-    } elsif ($src eq 'any' && $dst eq 'any') {
-        print "dup: $ipt_rule_ctr\n";
-        $rule = &ipt_build_rule(
-            "$cmds{'iptables'} -A fwsnort_INPUT_$config{'EXTERNAL_INTF'}",
-            $hdr_href,
-            $opts_href,
-            '',
-            $intf_net{'EXTERNAL_INTF'}{'ip'}
-        );
-
-        &ipt_build_rule(
-            "$cmds{'iptables'} -A fwsnort_INPUT_$config{'INTERNAL_INTF'}",
-            $hdr_href,
-            $opts_href,
-            '',
-            $intf_net{'INTERNAL_INTF'}{'ip'}
-        );
-
+            &ipt_build_rule(
+                "$cmds{'iptables'} -A fwsnort_INPUT_$config{'INTERNAL_INTF'}",
+                $hdr_href,
+                $opts_href,
+                '',
+                $intf_net{'INTERNAL_INTF'}{'ip'}
+            );
+        } else {
+            print " ** src: $src, dst: $dst\n";
+        }
+    } elsif ($dst eq 'any') {
+        if ($src eq 'any') {
+            print "dup: $ipt_rule_ctr\n";
+            &ipt_build_rule(
+                "$cmds{'iptables'} -A fwsnort_INPUT_$config{'EXTERNAL_INTF'}",
+                $hdr_href,
+                $opts_href,
+                '',
+                $intf_net{'EXTERNAL_INTF'}{'ip'}
+            );
+            &ipt_build_rule(
+                "$cmds{'iptables'} -A fwsnort_INPUT_$config{'INTERNAL_INTF'}",
+                $hdr_href,
+                $opts_href,
+                '',
+                $intf_net{'INTERNAL_INTF'}{'ip'}
+            );
+        } else {
+            print " ** src: $src, dst: $dst\n";
+        }
     } else {
-        print "src: $src, dst: $dst\n";
+        print " ** src: $src, dst: $dst\n";
     }
 
     return;
