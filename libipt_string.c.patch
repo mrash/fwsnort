@@ -1,5 +1,5 @@
 --- libipt_string.c	Wed May 29 09:08:16 2002
-+++ libipt_string.c.new	Sun Mar  2 09:33:32 2003
++++ libipt_string.c.new	Thu Apr 17 13:43:49 2003
 @@ -13,6 +13,7 @@
  #include <string.h>
  #include <stdlib.h>
@@ -8,7 +8,17 @@
  
  #include <iptables.h>
  #include <linux/netfilter_ipv4/ipt_string.h>
-@@ -31,6 +32,7 @@
+@@ -23,7 +24,8 @@
+ {
+ 	printf(
+ "STRING match v%s options:\n"
+-"--string [!] string             Match a string in a packet\n",
++"--string [!] string             Match a string in a packet\n"
++"--hex-string [!] string         Match a hex string in a packet\n",
+ IPTABLES_VERSION);
+ 
+ 	fputc('\n', stdout);
+@@ -31,6 +33,7 @@
  
  static struct option opts[] = {
  	{ "string", 1, 0, '1' },
@@ -16,7 +26,7 @@
  	{0}
  };
  
-@@ -44,10 +46,83 @@
+@@ -44,10 +47,83 @@
  static void
  parse_string(const unsigned char *s, struct ipt_string_info *info)
  {	
@@ -101,7 +111,7 @@
  /* Function which parses command options; returns true if it
     ate an option */
  static int
-@@ -64,7 +139,15 @@
+@@ -64,7 +140,15 @@
  		parse_string(argv[optind-1], stringinfo);
  		if (invert)
  			stringinfo->invert = 1;
