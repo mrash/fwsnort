@@ -1,5 +1,6 @@
 fwsnort-0.6.4 (12/18/2004);
-    - Updated to Snort-2.3 rules.
+    - Updated to Snort-2.3 rules.  FWSnort can convert a total of 1710
+      out of 2559 total Snort-2.3 rules.
     - Updated to new Snort rules download link for --update-rules mode:
       http://www.snort.org/dl/rules/snortrules-snapshot-CURRENT.tar.gz
     - Updated to standard [+], [-], and [*] prefixes for info, warning
