@@ -40,8 +40,8 @@ my $lib_dir     = '/usr/lib/fwsnort';
 my $fwsnort_dir = '/etc/fwsnort';
 my $rules_dir   = "${fwsnort_dir}/snort_rules";
 
-my $snort_website  = 'www.snort.org';
-my $snort_web_file = 'snortrules-stable.tar.gz';
+my $snort_website = 'www.snort.org';
+my $download_rules_file = 'snortrules-snapshot-CURRENT.tar.gz';
 
 ### system binaries
 my $perlCmd = '/usr/bin/perl';
@@ -86,28 +86,28 @@ exit 0;
 #===================== end main ===================
 
 sub install() {
-    die " ** You must run install.pl from the fwsnort " .
+    die "[*] You must run install.pl from the fwsnort " .
         "sources directory." unless -e 'fwsnort' and -e 'fwsnort.conf';
 
     unless (-d $fwsnort_dir) {
-        print " .. mkdir $fwsnort_dir\n";
+        print "[+] mkdir $fwsnort_dir\n";
         mkdir $fwsnort_dir, 0500;
     }
     unless (-d $rules_dir) {
-        print " .. mkdir $rules_dir\n";
+        print "[+] mkdir $rules_dir\n";
         mkdir $rules_dir, 0500;
     }
     unless (-d $lib_dir) {
-        print " .. mkdir $lib_dir\n";
+        print "[+] mkdir $lib_dir\n";
         mkdir $lib_dir, 0755;
     }
 
     ### install Net::IPv4Addr
-    print " .. Installing the Net::IPv4Addr perl module.\n";
-    chdir 'Net-IPv4Addr' or die " ** Could not chdir to ",
+    print "[+] Installing the Net::IPv4Addr perl module.\n";
+    chdir 'Net-IPv4Addr' or die "[*] Could not chdir to ",
         "Net-IPv4Addr: $!";
     unless (-e 'Makefile.PL' && -e 'IPv4Addr.pm') {
-        die " ** Your Net::IPv4Addr sources are incomplete!";
+        die "[*] Your Net::IPv4Addr sources are incomplete!";
     }
     system "$perlCmd Makefile.PL PREFIX=$lib_dir LIB=$lib_dir";
     system $makeCmd;
@@ -116,11 +116,11 @@ sub install() {
     chdir '..';
 
     ### installing IPTables::Parse
-    print " .. Installing the IPTables::Parse perl module\n";
-    chdir 'IPTables/Parse' or die " ** Could not chdir to ",
+    print "[+] Installing the IPTables::Parse perl module\n";
+    chdir 'IPTables/Parse' or die "[*] Could not chdir to ",
         "IPTables/Parse: $!";
     unless (-e 'Makefile.PL') {
-        die " ** Your source directory appears to be incomplete!  " .
+        die "[*] Your source directory appears to be incomplete!  " .
             "IPTables::Parse is missing.\n    Download the latest sources " .
             "from http://www.cipherdyne.org\n";
     }
@@ -135,41 +135,45 @@ sub install() {
     if (&query_get_latest_snort_rules()) {
         ### make sure we can actually reach snort.org.
         if (&test_snort_website()) {
+            if (-e $download_rules_file) {
+                unlink $download_rules_file or die "[*] Could not remove ",
+                    "$download_rules_file: $!";
+            }
             system "$cmds{'wget'} http://$snort_website/dl/rules/" .
-                $snort_web_file;
-            if (-e $snort_web_file) {
-                system "$cmds{'tar'} xvfz $snort_web_file";
+                $download_rules_file;
+            if (-e $download_rules_file) {
+                system "$cmds{'tar'} xvfz $download_rules_file";
                 if (-d 'rules') {
                     rmtree 'downloaded_snort_rules'
                         if -d 'downloaded_snort_rules';
                     move 'rules', 'downloaded_snort_rules'
-                        or die " ** Could not move rules -> ",
+                        or die "[*] Could not move rules -> ",
                             "downloaded_snort_rules: $!";
                     $local_rules_dir = 'downloaded_snort_rules';
                 } else {
-                    print " ** $snort_web_file did not appear to ",
+                    print "[-] $download_rules_file did not appear to ",
                         "contain a\n    \"rules\" directory.  Defaulting to ",
-                        "existing snort-2.1 rules.\n";
+                        "existing snort-2.3 rules.\n";
                 }
             } else {
-                print " ** Could not download $snort_web_file\n",
-                    "    Defaulting to existing snort-2.1 rules.\n";
+                print "[-] Could not download $download_rules_file\n",
+                    "    Defaulting to existing snort-2.3 rules.\n";
             }
         } else {
-            print " ** Could not connect to $snort_website on tcp/80.\n",
-                "    Defaulting to existing snort-2.1 rules.\n";
+            print "[-] Could not connect to $snort_website on tcp/80.\n",
+                "    Defaulting to existing snort-2.3 rules.\n";
         }
     }
 
-    opendir D, $local_rules_dir or die " ** Could not open ",
+    opendir D, $local_rules_dir or die "[*] Could not open ",
         "the $local_rules_dir directory: $!";
     my @rfiles = readdir D;
     closedir D;
     shift @rfiles; shift @rfiles;
-    print " .. Copying all rules files to $rules_dir\n";
+    print "[+] Copying all rules files to $rules_dir\n";
     for my $rfile (@rfiles) {
         next unless $rfile =~ /\.rules$/;
-        print " .. Installing $rfile\n";
+        print "[+] Installing $rfile\n";
         copy "snort_rules/${rfile}", "${rules_dir}/${rfile}";
     }
 
@@ -186,19 +190,19 @@ sub install() {
     if ($preserve_rv) {
         &preserve_config();
     } else {
-        print " .. Copying fwsnort.conf -> ${fwsnort_dir}/fwsnort.conf\n";
+        print "[+] Copying fwsnort.conf -> ${fwsnort_dir}/fwsnort.conf\n";
         copy 'fwsnort.conf', "${fwsnort_dir}/fwsnort.conf";
         chmod 0600, "${fwsnort_dir}/fwsnort.conf";
     }
 
-    print " .. Copying fwsnort -> ${sbin_dir}/fwsnort\n";
+    print "[+] Copying fwsnort -> ${sbin_dir}/fwsnort\n";
     copy 'fwsnort', "${sbin_dir}/fwsnort";
     chmod 0500, "${sbin_dir}/fwsnort";
 
     print "\n========================================================\n",
-        "\n .. fwsnort will generate an iptables script located at:\n",
+        "\n[+] fwsnort will generate an iptables script located at:\n",
         "    /etc/fwsnort/fwsnort.sh when executed.\n",
-        "\n .. fwsnort has been successfully installed!\n\n";
+        "\n[+] fwsnort has been successfully installed!\n\n";
 
     return;
 }
@@ -221,7 +225,7 @@ sub install_manpage() {
         ### prefer to install $manpage in /usr/local/man/man8 if
         ### this directory is configured in /etc/man.config
         open M, '< /etc/man.config' or
-            die " ** Could not open /etc/man.config: $!";
+            die "[*] Could not open /etc/man.config: $!";
         my @lines = <M>;
         close M;
         ### prefer the path "/usr/share/man"
@@ -258,11 +262,11 @@ sub install_manpage() {
     }
     mkdir $mpath, 0755 unless -d $mpath;
     my $mfile = "${mpath}/${manpage}";
-    print " .. Installing $manpage man page as $mfile\n";
-    copy $manpage, $mfile or die " ** Could not copy $manpage to " .
+    print "[+] Installing $manpage man page as $mfile\n";
+    copy $manpage, $mfile or die "[*] Could not copy $manpage to " .
         "$mfile: $!";
     chmod 0644, $mfile;
-    print " .. Compressing manpage $mfile\n";
+    print "[+] Compressing manpage $mfile\n";
     ### remove the old one so gzip doesn't prompt us
     unlink "${mfile}.gz" if -e "${mfile}.gz";
     system "$gzipCmd $mfile";
@@ -271,10 +275,10 @@ sub install_manpage() {
 
 sub query_get_latest_snort_rules() {
     my $ans = '';
-    print " .. Would you like to download the latest snort rules from \n",
+    print "[+] Would you like to download the latest snort rules from \n",
         "    http://$snort_website/?  If you not (or if you aren't connected\n",
         "    to the Net, then the installation will default to using \n",
-        "    snort-2.1 signatures.\n";
+        "    snort-2.3 signatures.\n";
     while ($ans ne 'y' && $ans ne 'n') {
         print "    ([y]/n)?  ";
         $ans = <STDIN>;
@@ -318,7 +322,7 @@ sub check_commands() {
                 }
             }
             unless ($found) {
-                die " ** Could not find $cmd, edit the ",
+                die "[*] Could not find $cmd, edit the ",
                     "config section of install.pl";
             }
         }
@@ -330,7 +334,7 @@ sub check_commands() {
 sub query_preserve_config() {
     my $ans = '';
     while ($ans ne 'y' && $ans ne 'n') {
-        print " .. Would you like to preserve the config from the\n",
+        print "[+] Would you like to preserve the config from the\n",
             '    existing fwsnort installation ([y]/n)?  ';
         $ans = <STDIN>;
         return 1 if $ans eq "\n";
@@ -344,18 +348,18 @@ sub query_preserve_config() {
 
 sub preserve_config() {
     my $file = 'fwsnort.conf';
-    open C, "< $file" or die " ** Could not open $file: $!";
+    open C, "< $file" or die "[*] Could not open $file: $!";
     my @new_lines = <C>;
     close C;
 
-    open CO, "< ${fwsnort_dir}/$file" or die " ** Could not open ",
+    open CO, "< ${fwsnort_dir}/$file" or die "[*] Could not open ",
         "${fwsnort_dir}/$file: $!";
     my @orig_lines = <CO>;
     close CO;
 
-    print " .. Preserving existing config: ${fwsnort_dir}/$file\n";
+    print "[+] Preserving existing config: ${fwsnort_dir}/$file\n";
     ### write to a tmp file and then move.
-    open CONF, "> ${fwsnort_dir}/${file}.new" or die " ** Could not open ",
+    open CONF, "> ${fwsnort_dir}/${file}.new" or die "[*] Could not open ",
         "${fwsnort_dir}/${file}.new: $!";
     for my $new_line (@new_lines) {
         if ($new_line =~ /^\s*#/) {

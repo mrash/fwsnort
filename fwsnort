@@ -340,17 +340,17 @@ Getopt::Long::Configure('no_ignore_case');
 
 ### Print the version number and exit if -V given on the command line.
 if ($print_ver) {
-    print " .. fwsnort v$version, by Michael Rash (mbr\@cipherdyne.org)\n";
+    print "[+] fwsnort v$version, by Michael Rash (mbr\@cipherdyne.org)\n";
     exit 0;
 }
 
 if ($no_ipt_log && not ($ipt_drop or $ipt_reject)) {
-    die " ** --ipt-no-log option can only be used ",
+    die "[*] --ipt-no-log option can only be used ",
         "with --ipt-drop or --ipt-reject";
 }
 
 if ($ipt_drop and $ipt_reject) {
-    die " ** Cannot specify both --ipt-drop and --ipt-reject";
+    die "[*] Cannot specify both --ipt-drop and --ipt-reject";
 }
 
 if ($strict) {
@@ -422,10 +422,10 @@ $ipt_sync = 0 if $no_ipt_sync;
 
 ### truncate old log (does anyone actually use the fwsnort
 ### parsing log?)
-open L, "> $logfile" or die " ** Could not open $logfile: $!";
+open L, "> $logfile" or die "[*] Could not open $logfile: $!";
 close L;
 
-&logr(localtime() . " .. Begin parsing cycle.");
+&logr(localtime() . "[+] Begin parsing cycle.");
 
 ### parse snort rules (signatures)
 if ($ipt_sync) {
@@ -455,11 +455,11 @@ push @ipt_script_lines, "\n### EOF ###";
 
 chmod 0500, $ipt_script;
 
-print "\n .. Logfile:         $logfile\n";
-print " .. Iptables script: $ipt_script\n";
+print "\n[+] Logfile:         $logfile\n";
+print "[+] Iptables script: $ipt_script\n";
 
 if ($ipt_apply) {
-    print " .. Executing $ipt_script\n";
+    print "[+] Executing $ipt_script\n";
     system $ipt_script;
 }
 print "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=",
@@ -469,7 +469,7 @@ exit 0;
 #===================== end main ======================
 
 sub parse_snort_rules() {
-    opendir D, $rules_dir or die " ** Could not open $rules_dir";
+    opendir D, $rules_dir or die "[*] Could not open $rules_dir";
     my @rfiles = readdir D;
     closedir D;
     shift @rfiles; shift @rfiles;
@@ -478,7 +478,7 @@ sub parse_snort_rules() {
     my $sabs_num = 0;
     my $tot_ipt_apply = 0;
     my $tot_unsup_ctr = 0;
-    FILE: for my $rfile (@rfiles) {
+    FILE: for my $rfile (sort @rfiles) {
         next FILE unless $rfile =~ /\.rules$/;
         $ipt_print_type = 0;
         if ($rules_type) {
@@ -488,9 +488,9 @@ sub parse_snort_rules() {
             next FILE unless $add_deleted;
         }
         ($snort_type) = ($rfile =~ /(\S+)\.rules/);
-        printf("%-30s", " .. $rfile");
-        &logr(" .. Parsing $rfile");
-        open R, "< ${rules_dir}/${rfile}" or die " ** Could not ",
+        printf("%-30s", "[+] $rfile");
+        &logr("[+] Parsing $rfile");
+        open R, "< ${rules_dir}/${rfile}" or die "[*] Could not ",
             "open: ${rules_type}/${rfile}";
         my @lines = <R>;
         close R;
@@ -523,14 +523,14 @@ sub parse_snort_rules() {
             }
             my $hdr_href = &parse_rule_hdr($rule_hdr, $line_num);
             unless ($hdr_href) {
-                &logr(" ** Unrecognized rule header: \"$rule_hdr\" at " .
+                &logr("[-] Unrecognized rule header: \"$rule_hdr\" at " .
                     "line: $line_num.  Skipping rule.");
                 $unsup_ctr++;
                 $tot_unsup_ctr++;
                 next RULE;
             }
             if ($debug) {
-                print STDOUT " .. Header: Proto: $hdr_href->{'proto'}, Src: ",
+                print STDOUT "[+] Header: Proto: $hdr_href->{'proto'}, Src: ",
                     "$hdr_href->{'src'}, Src_p: $hdr_href->{'src_p'}, ",
                     "bidir: $hdr_href->{'bidir'}, Dst: $hdr_href->{'dst'}, ",
                     "Dst_p: $hdr_href->{'dst_p'}\n";
@@ -571,14 +571,14 @@ sub parse_snort_rules() {
     }
     print "\n";
     if ($abs_num) {  ### we parsed at least one rule
-        print " .. Generated iptables rules for $abs_num out of ",
+        print "[+] Generated iptables rules for $abs_num out of ",
             "$sabs_num signatures: ",
             sprintf("%.2f", $abs_num/$sabs_num*100), "%\n";
     } else {
-        print " .. No rules parsed.\n";
+        print "[+] No rules parsed.\n";
     }
     if ($ipt_sync) {
-        print " .. Found $tot_ipt_apply applicable snort rules to your " .
+        print "[+] Found $tot_ipt_apply applicable snort rules to your " .
             "current iptables\n    policy.\n";
     }
     return;
@@ -592,7 +592,7 @@ sub parse_rule_options() {
 
     if ($snort_sid) {
         if ($rule_options =~ /sid:\s*$snort_sid\s*;/) {
-            &logr(" .. matched sid:$snort_sid: $rule_options");
+            &logr("[+] matched sid:$snort_sid: $rule_options");
         } else {
             return 0;
         }
@@ -604,18 +604,18 @@ sub parse_rule_options() {
     for my $opt (keys %{$snort_opts{'unsupported'}}) {
         ### see if we match a regex belonging to an supported option
         if ($rule_options =~ /$snort_opts{'unsupported'}{$opt}/) {
-            &logr(" ** SID: $sid  Unsupported option: \"$opt\" at " .
+            &logr("[-] SID: $sid  Unsupported option: \"$opt\" at " .
                 "line: $line_num.  Skipping rule.");
             return 0;
         }
     }
     if ($rule_options =~ /content\s*:.*content\s*:/) {
-        &logr(" ** SID: $sid  Unsupported multiple content fields at " .
+        &logr("[-] SID: $sid  Unsupported multiple content fields at " .
             "line: $line_num.  Skipping rule.");
         return 0;
     }
     if ($rule_options =~ /ip_proto\s*:.*ip_proto\s*:/) {
-        &logr(" ** SID: $sid  Unsupported multiple ip_proto fields at " .
+        &logr("[-] SID: $sid  Unsupported multiple ip_proto fields at " .
             "line: $line_num.  Skipping rule.");
         return 0;
     }
@@ -657,12 +657,12 @@ sub parse_rule_hdr() {
         my $dst_p = $6;
 
         unless ($proto =~ /^\w+$/) {
-            &logr(" ** Unsupported protocol: \"$proto\" at line: " .
+            &logr("[-] Unsupported protocol: \"$proto\" at line: " .
                 "$line_num.  Skipping rule.");
             return 0;
         }
         if ($proto eq 'ip') {
-            &logr(" ** Unsupported protocol: \"$proto\" at line: " .
+            &logr("[-] Unsupported protocol: \"$proto\" at line: " .
                 "$line_num.  Skipping rule.");
             return 0;
         }
@@ -1129,7 +1129,7 @@ sub ipt_add_rule() {
 
     if ($verbose) {
         push @ipt_script_lines, "### snort rule: $orig_snort_rule";
-        push @ipt_script_lines, "\$ECHO \" .. rule $ipt_rule_ctr\"";
+        push @ipt_script_lines, "\$ECHO \"[+] rule $ipt_rule_ctr\"";
     } else {
         push @ipt_script_lines, $comment;
     }
@@ -1266,15 +1266,15 @@ sub ipt_config_section() {
 sub ipt_type() {
     my $type = shift;
     push @ipt_script_lines, "\n###\n############ ${type}.rules ############\n###";
-    push @ipt_script_lines, "\$ECHO \" .. Adding $type rules.\"";
+    push @ipt_script_lines, "\$ECHO \"[+] Adding $type rules.\"";
     return;
 }
 
 sub check_type() {
     unless (-e "${rules_dir}/${rules_type}.rules") {
-        print " ** \"$rules_type\" is not a valid type.\n",
+        print "[-] \"$rules_type\" is not a valid type.\n",
             "    Choose from the following available signature types:\n";
-        opendir D, $rules_dir or die " ** Could not open $rules_dir";
+        opendir D, $rules_dir or die "[*] Could not open $rules_dir";
         my @rfiles = readdir D;
         closedir D;
         shift @rfiles; shift @rfiles;
@@ -1283,7 +1283,7 @@ sub check_type() {
                 print "        $1\n";
             }
         }
-        print " ** Exiting.\n";
+        print "[-] Exiting.\n";
         exit 1;
     }
     return;
@@ -1304,21 +1304,21 @@ sub readconf() {
         } elsif ($line =~ /^\s*(\S+)\s+(.*?);/) {
             my $var = $1;
             my $val = $2;
-            die " ** $fwsnort_conf: Variable \"$var\" is set to\n",
+            die "[*] $fwsnort_conf: Variable \"$var\" is set to\n",
                 "    _CHANGEME_ at line $l_ctr.  Edit $fwsnort_conf.\n"
                 if $val eq '_CHANGEME_';
             if ($var eq 'IGNOREIP') {
                 if ($val =~ /^$ip_re$/) {
                     push @ignore_ips, $val;
                 } else {
-                    die " ** $fwsnort_conf: IGNOREIP must be set to a \n",
+                    die "[*] $fwsnort_conf: IGNOREIP must be set to a \n",
                         "single IP address.\n";
                 }
             } elsif ($var eq 'IGNORENET') {
                 if ($val =~ m|^$ip_re/\d+$|) {
                     push @ignore_nets, $val;
                 } else {
-                    die " ** $fwsnort_conf: IGNORENET must be set to a \n",
+                    die "[*] $fwsnort_conf: IGNORENET must be set to a \n",
                         "CIDR network (e.g. \"192.168.10.0/24\").\n";
                 }
             } else {
@@ -1330,12 +1330,12 @@ sub readconf() {
 }
 
 sub validate_conf() {
-    die " ** The path to ifconfig is not in $fwsnort_conf. Exiting.\n"
+    die "[*] The path to ifconfig is not in $fwsnort_conf. Exiting.\n"
         unless defined $cmds{'ifconfig'};
 
-    die " ** $fwsnort_conf: EXTERNAL_INTF is not defined. Exiting.\n"
+    die "[*] $fwsnort_conf: EXTERNAL_INTF is not defined. Exiting.\n"
         unless defined $config{'EXTERNAL_INTF'};
-    die " ** $fwsnort_conf: INTERNAL_INTF is not defined. Exiting.\n"
+    die "[*] $fwsnort_conf: INTERNAL_INTF is not defined. Exiting.\n"
         unless defined $config{'INTERNAL_INTF'};
 
     $intf_type{$config{'EXTERNAL_INTF'}} = 'EXTERNAL_INTF';
@@ -1362,12 +1362,12 @@ sub validate_conf() {
     }
     if (defined $config{'DMZ_INTF'}) {
         if (not defined $config{'INTERNAL_INTF'}) {
-            die " ** $fwsnort_conf: DMZ_INTF cannot be defined without ",
+            die "[*] $fwsnort_conf: DMZ_INTF cannot be defined without ",
                 "also defining INTERNAL_INTF. Exiting.\n";
         }
         if ($config{'DMZ_INTF'} eq $config{'INTERNAL_INTF'}
                 || $config{'DMZ_INTF'} eq $config{'EXTERNAL_INTF'}) {
-            die " ** $fwsnort_conf: DMZ_INTF cannot be either the internal ",
+            die "[*] $fwsnort_conf: DMZ_INTF cannot be either the internal ",
                 "or external interface.  Exiting.\n";
         }
         $intf_type{$config{'DMZ_INTF'}} = 'DMZ_INTF';
@@ -1397,7 +1397,7 @@ sub validate_conf() {
     ### make sure all necessary iptables options are defined
     ### based on the options in %snort_opts
     for my $snort_opt (keys %{$snort_opts{'filter'}}) {
-        die " ** Equivalent iptables filter option not defined\n",
+        die "[*] Equivalent iptables filter option not defined\n",
             "    for snort option \"$snort_opt\""
         unless defined $iptables_opts{$snort_opt};
     }
@@ -1411,7 +1411,7 @@ sub validate_cmdl_networks() {
     &validate_subnet($int_net, '-i') if $int_net;
 
     if ($dmz_net) {
-        die " ** Must define DMZ_INTF in $fwsnort_conf to specify a DMZ net.\n"
+        die "[*] Must define DMZ_INTF in $fwsnort_conf to specify a DMZ net.\n"
             unless defined $config{'DMZ_INTF'};
         &validate_subnet($dmz_net, '-d');
     }
@@ -1424,15 +1424,15 @@ sub validate_subnet() {
         my $mask = $1;
         if ($mask =~ /^\d+$/) {
             unless ($mask > 7 and $mask < 33) {
-                die " ** CIDR mask must be in the range 8-32 with $cmdl_opt\n";
+                die "[*] CIDR mask must be in the range 8-32 with $cmdl_opt\n";
             }
         } else {
             unless ($mask =~ /$ip_re/) {
-                die " ** Netmask must either be in CIDR or regular notation.\n";
+                die "[*] Netmask must either be in CIDR or regular notation.\n";
             }
         }
     } else {
-        die " ** Must specify network as <net>/<mask> with $cmdl_opt\n";
+        die "[*] Must specify network as <net>/<mask> with $cmdl_opt\n";
     }
     return;
 }
@@ -1445,7 +1445,7 @@ sub ipt_test() {
     if ($rv == 0) {
         system "$cmds{'iptables'} -D INPUT 1";
     } else {
-        die " ** Iptables has not been compiled with logging support.  ",
+        die "[*] Iptables has not been compiled with logging support.  ",
             "If you want to\n    have fwsnort generate an iptables script ",
             "    anyway then specify the\n    --no-ipt-test option. ",
             "Exiting.\n"
@@ -1478,7 +1478,7 @@ sub ipt_test() {
     if ($rv == 0) {
         system "$cmds{'iptables'} -D INPUT 1";
     } else {
-        die " ** It does not appear that string match support is ",
+        die "[*] It does not appear that string match support is ",
             "compiled into\n    iptables.  fwsnort will not be of very ",
             "much use without this.\n    ** NOTE: If you want to have ",
             "fwsnort generate an iptables script\n    anyway, ",
@@ -1491,7 +1491,7 @@ sub ipt_test() {
     if ($rv == 0) {
         system "$cmds{'iptables'} -D INPUT 1";
     } else {
-        die " ** It does not appear that the --hex-string patch has ",
+        die "[*] It does not appear that the --hex-string patch has ",
             "been applied.\n    fwsnort will not be of very much use ",
             "without this.\n    ** NOTE: If you want to have ",
             "fwsnort generate an iptables script\n    anyway, ",
@@ -1506,7 +1506,7 @@ sub ipt_test() {
         if ($rv == 0) {
             system "$cmds{'iptables'} -D INPUT 1";
         } else {
-            die " ** It does not appear that the REJECT target has ",
+            die "[*] It does not appear that the REJECT target has ",
                 "been compiled into iptables.\n    The --ipt-reject option ",
                 "requires this option so that tcp sessions can be killed.\n",
                 "    Exiting.\n";
@@ -1522,7 +1522,7 @@ sub build_port_arr() {
     if (defined $config{$key}) {
         @$aref = split /,\s*/, $config{$key};
         for my $port (@$aref) {
-            die " ** $fwsnort_conf: $key can only contain a comma\n",
+            die "[*] $fwsnort_conf: $key can only contain a comma\n",
                 "    separated list of port numbers.\n"
                 unless $port =~ /^\d+$/
                 or $port =~ /^\!\d+$/
@@ -1547,7 +1547,7 @@ sub build_ip_arr() {
         unless ($intf_flag) {
             @$aref = split /,\s*/, $config{$key};
             for my $ip (@$aref) {
-                die " ** $fwsnort_conf: $key can only contain a comma\n",
+                die "[*] $fwsnort_conf: $key can only contain a comma\n",
                     "    separated list of ip addresses.\n"
                     unless $ip =~ /^$ip_re$/
                     or $ip =~ m|^$ip_re/\d+$|;
@@ -1576,17 +1576,17 @@ sub get_intf_net() {
             return $1, "${net}/${cidr}";
         }
     }
-    die " ** Could not get ip and netmask for interface $intf.  Is the\n",
+    die "[*] Could not get ip and netmask for interface $intf.  Is the\n",
         "    interface up?\n";
 }
 
 sub dump_conf() {
-    print " .. Interfaces:\n";
+    print "[+] Interfaces:\n";
     for my $loc (keys %intf_net) {
         print "    Type: $loc, Name: $intf_net{$loc}{'name'}, ",
             "Net: $intf_net{$loc}{'net'}\n";
     }
-    print " .. HTTP_SERVERS: ";
+    print "[+] HTTP_SERVERS: ";
     if (defined $config{'HTTP_SERVERS'}) {
         if (@http_servers) {
             print @http_servers, "\n";
@@ -1596,7 +1596,7 @@ sub dump_conf() {
     } else {
         print "Not Defined\n";
     }
-    print " .. SMTP_SERVERS: ";
+    print "[+] SMTP_SERVERS: ";
     if (defined $config{'SMTP_SERVERS'}) {
         if (@smtp_servers) {
             print @smtp_servers, "\n";
@@ -1606,7 +1606,7 @@ sub dump_conf() {
     } else {
         print "Not Defined\n";
     }
-    print " .. DNS_SERVERS: ";
+    print "[+] DNS_SERVERS: ";
     if (defined $config{'DNS_SERVERS'}) {
         if (@dns_servers) {
             print @dns_servers, "\n";
@@ -1616,7 +1616,7 @@ sub dump_conf() {
     } else {
         print "Not Defined\n";
     }
-    print " .. SQL_SERVERS: ";
+    print "[+] SQL_SERVERS: ";
     if (defined $config{'SQL_SERVERS'}) {
         if (@sql_servers) {
             print @sql_servers, "\n";
@@ -1626,7 +1626,7 @@ sub dump_conf() {
     } else {
         print "Not Defined\n";
     }
-    print " .. TELNET_SERVERS: ";
+    print "[+] TELNET_SERVERS: ";
     if (defined $config{'TELNET_SERVERS'}) {
         if (@telnet_servers) {
             print @telnet_servers, "\n";
@@ -1636,25 +1636,25 @@ sub dump_conf() {
     } else {
         print "Not Defined\n";
     }
-    print " .. AIM_SERVERS: ";
+    print "[+] AIM_SERVERS: ";
     if (@aim_servers) {
         print @aim_servers, "\n";
     } else {
         print "Not Defined\n";
     }
-    print " .. HTTP_PORTS: ";
+    print "[+] HTTP_PORTS: ";
     if (@http_ports) {
         print @http_ports, "\n";
     } else {
         print "Not Defined\n";
     }
-    print " .. SHELLCODE_PORTS: ";
+    print "[+] SHELLCODE_PORTS: ";
     if (@shellcode_ports) {
         print @shellcode_ports, "\n";
     } else {
         print "Not Defined\n";
     }
-    print " .. ORACLE_PORTS: ";
+    print "[+] ORACLE_PORTS: ";
     if (@oracle_ports) {
         print @oracle_ports, "\n";
     } else {
@@ -1670,9 +1670,9 @@ sub setup() {
 
     ### these two directories must already exist for
     ### things to work
-    die " ** No fwsnort directory $fwsnort_dir: $!"
+    die "[*] No fwsnort directory $fwsnort_dir: $!"
         unless -d $fwsnort_dir;
-    die " ** No snort rules directory $rules_dir: $!"
+    die "[*] No snort rules directory $rules_dir: $!"
         unless -d $rules_dir;
 
     ### these directories can be created at runtime
@@ -1693,10 +1693,14 @@ sub setup() {
 
 sub update_rules() {
     ### make sure we can actually reach snort.org.
-    print " .. Downloading latest rules:\n",
+    print "[+] Downloading latest rules:\n",
         "    http://$snort_website/dl/rules/$download_rules_file\n";
     if (&test_snort_website()) {
-        chdir $fwsnort_dir or die " ** Could not chdir $fwsnort_dir: $!";
+        chdir $fwsnort_dir or die "[*] Could not chdir $fwsnort_dir: $!";
+        if (-e $download_rules_file) {
+            unlink $download_rules_file or die "[*] Could not remove ",
+                "$download_rules_file: $!";
+        }
         system "$cmds{'wget'} http://$snort_website/dl/rules/" .
             "$download_rules_file";
         system "$cmds{'tar'} xvfz $download_rules_file";
@@ -1705,19 +1709,19 @@ sub update_rules() {
                 rmtree 'snort_rules.orig' if -d 'snort_rules.orig';
                 move 'snort_rules', 'snort_rules.orig';
             }
-            move 'rules', 'snort_rules' or die " ** Could not ",
+            move 'rules', 'snort_rules' or die "[*] Could not ",
                 "move rules -> snort_rules: $!";
         } else {
-            print " ** $download_rules_file did not appear to ",
+            print "[-] $download_rules_file did not appear to ",
                 "contain a\n    \"rules\" directory.  Defaulting to ",
                 "existing snort-2.0 rules.\n";
         }
     } else {
-        print " ** Could not connect to $snort_website on tcp/80.\n",
+        print "[-] Could not connect to $snort_website on tcp/80.\n",
             "    Defaulting to existing snort-2.0 rules.\n";
     }
-    print " .. Moving rules files to $fwsnort_dir/snort_rules/\n",
-        " .. Finished.\n";
+    print "[+] Moving rules files to $fwsnort_dir/snort_rules/\n",
+        "[+] Finished.\n";
     exit 0;
 }
 
@@ -1737,9 +1741,9 @@ sub test_snort_website() {
 
 sub chk_commands() {
     for my $cmd (keys %cmds) {
-        die " ** $cmd is not located at $cmds{$cmd}: $!"
+        die "[*] $cmd is not located at $cmds{$cmd}: $!"
             unless -e $cmds{$cmd};
-        die " ** $cmd is not executable at $cmds{$cmd}: $!"
+        die "[*] $cmd is not executable at $cmds{$cmd}: $!"
             unless -x $cmds{$cmd};
     }
     return;
@@ -1761,13 +1765,13 @@ sub archive() {
         my $newfile = $targetbase . '2';
         move $targetbase, $newfile;
     }
-    &logr(" .. Archiving $file");
+    &logr("[+] Archiving $file");
     move $file, $targetbase;   ### move $file into the archive directory
     return;
 }
 
 sub write_ipt_script() {
-    open F, "> $ipt_script" or die " ** Could not open $ipt_script: $!";
+    open F, "> $ipt_script" or die "[*] Could not open $ipt_script: $!";
     print F "$_\n" for @ipt_script_lines;
     close F;
     return;
@@ -1778,7 +1782,7 @@ sub logr() {
     if ($stdout) {
         print STDOUT "$msg\n";
     } else {
-        open F, ">> $logfile" or die " ** Could not open $logfile: $!";
+        open F, ">> $logfile" or die "[*] Could not open $logfile: $!";
         print F "$msg\n";
         close F;
     }
@@ -1790,7 +1794,7 @@ sub usage() {
     print <<_USAGE_;
 
 fwsnort v$version
- .. By Michael Rash <mbr\@cipherdyne.org>, http://www.cipherdyne.org/
+[+] By Michael Rash <mbr\@cipherdyne.org>, http://www.cipherdyne.org/
 
 Usage: fwsnort [-t <snort rule type>] [-l <logfile>] [-v] [-V] [-h]
        [-u] [-c <config file>] [--snort-sid=<sid>] [--ipt-apply]
