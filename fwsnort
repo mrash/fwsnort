@@ -12,7 +12,7 @@
 #
 # Credits: (see the CREDITS file)
 #
-# Version: 0.6.1
+# Version: 0.6.2
 #
 # Copyright (C) 2003 Michael Rash (mbr@cipherdyne.org)
 #
@@ -30,7 +30,11 @@
 #
 # TODO:
 #   - Add the ability to remove rules from a real snort config in the same
-#     way we remove them from iptables rulesets in fwsnort.
+#     way we remove them from iptables rulesets in fwsnort (we remove rules
+#     from an iptables ruleset if the iptables policy will not allow such
+#     traffic through in the first place).
+#   - Implement code for the various SERVER variables.
+#   - Two new options: --ipt-tos and --ipt-mark.
 #
 # Snort Rule Options:
 #
@@ -112,7 +116,7 @@ my $ipt_script = "${fwsnort_dir}/fwsnort.sh";
 #===================== end config =======================
 
 ### version number
-my $version = '0.6';
+my $version = '0.6.2';
 
 ### supported variables in snort signatures
 my %snort_vars = (
@@ -286,36 +290,40 @@ my $no_ipt_test    = 0;
 my $no_ipt_jumps   = 0;
 my $rules_type     = '';
 my $snort_type     = '';
+my $int_net        = '';
+my $dmz_net        = '';
 
 ### make Getopts case sensitive
 Getopt::Long::Configure('no_ignore_case');
 
 &usage(1) unless (GetOptions(
-    'ipt-apply'    => \$ipt_apply,    # Apply the generated ruleset.
-    'ipt-block'    => \$ipt_block,    # Add iptables DROP/REJECT rules.
-    'ipt-script=s' => \$ipt_script,   # Manually specify the path to the
-                                      # generated iptables script.
-    'snort-sid=i'  => \$snort_sid,    # Parse only this particular snort rule.
-    'type=s'       => \$rules_type,   # Process this type of snort rule
-                                      # (e.g. "ddos")
-    'snort-rdir=s' => \$rules_dir,    # Manually specify the snort rules
-                                      # directory.
-    'no-ipt-sync'  => \$no_ipt_sync,  # Do not sync with the iptables policy.
-    'no-ipt-log'   => \$no_ipt_log,   # Do not generate iptables logging rules.
-    'no-ipt-test'  => \$no_ipt_test,  # Don't perform any checks against
+    'ipt-apply'      => \$ipt_apply,    # Apply the generated ruleset.
+    'ipt-block'      => \$ipt_block,    # Add iptables DROP/REJECT rules.
+    'ipt-script=s'   => \$ipt_script,   # Manually specify the path to the
+                                        # generated iptables script.
+    'internal-net=s' => \$int_net,      # Manually specify internal net.
+    'dmz-net=s'      => \$dmz_net,      # Manually specify dmz net.
+    'snort-sid=i'    => \$snort_sid,    # Parse only this particular snort rule.
+    'type=s'         => \$rules_type,   # Process this type of snort rule
+                                        # (e.g. "ddos")
+    'snort-rdir=s'   => \$rules_dir,    # Manually specify the snort rules
+                                        # directory.
+    'no-ipt-sync'    => \$no_ipt_sync,  # Do not sync with the iptables policy.
+    'no-ipt-log'     => \$no_ipt_log,   # Do not generate iptables logging rules.
+    'no-ipt-test'    => \$no_ipt_test,  # Don't perform any checks against
                                       # iptables.
-    'no-ipt-jumps' => \$no_ipt_jumps, # Don't jump packets from the INPUT or
-                                      # FORWARD chains.
-    'update-rules' => \$update_rules, # Download latest snort rules.
-    'strict'       => \$strict,       # Strict mode.
-    'debug'        => \$debug,        # Debug mode.
-    'dump-conf'    => \$dump_conf,    # Display config variables
-    'config=s'     => \$fwsnort_conf, # Manually specify the config file
-    'verbose'      => \$verbose,
-    'logfile=s'    => \$logfile,      # Specify the logfile path.
-    'stdout'       => \$stdout,       # Print log messages to stdout.
-    'Version'      => \$print_ver,
-    'help'         => \$help
+    'no-ipt-jumps'   => \$no_ipt_jumps, # Don't jump packets from the INPUT or
+                                        # FORWARD chains.
+    'update-rules'   => \$update_rules, # Download latest snort rules.
+    'strict'         => \$strict,       # Strict mode.
+    'debug'          => \$debug,        # Debug mode.
+    'dump-conf'      => \$dump_conf,    # Display config variables
+    'config=s'       => \$fwsnort_conf, # Manually specify the config file
+    'verbose'        => \$verbose,
+    'logfile=s'      => \$logfile,      # Specify the logfile path.
+    'stdout'         => \$stdout,       # Print log messages to stdout.
+    'Version'        => \$print_ver,
+    'help'           => \$help
 ));
 
 &usage(0) if $help;
@@ -360,7 +368,10 @@ $ipt_sync = 0 if $no_ipt_sync;
 &chk_commands();
 
 ### make sure the config is correct
-&validateconf();
+&validate_conf();
+
+### validate any networks that were specified on the command line.
+&validate_cmdl_networks();
 
 ### download latest snort rules from snort.org
 &update_rules() if $update_rules;
@@ -750,14 +761,10 @@ sub cache_ipt_policy() {
     my $ipt = new IPTables::Parse;
     $ipt_policy{'INPUT'} = $ipt->chain_action_rules('filter',
         'INPUT', 'ACCEPT');
-    my $cached_forward = 0;
+    ### we know that the dmz interface can only be defined if we have
+    ### already defined the internal inteface.
     if (defined $config{'INTERNAL_INTF'}
             && $config{'INTERNAL_INTF'} ne $config{'EXTERNAL_INTF'}) {
-        $ipt_policy{'FORWARD'} = $ipt->chain_action_rules('filter',
-            'FORWARD', 'ACCEPT');
-        $cached_forward = 1;
-    }
-    if (defined $config{'DMZ_INTF'} && ! $cached_forward) {
         $ipt_policy{'FORWARD'} = $ipt->chain_action_rules('filter',
             'FORWARD', 'ACCEPT');
     }
@@ -935,8 +942,10 @@ sub ipt_build_rule() {
         $rule .= " $iptables_opts{'proto'} $hdr_href->{'proto'}";
     }
 
-    ### append the source (this will always be
-    ### either "-s <net>" or "-d <net>"
+    ### append the source (this will always be either "-s <net>" or
+    ### "-d <net>" instead of "-s <ip>" or "-d <ip>" (the IP tied to
+    ### a firewall interface is never actually used since everything
+    ### is done by interface instead).  This is definitely a kludge.
     if ($src_dst =~ m|$iptables_opts{'src'}|) {
         $rule .= " $src_dst";
     }
@@ -1081,6 +1090,8 @@ sub ipt_add_rule() {
     if ($ipt_block) {
         if ($hdr_href->{'proto'} eq 'tcp') {
             $drop_rule = "$rule -j REJECT --reject-with tcp-reset";
+        } elsif ($hdr_href->{'proto'} eq 'udp') {
+            $drop_rule = "$rule -j REJECT --reject-with icmp-port-unreachable";
         } else {
             $drop_rule = "$rule -j DROP";
         }
@@ -1228,23 +1239,37 @@ sub readconf() {
     return;
 }
 
-sub validateconf() {
+sub validate_conf() {
     die " ** The path to ifconfig is not in $fwsnort_conf. Exiting.\n"
         unless defined $cmds{'ifconfig'};
 
     die " ** $fwsnort_conf: EXTERNAL_INTF is not defined. Exiting.\n"
         unless defined $config{'EXTERNAL_INTF'};
-    $intf_type{$config{'EXTERNAL_INTF'}} = 'EXTERNAL_INTF';
-    $intf_net{'EXTERNAL_INTF'}{'name'} = $config{'EXTERNAL_INTF'};
-    ($intf_net{'EXTERNAL_INTF'}{'ip'}, $intf_net{'EXTERNAL_INTF'}{'net'})
-        = &get_intf_net($config{'EXTERNAL_INTF'});
-
     die " ** $fwsnort_conf: INTERNAL_INTF is not defined. Exiting.\n"
         unless defined $config{'INTERNAL_INTF'};
+
+    $intf_type{$config{'EXTERNAL_INTF'}} = 'EXTERNAL_INTF';
+    $intf_net{'EXTERNAL_INTF'}{'name'} = $config{'EXTERNAL_INTF'};
+
     $intf_type{$config{'INTERNAL_INTF'}} = 'INTERNAL_INTF';
     $intf_net{'INTERNAL_INTF'}{'name'} = $config{'INTERNAL_INTF'};
-    ($intf_net{'INTERNAL_INTF'}{'ip'}, $intf_net{'INTERNAL_INTF'}{'net'})
-        = &get_intf_net($config{'INTERNAL_INTF'});
+
+    ### take the internal network from the command line if --external-net was
+    ### given (NOTE: the network tied to the external interface is never really
+    ### used; the iptables rules are built instead with a source of the
+    ### internal network).
+    if ($int_net) {
+        $intf_net{'INTERNAL_INTF'}{'ip'} = '';
+        $intf_net{'INTERNAL_INTF'}{'net'} = $int_net;
+        $intf_net{'EXTERNAL_INTF'}{'ip'} = '';
+        $intf_net{'EXTERNAL_INTF'}{'net'} = '';  ### net is never used
+    } else {
+        ### read the networks off of the interfaces
+        ($intf_net{'INTERNAL_INTF'}{'ip'}, $intf_net{'INTERNAL_INTF'}{'net'})
+            = &get_intf_net($config{'INTERNAL_INTF'});
+        ($intf_net{'EXTERNAL_INTF'}{'ip'}, $intf_net{'EXTERNAL_INTF'}{'net'})
+            = &get_intf_net($config{'EXTERNAL_INTF'});
+    }
     if (defined $config{'DMZ_INTF'}) {
         if (not defined $config{'INTERNAL_INTF'}) {
             die " ** $fwsnort_conf: DMZ_INTF cannot be defined without ",
@@ -1257,8 +1282,13 @@ sub validateconf() {
         }
         $intf_type{$config{'DMZ_INTF'}} = 'DMZ_INTF';
         $intf_net{'DMZ_INTF'}{'name'} = $config{'DMZ_INTF'};
-        ($intf_net{'DMZ_INTF'}{'ip'}, $intf_net{'DMZ_INTF'}{'net'})
-            = &get_intf_net($config{'DMZ_INTF'});
+        if ($dmz_net) {
+            $intf_net{'DMZ_INTF'}{'ip'} = '';
+            $intf_net{'DMZ_INTF'}{'net'} = $dmz_net;
+        } else {
+            ($intf_net{'DMZ_INTF'}{'ip'}, $intf_net{'DMZ_INTF'}{'net'})
+                = &get_intf_net($config{'DMZ_INTF'});
+        }
     }
 
     ### build ip arrays for the server variables
@@ -1282,6 +1312,38 @@ sub validateconf() {
         unless defined $iptables_opts{$snort_opt};
     }
 
+    return;
+}
+
+sub validate_cmdl_networks() {
+    ### we already know that both EXTERNAL_INTF and INTERNAL_INTF
+    ### are defined from validate_conf().
+    &validate_subnet($int_net, '-i') if $int_net;
+
+    if ($dmz_net) {
+        die " ** Must define DMZ_INTF in $fwsnort_conf to specify a DMZ net.\n"
+            unless defined $config{'DMZ_INTF'};
+        &validate_subnet($dmz_net, '-d');
+    }
+    return;
+}
+
+sub validate_subnet() {
+    my ($net, $cmdl_opt) = @_;
+    if ($net =~ m|^$ip_re/(\S+)|) {
+        my $mask = $1;
+        if ($mask =~ /^\d+$/) {
+            unless ($mask > 7 and $mask < 33) {
+                die " ** CIDR mask must be in the range 8-32 with $cmdl_opt\n";
+            }
+        } else {
+            unless ($mask =~ /$ip_re/) {
+                die " ** Netmask must either be in CIDR or regular notation.\n";
+            }
+        }
+    } else {
+        die " ** Must specify network as <net>/<mask> with $cmdl_opt\n";
+    }
     return;
 }
 
@@ -1407,6 +1469,12 @@ sub build_ip_arr() {
 }
 
 sub get_intf_net() {
+    ### NOTE: the ip associated with an interface is never used by fwsnort
+    ### as of version 0.6.2.  Traffic matched against the INPUT or OUTPUT
+    ### chains simply uses the interfaces in the iptables rules, and traffic
+    ### in the FORWARD chain is matched against the internal network.  We
+    ### return the interface IP information just because it is easy to do
+    ### since we are already parsing the output of ifconfig.
     my $intf = shift;
     my @if_lines = `$cmds{'ifconfig'} $intf`;
     for my $line (@if_lines) {
@@ -1639,46 +1707,54 @@ fwsnort v$version
 
 Usage: fwsnort [-t <snort rule type>] [-l <logfile>] [-v] [-V] [-h]
        [-u] [-c <config file>] [--snort-sid=<sid>] [--ipt-apply]
+       [-e <external network] [-i <internal network] [-d <dmz network]
        [--ipt-drop] [--ipt-script=<script>] [--no-ipt-sync]
        [--no-ipt-log] [--no-ipt-test] [--no-ipt-jumps] [--dump-conf]
        [--debug] [--strict]
 
 Options:
-    --strict                - Make snort parser very strict about
-                              which options it will translate into
-                              iptables rules.
-    --ipt-script=<script>   - Print iptables script to <script>
-                              instead of the normal location at
-                              $ipt_script
-    --ipt-apply             - Execute the fwsnort.sh script.
-    --ipt-block             - Add a protocol-dependent DROP or REJECT
-                              rule for every logging rule.
-    --snort-sid=<sid>       - Generate an equivalent iptables rule
-                              for the specific snort id <sid>.
-    --no-ipt-sync           - Add iptables rules for signatures that
-                              are already blocked by iptables.
-    --no-ipt-log            - Do not generated iptables log rules
-                              (can only be used with --ipt-drop).
-    --no-ipt-test           - Do not run any checks for iptables
-                              options.
-    --no-ipt-jumps          - Do not jump packets from built-in
-                              iptables INPUT or FORWARD chains to
-                              chains created by fwsnort.
-    -u   --update-rules     - Download latest snort rules from
-                              http://$snort_website/
-    -t   --type=<type>      - Only process snort rules of type <type>
-                              (e.g. "ddos" or "backdoor")
-    -c   --config=<config>  - Use <config> instead of the normal
-                              config file located at
-                              $fwsnort_conf
-    -l   --logfile=<file>   - Log messages to <file> instead of the
-                              normal location at
-                              $logfile
-    --dump-conf             - Dump configuration on STDOUT and exit.
-    --debug                 - Run in debug mode.
-    -v   --verbose          - Run in verbose mode.
-    -V   --Version          - Print fwsnort version number and exit.
-    -h   --help             - Display usage on STDOUT and exit.
+    --strict                  - Make snort parser very strict about
+                                which options it will translate into
+                                iptables rules.
+    --ipt-script=<script>     - Print iptables script to <script>
+                                instead of the normal location at
+                                $ipt_script
+    --ipt-apply               - Execute the fwsnort.sh script.
+    --ipt-block               - Add a protocol dependent REJECT rule
+                                (tcp resets for tcp or icmp port
+                                unreachable for udp messages) for
+                                every logging rule.
+    --snort-sid=<sid>         - Generate an equivalent iptables rule
+                                for the specific snort id <sid>.
+    --no-ipt-sync             - Add iptables rules for signatures that
+                                are already blocked by iptables.
+    --no-ipt-log              - Do not generate iptables log rules
+                                (can only be used with --ipt-drop).
+    --no-ipt-test             - Do not run any checks for availability
+                                of iptables modules (string, LOG,
+                                ttl, etc.).
+    --no-ipt-jumps            - Do not jump packets from built-in
+                                iptables INPUT or FORWARD chains to
+                                chains created by fwsnort.
+    --internal-net <net/mask> - Manually specify the internal network
+                                (CIDR or standard notation).
+    --dmz-net <net/mask>      - Manually specify a dmz network
+                                (CIDR or standard notation).
+    -u   --update-rules       - Download latest snort rules from
+                                http://$snort_website/
+    -t   --type=<type>        - Only process snort rules of type <type>
+                                (e.g. "ddos" or "backdoor")
+    -c   --config=<config>    - Use <config> instead of the normal
+                                config file located at
+                                $fwsnort_conf
+    -l   --logfile=<file>     - Log messages to <file> instead of the
+                                normal location at
+                                $logfile
+    --dump-conf               - Dump configuration on STDOUT and exit.
+    --debug                   - Run in debug mode.
+    -v   --verbose            - Run in verbose mode.
+    -V   --Version            - Print fwsnort version number and exit.
+    -h   --help               - Display usage on STDOUT and exit.
 
 _USAGE_
     exit $exit;
