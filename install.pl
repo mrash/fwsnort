@@ -6,7 +6,7 @@
 #
 # Purpose: To install fwsnort
 #
-# Author: Michael B. Rash <mbr@cipherydne.com>
+# Author: Michael Rash <mbr@cipherydne.com>
 #
 # License: GPL
 #
