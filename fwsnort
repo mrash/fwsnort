@@ -596,30 +596,32 @@ sub build_ipt_rule() {
     $comment .= " reference: \"$opts_href->{'reference'}\","
         if defined $opts_href->{'reference'};
     $comment =~ s/,$//;
-    print $comment, "\n";
 
-    print $rule, "\n";
-    return 1;
-
+    &logr("$comment\n", $fwscript);
+    &logr("$rule\n", $fwscript);
+    return;
 }
 
 sub add_ipt_chains() {
     for my $intf (keys %intf_net) {
-        print "### create the \"fwsnort_${intf_net{$intf}{'name'}}\" chain.\n";
-        print "$cmds{'iptables'} -N fwsnort_${intf_net{$intf}{'name'}}\n";
-        print "$cmds{'iptables'} -F fwsnort_${intf_net{$intf}{'name'}}\n";
+        &logr("### create the \"fwsnort_${intf_net{$intf}{'name'}}\" " .
+            "chain.\n", $fwscript);
+        &logr("$cmds{'iptables'} -N fwsnort_${intf_net{$intf}{'name'}}\n",
+            $fwscript);
+        &logr("$cmds{'iptables'} -F fwsnort_${intf_net{$intf}{'name'}}\n",
+            $fwscript);
     }
     return;
 }
 
 sub jump_chain() {
-    print "$cmds{'iptables'} -I INPUT 1 ",
-        "-i $intf_net{'EXTERNAL_INTF'}{'name'} ",
-        "-j fwsnort_${intf_net{'EXTERNAL_INTF'}{'name'}}\n";
+    &logr("$cmds{'iptables'} -I INPUT 1 " .
+        "-i $intf_net{'EXTERNAL_INTF'}{'name'} " .
+        "-j fwsnort_${intf_net{'EXTERNAL_INTF'}{'name'}}\n", $fwscript);
     if (defined $intf_net{'INTERNAL_INTF'}) {
-        print "$cmds{'iptables'} -I FORWARD 1 ",
-            "-i $intf_net{'EXTERNAL_INTF'}{'name'} ",
-            "-j fwsnort_${intf_net{'EXTERNAL_INTF'}{'name'}}\n";
+        &logr("$cmds{'iptables'} -I FORWARD 1 " .
+            "-i $intf_net{'EXTERNAL_INTF'}{'name'} " .
+            "-j fwsnort_${intf_net{'EXTERNAL_INTF'}{'name'}}\n", $fwscript);
     }
 #    if (defined $intf_net{'DMZ_INTF'}) {
 #        print "$cmds{'iptables'} -I INPUT 1 ",
@@ -902,6 +904,7 @@ sub setup() {
 
     ### archive old stuff
 #    &archive();
+    unlink $fwscript;
     return;
 }
 
@@ -936,14 +939,13 @@ sub chk_commands() {
 #}
 
 sub logr() {
-    my $msg = shift;
-    if ($logfile) {
-        open LOG, ">> $logfile" or die " ** Could not open $logfile " .
-            "$!";
-        print LOG $msg;
-        close LOG;
-    } else {
+    my ($msg, $file) = @_;
+    if ($stdout) {
         print STDOUT $msg;
+    } else {
+        open F, ">> $file" or die " ** Could not open $file: $!";
+        print F $msg;
+        close F;
     }
     return;
 }
