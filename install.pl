@@ -28,53 +28,63 @@
 # $Id$
 #
 
+use IO::Socket;
 use File::Copy;
 use Getopt::Long;
 use strict;
 
 #========================= config ========================
 my $sbin_dir    = '/usr/sbin';
+my $lib_dir     = '/usr/lib/fwsnort';
 my $fwsnort_dir = '/etc/fwsnort';
 my $rules_dir   = "${fwsnort_dir}/snort_rules";
+
+my $snort_website = 'www.snort.org';
 
 ### system binaries
 my $perlCmd = '/usr/bin/perl';
 my $makeCmd = '/usr/bin/make';
+my $wgetCmd = '/usr/bin/wget';
 my $gzipCmd = '/bin/gzip';
+my $tarCmd  = '/bin/tar';
 #======================= end config ======================
 
 ### establish some defaults
-my $install   = 1;
 my $uninstall = 0;
 my $help      = 0;
 
+my %cmds = (
+    'perl' => $perlCmd,
+    'make' => $makeCmd,
+    'gzip' => $gzipCmd,
+    'wget' => $wgetCmd
+);
+
 &usage(1) unless (GetOptions(
-    'install'   => \$install,  ### default mode (already enabled)
     'uninstall' => \$uninstall, ### uninstall fwsnort
     'help'      => \$help
 ));
 
 &usage(0) if $help;
 
-die " ** Cannot both install and unistall.  Exiting."
-    if $install && $uninstall;
-
-die " ** \"$perlCmd\" is not executable." unless -x $perlCmd;
-die " ** \"$makeCmd\" is not executable." unless -x $makeCmd;
+### make sure the system binaries are where we think they are.
+&check_commands();
 
 ### check to make sure we are running as root
-$< == 0 && $> == 0 or die "You need to be root (or equivalent UID 0" .
+$< == 0 && $> == 0 or die "You need to be root (or equivalent UID 0",
     " account) to install/uninstall fwsnort!\n";
 
-&uninstall() if $uninstall;
-&install()   if $install;
-
+if ($uninstall) {
+    &uninstall();
+} else {
+    &install()
+}
 exit 0;
 #===================== end main ===================
 
 sub install() {
     die " ** You must run install.pl from the fwsnort " .
-        "sources directory." unless -e 'fwsnort' && -e 'fwsnort.conf';
+        "sources directory." unless -e 'fwsnort' and -e 'fwsnort.conf';
 
     unless (-d $fwsnort_dir) {
         print " .. mkdir $fwsnort_dir\n";
@@ -84,6 +94,10 @@ sub install() {
         print " .. mkdir $rules_dir\n";
         mkdir $rules_dir, 0500;
     }
+    unless (-d $lib_dir) {
+        print " .. mkdir $lib_dir\n";
+        mkdir $lib_dir, 0755;
+    }
 
     ### install Net::IPv4Addr
     print " .. Installing the Net::IPv4Addr perl module.\n";
@@ -92,9 +106,9 @@ sub install() {
     unless (-e 'Makefile.PL' && -e 'IPv4Addr.pm') {
         die " ** Your Net::IPv4Addr sources are incomplete!";
     }
-    system "$perlCmd Makefile.PL";
+    system "$perlCmd Makefile.PL PREFIX=$lib_dir LIB=$lib_dir";
     system $makeCmd;
-    system "$makeCmd test";
+#    system "$makeCmd test";
     system "$makeCmd install";
     chdir '..';
 
@@ -107,15 +121,37 @@ sub install() {
             "IPTables::Parse is missing.\n    Download the latest sources " .
             "from http://www.cipherdyne.org\n";
     }
-    system "$perlCmd Makefile.PL";
+    system "$perlCmd Makefile.PL PREFIX=$lib_dir LIB=$lib_dir";
     system $makeCmd;
 #    system "$Cmds{'make'} test";
     system "$makeCmd install";
     chdir '../..';
     print "\n\n";
 
-    opendir D, 'snort_rules' or die " ** Could not open " .
-        'the snort_rules directory';
+    my $local_rules_dir = 'snort_rules';
+    if (&query_get_latest_snort_rules()) {
+        ### make sure we can actually reach snort.org.
+        if (&test_snort_website()) {
+            system "$cmds{'wget'} http://$snort_website/dl/rules/" .
+                "snortrules-stable.tar.gz";
+            system "$cmds{'tar'} xvfz snortrules-stable.tar.gz";
+            if (-d 'rules') {
+                move 'rules', 'downloaded_snort_rules' or die " ** Could not ",
+                    "move rules -> downloaded_snort_rules: $!";
+                $local_rules_dir = 'downloaded_snort_rules';
+            } else {
+                print " ** snortrules-stable.tar.gz did not appear to ",
+                    "contain a\n    \"rules\" directory.  Defaulting to ",
+                    "existing snort-2.0 rules.\n";
+            }
+        } else {
+            print " ** Could not connect to $snort_website on tcp/80.\n",
+                "    Defaulting to existing snort-2.0 rules.\n";
+        }
+    }
+
+    opendir D, $local_rules_dir or die " ** Could not open ",
+        "the $local_rules_dir directory: $!";
     my @rfiles = readdir D;
     closedir D;
     shift @rfiles; shift @rfiles;
@@ -210,6 +246,64 @@ sub install_manpage() {
     ### remove the old one so gzip doesn't prompt us
     unlink "${mfile}.gz" if -e "${mfile}.gz";
     system "$gzipCmd $mfile";
+    return;
+}
+
+sub query_get_latest_snort_rules() {
+    my $ans = '';
+    print " .. Would you like to download the latest snort rules from \n",
+        "    http://$snort_website/?  If you not (or if you aren't connected\n",
+        "    to the Net, then the installation will default to using \n",
+        "    snort-2.0 signatures.\n";
+    while ($ans ne 'y' && $ans ne 'n') {
+        print "    ([y]/n)?  ";
+        $ans = <STDIN>;
+        return 1 if $ans eq "\n";
+        chomp $ans;
+    }
+    if ($ans eq 'y') {
+        return 1;
+    }
+    return 0;
+}
+
+sub test_snort_website() {
+    my $sock = new IO::Socket::INET(
+        PeerAddr => $snort_website,
+        PeerPort => 80,
+        Proto    => 'tcp',
+        Timeout  => 7
+    );
+    if (defined($sock)) {
+        close $sock;
+        return 1;
+    }
+    return 0;
+}
+
+sub check_commands() {
+    my @path = qw(
+        /bin
+        /usr/bin
+        /usr/local/bin
+    );
+    CMD: for my $cmd (keys %cmds) {
+        unless (-x $cmds{$cmd}) {
+            my $found = 0;
+            PATH: for my $dir (@path) {
+                if (-x "${dir}/${cmd}") {
+                    $cmds{$cmd} = "${dir}/${cmd}";
+                    $found = 1;
+                    last PATH;
+                }
+            }
+            unless ($found) {
+                die " ** Could not find $cmd, edit the ",
+                    "config section of install.pl";
+            }
+        }
+    }
+
     return;
 }
 
