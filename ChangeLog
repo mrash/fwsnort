@@ -5,6 +5,7 @@ fwsnort-0.6.4 (12/18/2004);
       http://www.snort.org/dl/rules/snortrules-snapshot-CURRENT.tar.gz
     - Updated to standard [+], [-], and [*] prefixes for info, warning
       and die logging messages.
+    - Added --replace-string patches.
 
 fwsnort-0.6.3 (04/04/2004);
     - Added ignore functionality for both IPs and networks
