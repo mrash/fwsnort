@@ -87,8 +87,8 @@ sub install() {
 
     ### install Net::IPv4Addr
     print " .. Installing the Net::IPv4Addr perl module.\n";
-    chdir 'Net-IPv4Addr-0.10' or die " ** Could not chdir to ",
-        "Net-IPv4Addr-0.10: $!";
+    chdir 'Net-IPv4Addr' or die " ** Could not chdir to ",
+        "Net-IPv4Addr: $!";
     unless (-e 'Makefile.PL' && -e 'IPv4Addr.pm') {
         die " ** Your Net::IPv4Addr sources are incomplete!";
     }
@@ -100,12 +100,12 @@ sub install() {
 
     ### installing IPTables::Parse
     print " .. Installing the IPTables::Parse perl module\n";
-    chdir 'IPTables-0.10/Parse' or die " ** Could not chdir to ",
-        "IPTables-0.10/Parse: $!";
+    chdir 'IPTables/Parse' or die " ** Could not chdir to ",
+        "IPTables/Parse: $!";
     unless (-e 'Makefile.PL') {
         die " ** Your source directory appears to be incomplete!  " .
             "IPTables::Parse is missing.\n    Download the latest sources " .
-            "from http://www.cipherdyne.com\n";
+            "from http://www.cipherdyne.org\n";
     }
     system "$perlCmd Makefile.PL";
     system $makeCmd;
@@ -114,8 +114,8 @@ sub install() {
     chdir '../..';
     print "\n\n";
 
-    opendir D, 'snort-2.0_rules' or die " ** Could not open " .
-        'the snort-2.0_rules directory';
+    opendir D, 'snort_rules' or die " ** Could not open " .
+        'the snort_rules directory';
     my @rfiles = readdir D;
     closedir D;
     shift @rfiles; shift @rfiles;
@@ -123,7 +123,7 @@ sub install() {
     for my $rfile (@rfiles) {
         next unless $rfile =~ /\.rules$/;
         print " .. Installing $rfile\n";
-        copy "snort-2.0_rules/${rfile}", "${rules_dir}/${rfile}";
+        copy "snort_rules/${rfile}", "${rules_dir}/${rfile}";
     }
 
     print "\n";

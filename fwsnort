@@ -8,9 +8,9 @@
 #          fwsnort is based on the original snort2iptables shell script
 #          written by William Stearns.
 #
-# Author: Michael Rash <mbr@cipherdyne.com>
+# Author: Michael Rash <mbr@cipherdyne.org>
 #
-# Copyright (C) 2003 Michael Rash (mbr@cipherdyne.com)
+# Copyright (C) 2003 Michael Rash (mbr@cipherdyne.org)
 #
 # License (GNU Public License):
 #
@@ -300,7 +300,7 @@ Getopt::Long::Configure('no_ignore_case');
 
 ### Print the version number and exit if -V given on the command line.
 if ($print_ver) {
-    print " .. fwsnort v$version, by Michael Rash (mbr\@cipherdyne.com)\n";
+    print " .. fwsnort v$version, by Michael Rash (mbr\@cipherdyne.org)\n";
     exit 0;
 }
 
@@ -1088,9 +1088,9 @@ sub ipt_hdr() {
         $ipt_script);
     &logr("#           information see the fwsnort man page or the " .
         "documentation\n", $ipt_script);
-    &logr("#           available at http://www.cipherdyne.com/fwsnort/\n",
+    &logr("#           available at http://www.cipherdyne.org/fwsnort/\n",
         $ipt_script);
-    &logr("#\n# Author:  Michael Rash <mbr\@cipherdyne.com>\n",
+    &logr("#\n# Author:  Michael Rash <mbr\@cipherdyne.org>\n",
         $ipt_script);
     &logr("#\n", $ipt_script);
     &logr("###########################################################" .
@@ -1462,7 +1462,7 @@ sub usage() {
     print <<_USAGE_;
 
 fwsnort v$version
- .. By Michael Rash <mbr\@cipherdyne.com>, http://www.cipherdyne.com
+ .. By Michael Rash <mbr\@cipherdyne.org>, http://www.cipherdyne.org
 
 Usage: fwsnort [-t <snort rule type>] [-l <logfile>] [-v] [-V] [-h]
        [-t] [-c <config file>] [--snort-sid <sid>] [--no-ipt-sync]
