@@ -84,19 +84,6 @@ sub install() {
     system "$makeCmd install";
     chdir '..';
 
-    ### install Tie::IxHash
-    print " .. Installing the Tie::IxHash perl module.\n";
-    chdir 'Tie-IxHash-1.21' or die " ** Could not chdir to ",
-        "Tie-IxHash-1.21: $!";
-    unless (-e 'Makefile.PL') {
-        die " ** Your Tie-IxHash-1.21 is incomplete!";
-    }
-    system "$perlCmd Makefile.PL";
-    system $makeCmd;
-    system "$makeCmd test";
-    system "$makeCmd install";
-    chdir '..';
-
     opendir D, 'snort_rules' or die " ** Could not open " .
         "the snort_rules directory";
     my @rfiles = readdir D;
