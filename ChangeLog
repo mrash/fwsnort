@@ -1,4 +1,8 @@
-fwsnort-0.6 (01/04/2003):
+fwsnort-0.6.1 (02/01/2004):
+    - Bugfix for not adding dmz interface rules to INPUT chain.
+    - Bugfix for not getting the DMZ interface network.
+
+fwsnort-0.6 (01/04/2004):
     - Speed increase and disk access decrease by writing iptables
       commands to the iptables script only after all lines have been
       generated.
