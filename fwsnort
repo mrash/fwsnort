@@ -123,18 +123,21 @@ my %snort_vars = (
 
 my %iptables_opts = (
     'uricontent' => '-m string',
-    'content' => '-m string',
-    'ipopts'  => '-m ipv4options',
-    'flags'   => '--tcp-flags',
-    'itype'   => '--icmp-type',
-    'ttl'     => '--ttl',
-    'tos'     => '--tos',
-    'seq'     => '--log-tcp-sequence',
-    'src'     => '-s',
-    'src_p'   => '--sport',
-    'dst'     => '-d',
-    'dst_p'   => '--dport',
-    'proto'   => '-p'
+    'content'  => '-m string',
+    'ipopts'   => '-m ipv4options',
+    'flags'    => '--tcp-flags',
+    'flow'     => '--tcp-flags',  ### revert to keeping track of ACK
+                                  ### flags (usually ok).
+    'itype'    => '--icmp-type',
+    'ttl'      => '-m ttl',
+    'tos'      => '--tos',
+    'seq'      => '--log-tcp-sequence',
+    'src'      => '-s',
+    'src_p'    => '--sport',
+    'dst'      => '-d',
+    'dst_p'    => '--dport',
+    'proto'    => '-p',
+    'ip_proto' => '-p'
 );
 
 my %snort_opts = (
@@ -144,13 +147,14 @@ my %snort_opts = (
     ### source, destination, etc.)
     'filter' => {
         'uricontent' => '[\s;]uricontent:\s*\"(.*?)\"\s*;',
-        'content' => '[\s;]content:\s*\"(.*?)\"\s*;',
-        'flags'   => '[\s;]flags:\s*(.*?)\s*;',
-        'itype'   => '[\s;]itype:\s*(\d+)\s*;',
-        'ttl'     => '[\s;]ttl:\s*(\d+)\s*;',
-        'tos'     => '[\s;]tos:\s*(\d+)\s*;',
-#        'ipopts'  => '[\s;]ipopts:\s*(rr|ssrr|lsrr)\s*;',
-#       'flow'    => ''  ### not implemented yet
+        'content'  => '[\s;]content:\s*\"(.*?)\"\s*;',
+        'flags'    => '[\s;]flags:\s*(.*?)\s*;',
+        'itype'    => '[\s;]itype:\s*(\d+)\s*;',
+        'ttl'      => '[\s;]ttl:\s*(.*?)\s*;',
+        'tos'      => '[\s;]tos:\s*(\d+)\s*;',
+        'ipopts'   => '[\s;]ipopts:\s*(rr|ssrr|lsrr|lsrre)\s*;',
+        'flow'     => '[\s;]flow:\s*(.*?)\s*;',
+        'ip_proto' => '[\s;]ip_proto:\s*(.*?)\s*;'
     },
 
     ### snort options which are logged within iptables
@@ -177,23 +181,26 @@ my %snort_opts = (
     ### within iptables filter statements (yet :)
     'unsupported' => {
         'dsize'        => '[\s;]dsize:\s*\S+\s*;',
-        'seq'          => '[\s;]seq:\s*\d+\s*;',
         'ack'          => '[\s;]ack:\s*\d+\s*;',
         'fragbits'     => '[\s;]fragbits:\s*\S+\s*;',
         'content-list' => '[\s;]content\-list:\s*\".*?\"\s*;',
         'rpc'          => '[\s;]rpc:\s*\S+\s*;',
 #        'offset'       => '[\s;]offset:\s*\d+\s*;',
 #        'depth'        => '[\s;]depth:\s*\d+\s*;',
-        'ipopts'  => '[\s;]ipopts:\s*(\w+)\s*;',
+#        'ipopts'  => '[\s;]ipopts:\s*(\w+)\s*;',
 
         ### the following fields get logged by iptables but
         ### we cannot filter them directly (yet).
-        'id'       => '[\s;]id:\s*(\d+)\s*;',
-        'seq'      => '[\s;]seq:\s*(\d+)\s*;',
-        'icmp_seq' => '[\s;]icmp_seq:\s*(\d+)\s*;',
-        'icmp_id'  => '[\s;]icmp_id:\s*(\d+)\s*;',
-        'icode'    => '[\s;]icode:\s*(\d+)\s*;',
-        'sameip'   => '[\s;]sameip\s*;'
+        'id'        => '[\s;]id:\s*(\d+)\s*;',
+        'seq'       => '[\s;]seq:\s*(\d+)\s*;',  ### --log-tcp-sequence
+        'icmp_seq'  => '[\s;]icmp_seq:\s*(\d+)\s*;',
+        'icmp_id'   => '[\s;]icmp_id:\s*(\d+)\s*;',
+        'icode'     => '[\s;]icode:\s*(\d+)\s*;',
+        'sameip'    => '[\s;]sameip\s*;',
+        'byte_test' => '[\s;]byte_test\s*.*?\s*;',
+        'byte_jump' => '[\s;]byte_test\s*.*?\s*;',
+        'distance'  => '[\s;]distance:\s*(\d+)\s*;',
+        'within'    => '[\s;]within:\s*(\d+)\s*;'
     },
 
     ### snort options that fwsnort will ignore
@@ -267,24 +274,26 @@ my $snort_type     = '';
 Getopt::Long::Configure('no_ignore_case');
 
 &usage(1) unless (GetOptions(
-    'ipt-apply'   => \$ipt_apply,     # apply the generated ruleset
-    'ipt-drop'    => \$ipt_drop,
-    'snort-sid=i' => \$snort_sid,    # Parse only this particular snort rule
-    'type=s'      => \$rules_type,   # process this type of snort rule
-                                     # (e.g. "ddos")
-    'logfile=s'   => \$logfile,
-    'stdout'      => \$stdout,       # print the fw ruleset on STDOUT
-    'no-ipt-sync' => \$no_ipt_sync,  # do not sync with the iptables policy
-    'no-ipt-log'  => \$no_ipt_log,   # do not generate iptables log rules
-    'no-ipt-test' => \$no_ipt_test,  # don't perform any checks against
-                                     # iptables
-    'strict'      => \$strict,
-    'debug'       => \$debug,
-    'dump-conf'   => \$dump_conf,    # display config variables
-    'config=s'    => \$fwsnort_conf, # manually specify the config file
-    'verbose'     => \$verbose,
-    'Version'     => \$print_ver,
-    'help'        => \$help
+    'ipt-apply'    => \$ipt_apply,    # apply the generated ruleset
+    'ipt-drop'     => \$ipt_drop,
+    'snort-sid=i'  => \$snort_sid,    # Parse only this particular snort rule
+    'type=s'       => \$rules_type,   # process this type of snort rule
+                                      # (e.g. "ddos")
+    'snort-rdir=s' => \$rules_dir,    # Manually specify the snort rules
+                                      # directory.
+    'logfile=s'    => \$logfile,
+    'stdout'       => \$stdout,       # print the fw ruleset on STDOUT
+    'no-ipt-sync'  => \$no_ipt_sync,  # do not sync with the iptables policy
+    'no-ipt-log'   => \$no_ipt_log,   # do not generate iptables log rules
+    'no-ipt-test'  => \$no_ipt_test,  # don't perform any checks against
+                                      # iptables
+    'strict'       => \$strict,
+    'debug'        => \$debug,
+    'dump-conf'    => \$dump_conf,    # display config variables
+    'config=s'     => \$fwsnort_conf, # manually specify the config file
+    'verbose'      => \$verbose,
+    'Version'      => \$print_ver,
+    'help'         => \$help
 ));
 
 &usage(0) if $help;
@@ -827,7 +836,11 @@ sub ipt_build_rule() {
     }
 
     ### append the protocol to the rule
-    $rule .= " $iptables_opts{'proto'} $hdr_href->{'proto'}";
+    if (defined $opts_href->{'ip_proto'}) {
+        $rule .= " $iptables_opts{'ip_proto'} $opts_href->{'ip_proto'}";
+    } else {
+        $rule .= " $iptables_opts{'proto'} $hdr_href->{'proto'}";
+    }
 
     ### append the source (this will always be
     ### either "-s <net>" or "-d <net>"
@@ -884,6 +897,18 @@ sub ipt_build_opts() {
         }
     }
 
+    ### append --tcp-flags ACK ACK if flow=established.
+    ### NOTE: we can't really handle "flow" in the same way snort can,
+    ### since there is no way to keep track of which side initiated the
+    ### tcp session (where the SYN packet came from), but older versions
+    ### of snort (pre 1.9) just used tcp flags "A+" to keep track of
+    ### this... we need to do the same.
+    if (defined $opts_href->{'flow'} && ! defined $opts_href->{'flags'}) {
+        if ($opts_href->{'flow'} =~ /established/) {
+            $rule .= " $iptables_opts{'flow'} ACK ACK";
+        }
+    }
+
     ### append tos
     if (defined $opts_href->{'tos'}) {
         $rule .= " $iptables_opts{'tos'} $opts_href->{'tos'}"
@@ -891,7 +916,13 @@ sub ipt_build_opts() {
 
     ### append ttl
     if (defined $opts_href->{'ttl'}) {
-        $rule .= " $iptables_opts{'ttl'} $opts_href->{'ttl'}"
+        if ($opts_href->{'ttl'} =~ /\<\s*(\d+)/) {
+            $rule .= " $iptables_opts{'ttl'} -ttl-lt $1";
+        } elsif ($opts_href->{'ttl'} =~ /\>\s*(\d+)/) {
+            $rule .= " $iptables_opts{'ttl'} -ttl-gt $1";
+        } else {
+            $rule .= " $iptables_opts{'ttl'} -ttl-eq $opts_href->{'ttl'}";
+        }
     }
 
     ### append icmp type
@@ -901,7 +932,7 @@ sub ipt_build_opts() {
 
     ### append ip options
     if (defined $opts_href->{'ipopts'}) {
-        $rule .= " $iptables_opts{'ipopts'} $opts_href->{'ipopts'}"
+        $rule .= " $iptables_opts{'ipopts'} --$opts_href->{'ipopts'}"
     }
 
     ### append snort content options
