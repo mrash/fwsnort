@@ -15,6 +15,7 @@
 # $Id$
 #
 
+use Data::Dumper;
 use Getopt::Long;
 use strict;
 
@@ -30,6 +31,57 @@ my $iptablesCmd = '/sbin/iptables';
 
 ### version number
 my $version = '0.1';
+
+### snort options that should be put into iptables
+### ruleset, but only in log messages with --log-prefix
+my %sopt_logprefix = (
+    'msg'       => 'msg:\s*\"(.*?)\";',
+    'reference' => '[\s;]reference:\s*(.*?);',
+    'sid'       => '[\s;]sid:\s*(\d+);',
+    'rev'       => '[\s;]rev:\s*(\d+);',
+    'classtype' => '[\s;]classtype:\s*(.*?);'
+);
+
+### snort options that we can directly filter on
+### in iptables rulesets (snort options are separate
+### from the snort "header" which include protocol,
+### source, destination, etc.)
+my %sopt_filter = (
+    'content' => '[\s;]content:\s*\"(.*?)\";',
+    'flags'   => '[\s;]flags:\s*(.*?);',
+    'itype'   => '[\s;]itype:\s*(\d+);',
+    'ttl'     => '[\s;]ttl:\s*(\d+);'
+);
+
+### snort options that cannot be included directly
+### within iptables filter statements (yet :)
+my %sopt_nofilter = (
+    'offset'       => '[\s;]offset:\s*\d+;',
+    'depth'        => '[\s;]depth:\s*\d+;',
+    'dsize'        => '[\s;]dsize:\s*\S+;',
+    'icmp_id'      => '[\s;]icmp_id:\s*\d+;',
+    'icmp_seq'     => '[\s;]icmp_seq:\s*\d+;',
+    'seq'          => '[\s;]seq:\s*\d+;',
+    'ack'          => '[\s;]ack:\s*\d+;',
+    'fragbits'     => '[\s;]fragbits:\s*\S+;',
+    'icode'        => '[\s;]icode:\s*\d+;',
+    'uricontent'   => '[\s;]uricontent:\s*\".*?\";',
+    'content-list' => '[\s;]content\-list:\s*\".*?\";',
+    'ipopts'       => '[\s;]ipopts:\s*.*?;',
+    'rpc'          => '[\s;]rpc:\s*\S+;',
+    'id'           => '[\s;]id:\s*\d+;',
+    'tos'          => '[\s;]tos:\s*\d+;'
+);
+
+### snort options which are logged within iptables
+### logging statements (so we can detect these values
+### but just not filter them directly)
+my @sopt_log = (
+    'id',
+    'icode',
+    'seq',
+    'tos'
+);
 
 ### establish some default behavior
 my $fw_apply   = 0;
@@ -86,6 +138,8 @@ sub parse_snort_rules() {
     closedir D;
     shift @rfiles; shift @rfiles;
 
+    my $abs_num = 0;
+    my $sabs_num = 0;
     for my $rfile (@rfiles) {
         next unless $rfile =~ /\.rules$/;
         if ($rules_type) {
@@ -107,145 +161,106 @@ sub parse_snort_rules() {
             $rule_num++;  ### keep track of the abs num of rules
             my $rule_hdr;
             my $rule_options;
+            $sabs_num++;
             if ($line =~ m|^(.*)\s+\((.*)\)|) {
                 $rule_hdr     = $1;
                 $rule_options = $2;
             } else {  ### don't know what type of snort rule it is
                 next RULE;
             }
-            my ($proto, $src, $src_p, $bidir, $dst, $dst_p)
-                = &parse_rule_hdr($rule_hdr);
-            unless ($proto) {
-                print " ** Unrecognized rule header: \"$rule_hdr\" at " .
+            my $hdr_href = &parse_rule_hdr($rule_hdr);
+            unless ($hdr_href) {
+                print " ** Unrecognized rule header: \"$rule_hdr\" at ",
                     "line: $line_num.  Skipping rule.\n";
                 next RULE;
             }
             if ($debug) {
-                print " .. Header: $proto, $src, $src_p, " .
-                    "$bidir, $dst, $dst_p\n";
+                print " .. Header: $hdr_href->{'proto'}, $hdr_href->{'src'} ",
+                    "    $hdr_href->{'src_p'}, bidir: $hdr_href->{'bidir'} ",
+                    "$hdr_href->{'dst'}, $hdr_href->{'dst_p'}\n";
             }
-            my ($msg, $flags, $content, $ref, $sid, $rev, $classtype)
+            my ($opt_filter_href, $opt_logprefix_href)
                 = &parse_rule_options($rule_options, $line_num);
-            unless ($msg) {
+            unless ($opt_filter_href) {
                 next RULE;
             }
             $parsed_ctr++;  ### keep track of successfully parsed rules
+            $abs_num++;;
         }
         print " .. Successfully parsed $parsed_ctr out of $rule_num rules.\n";
         print "\n";
     }
+    print " ==========\n";
+    print " .. Totals: Parsed $abs_num out of $sabs_num: " .
+        sprintf("%.2f", $abs_num/$sabs_num*100) . "%\n";
     return;
 }
 
 sub parse_rule_options() {
     my ($rule_options, $line_num) = @_;
-    ### Unsupported options:
-    ###   rev: snort rule revision number
-    ###   depth: sets the maximum search depth for a pattern match attempt
-    ###   offset: sets the offset to begin attempting a pattern match
-    ###   dsize: test the packet's payload size against a value
-    my $msg       = '';
-    my $flags     = '';
-    my $content   = '';
-    my $ref       = '';
-    my $sid       = '';
-    my $rev       = '';
-    my $classtype = '';
-    my $itype     = '';
-    my $ttl       = '';
-    if ($rule_options =~ /depth:\s*\d+;/) {
-        print " ** Unsupported option: \"depth\" at " .
-            "line: $line_num.  Skipping rule.\n";
-        return 0,0,0,0,0,0,0;
-    }
-    if ($rule_options =~ /offset:\s*\d+;/) {
-        print " ** Unsupported option: \"offset\" at " .
-            "line: $line_num.  Skipping rule.\n";
-        return 0,0,0,0,0,0,0;
-    }
-    if ($rule_options =~ /dsize:\s*\S+;/) {
-        print " ** Unsupported option: \"dsize\" at " .
-            "line: $line_num.  Skipping rule.\n";
-        return 0,0,0,0,0,0,0;
-    }
-    if ($rule_options =~ /icmp_id:\s*\d+;/) {
-        print " ** Unsupported option: \"icmp_id\" at " .
-            "line: $line_num.  Skipping rule.\n";
-        return 0,0,0,0,0,0,0;
-    }
-    if ($rule_options =~ /icmp_seq:\s*\d+;/) {
-        print " ** Unsupported option: \"icmp_seq\" at " .
-            "line: $line_num.  Skipping rule.\n";
-        return 0,0,0,0,0,0,0;
-    }
-    if ($rule_options =~ /seq:\s*\d+;/) {
-        print " ** Unsupported option: \"seq\" at " .
-            "line: $line_num.  Skipping rule.\n";
-        return 0,0,0,0,0,0,0;
-    }
-    if ($rule_options =~ /ack:\s*\d+;/) {
-        print " ** Unsupported option: \"ack\" at " .
-            "line: $line_num.  Skipping rule.\n";
-        return 0,0,0,0,0,0,0;
-    }
-    if ($rule_options =~ /fragbits:\s*\S+;/) {
-        print " ** Unsupported option: \"fragbits\" at " .
-            "line: $line_num.  Skipping rule.\n";
-        return 0,0,0,0,0,0,0;
-    }
-    if ($rule_options =~ /icode:\s*\d+;/) {
-        print " ** Unsupported option: \"icode\" at " .
-            "line: $line_num.  Skipping rule.\n";
-        return 0,0,0,0,0,0,0;
+
+    my %opt_logprefix;
+    my %opt_filter;
+
+    for my $option (keys %sopt_nofilter) {
+        my $regex = $sopt_nofilter{$option};
+        if ($rule_options =~ /$regex/) {
+            print " ** Unsupported option: \"$option\" at " .
+                "line: $line_num.  Skipping rule.\n" if $verbose;
+            return 0;
+        }
     }
 
-    if ($rule_options =~ /msg:\s*\"(.*?)\";/) {
-        $msg = $1;
+    for my $option (keys %sopt_logprefix) {
+        my $regex = $sopt_logprefix{$option};
+        if ($rule_options =~ /$regex/) {
+            $opt_logprefix{$option} = $1;
+        }
     }
-    if ($rule_options =~ /content:\s*\"(.*?)\";/) {
-        $content = $1;
+    for my $option (keys %sopt_filter) {
+        my $regex = $sopt_filter{$option};
+        if ($rule_options =~ /$regex/) {
+            $opt_filter{$option} = $1;
+        }
     }
-    if ($rule_options =~ /flags:\s*(.*?);/) {
-        $flags = $1;
-    }
-    if ($rule_options =~ /reference:\s*(.*?);/) {
-        $ref = $1;
-    }
-    if ($rule_options =~ /sid:\s*(\d+);/) {
-        $sid = $1;
-    }
-    if ($rule_options =~ /rev:\s*(\d+);/) {
-        $rev = $1;
-    }
-    if ($rule_options =~ /classtype:\s*(.*?);/) {
-        $classtype = $1;
-    }
+
     while ($rule_options =~ /(\w+):\s*.*?;/g) {
         my $option = $1;
-        if ($option ne 'msg' && $option ne 'flags' &&
-            $option ne 'reference' && $option ne 'sid' &&
-            $option ne 'rev' && $option ne 'classtype' &&
-            $option ne 'content' && $option ne 'itype' &&
-            $option ne 'ttl') {
+        if (! defined $sopt_filter{$option} &&
+            ! defined $sopt_logprefix{$option}) {
             print "$line_num option: $option -- $rule_options\n";
         }
     }
-    return $msg, $flags, $content, $ref, $sid, $rev, $classtype;
+    return \%opt_filter, \%opt_logprefix;
 }
 
 sub parse_rule_hdr() {
     my $rule_hdr = shift;
-    my $tmpd;
+    my $bidir = 0;
     if ($rule_hdr =~ m|^alert\s+(\S+)\s+(\S+)\s+(\S+)
                         \s+(\S+)\s+(\S+)\s+(\S+)|x) {
         if ($4 eq '<>') {
-            return $1,$2,$3,1,$5,$6;
+            $bidir = 1;
         } elsif ($4 eq '<-') {
-            return $1,$5,$3,0,$2,$6; ### switch src and dst
+            return {
+                'proto' => $1,
+                'src'   => $5,  ### switch src and dst
+                'src_p' => $3,
+                'bidir' => 0,
+                'dst'   => $2,
+                'dst_p' => $6,
+            };
         }
-        return $1,$2,$3,0,$5,$6;  ### normal src -> dst
+        return {
+            'proto' => $1,
+            'src'   => $2,  ### normal src -> dst
+            'src_p' => $3,
+            'bidir' => $bidir,
+            'dst'   => $5,
+            'dst_p' => $6,
+        };
     } else {
-        return 0,0,0,0,0,0;
+        return 0;
     }
 }
 
