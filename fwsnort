@@ -1121,12 +1121,12 @@ sub validateconf() {
     ($intf_net{'EXTERNAL_INTF'}{'ip'}, $intf_net{'EXTERNAL_INTF'}{'net'})
         = &get_intf_net($config{'EXTERNAL_INTF'});
 
-    if (defined $config{'INTERNAL_INTF'}) {
-        $intf_type{$config{'INTERNAL_INTF'}} = 'INTERNAL_INTF';
-        $intf_net{'INTERNAL_INTF'}{'name'} = $config{'INTERNAL_INTF'};
-        ($intf_net{'INTERNAL_INTF'}{'ip'}, $intf_net{'INTERNAL_INTF'}{'net'})
-            = &get_intf_net($config{'INTERNAL_INTF'});
-    }
+    die " ** $fwsnort_conf: INTERNAL_INTF is not defined. Exiting.\n"
+        unless defined $config{'INTERNAL_INTF'};
+    $intf_type{$config{'INTERNAL_INTF'}} = 'INTERNAL_INTF';
+    $intf_net{'INTERNAL_INTF'}{'name'} = $config{'INTERNAL_INTF'};
+    ($intf_net{'INTERNAL_INTF'}{'ip'}, $intf_net{'INTERNAL_INTF'}{'net'})
+        = &get_intf_net($config{'INTERNAL_INTF'});
     if (defined $config{'DMZ_INTF'}) {
         die " ** $fwsnort_conf: DMZ_INTF cannot be defined without ",
             "also defining INTERNAL_INTF. Exiting.\n";
