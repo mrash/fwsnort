@@ -24,6 +24,44 @@
 #    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307
 #    USA
 #
+# Snort Rule Options:
+#
+#   msg:     Prints a message in alerts and packet logs.
+#   logto:   Log the packet to a user specified filename instead of the
+#            standard output file.
+#   ttl:     Test the IP header's TTL field value.
+#   tos:     test the IP header's TOS field value 
+#   id:      test the IP header's fragment ID field for a specific value 
+#   ipoption:  watch the IP option fields for specific codes 
+#   fragbits:  test the fragmentation bits of the IP header 
+#   dsize:     test the packet's payload size against a value 
+#   flags      test the TCP flags for certain values 
+#   seq:       test the TCP sequence number field for a specific value 
+#   ack:       test the TCP acknowledgement field for a specific value 
+#   itype:     test the ICMP type field against a specific value 
+#   icode:     test the ICMP code field against a specific value 
+#   icmp_id:   test the ICMP ECHO ID field against a specific value 
+#   icmp_seq:  test the ICMP ECHO sequence number against a specific value 
+#   content:   search for a pattern in the packet's payload 
+#   content-list:  search for a set of patterns in the packet's payload 
+#   offset:    modifier for the content option, sets the offset to begin attempting a pattern match 
+#   depth:     modifier for the content option, sets the maximum search depth for a pattern match attempt 
+#   nocase:   match the preceding content string with case insensitivity 
+#   session   dumps the application layer information for a given session 
+#   rpc:       watch RPC services for specific application/procedure calls 
+#   resp:      active response (knock down connections, etc) 
+#   react:     active response (block web sites) 
+#   reference:   external attack reference ids 
+#   sid:         Snort rule id 
+#   rev:     rule revision number 
+#   classtype:  rule classification identifier 
+#   priority:   rule severity identifier 
+#   uricontent: search for a pattern in the URI portion of a packet
+#   tag:        advanced logging actions for rules 
+#   ip_proto:   IP header's protocol value 
+#   sameip:      determines if source ip equals the destination ip 
+#   stateless:  valid regardless of stream state 
+#   regex:       wildcard pattern matching 
 ############################################################################
 #
 # $Id$
@@ -87,7 +125,7 @@ my %sopt_logprefix = (
 ### from the snort "header" which include protocol,
 ### source, destination, etc.)
 my %sopt_filter = (
-    'uricontent'   => '[\s;]uricontent:\s*\".*?\";',
+    'uricontent'   => '[\s;]uricontent:\s*\"(.*?)\";',
     'content' => '[\s;]content:\s*\"(.*?)\";',
     'flags'   => '[\s;]flags:\s*(.*?);',
     'itype'   => '[\s;]itype:\s*(\d+);',
@@ -129,15 +167,10 @@ my @shellcode_ports = ();
 my @oracle_ports    = ();
 
 ### interface config
-my %interfaces   = ();  ### corresponds to $EXTERNAL_NET and $HOME_NET
-my %intf_to_type = ();
+my %intf_net  = ();  ### corresponds to $EXTERNAL_NET and $HOME_NET
+my %intf_type = ();
 
 ### server config
-#my %servers = ();
-
-### port config
-#my %ports = ();
-
 my @http_servers   = ();
 my @smtp_servers   = ();
 my @dns_servers    = ();
@@ -269,17 +302,18 @@ sub parse_snort_rules() {
                 next RULE;
             }
             if ($debug) {
-                print " .. Header: $hdr_href->{'proto'}, $hdr_href->{'src'} ",
-                    "    $hdr_href->{'src_p'}, bidir: $hdr_href->{'bidir'} ",
-                    "$hdr_href->{'dst'}, $hdr_href->{'dst_p'}\n";
+                print " .. Header: Proto: $hdr_href->{'proto'}, Src: ",
+                    "$hdr_href->{'src'}, Src_p: $hdr_href->{'src_p'}, ",
+                    "bidir: $hdr_href->{'bidir'}, Dst: $hdr_href->{'dst'}, ",
+                    "Dst_p: $hdr_href->{'dst_p'}\n";
             }
             my ($ipttype, $opt_filter_href, $opt_logprefix_href)
                 = &parse_rule_options($rule_options, $line_num);
             if ($ipttype == 1) {  ### we can filter
-                &add_ipt_filter_rule($hdr_href, $opt_filter_href);
+                &add_ipt_rule($hdr_href, $opt_filter_href, 'filter');
                 $parsed_ctr++;  ### keep track of successfully parsed rules
             } elsif ($ipttype == 2) {
-                &add_ipt_log_rule($hdr_href, $opt_logprefix_href);
+                &add_ipt_rule($hdr_href, $opt_logprefix_href, 'log');
                 $logonly_ctr++;
             } else {
                 $unsup_ctr++;
@@ -361,10 +395,11 @@ sub parse_rule_options() {
 sub parse_rule_hdr() {
     my $rule_hdr = shift;
     my $bidir = 0;
-    if ($rule_hdr =~ m|^alert\s+(\S+)\s+(\S+)\s+(\S+)
-                        \s+(\S+)\s+(\S+)\s+(\S+)|x) {
+    if ($rule_hdr =~ m|^alert\s+(\S+)\s+\$?(\S+)\s+\$?(\S+)
+                        \s+(\S+)\s+\$?(\S+)\s+\$?(\S+)|x) {
         if ($4 eq '<>') {
             $bidir = 1;
+            print " ** bidir\n";
         } elsif ($4 eq '<-') {
             return {
                 'proto' => $1,
@@ -388,42 +423,157 @@ sub parse_rule_hdr() {
     }
 }
 
-sub add_ipt_filter_rule() {
-    my ($hdr_href, $opt_filter_href) = @_;
-    my $src_port = '';
-    my $dst_port = '';
-    unless ($hdr_href->{'src_p'} eq 'any') {
-        $src_port = "--sport $hdr_href->{'src_p'}";
+sub add_ipt_rule() {
+    my ($hdr_href, $opt_href) = @_;
+
+    ### start the rule
+    my $rule = $cmds{'iptables'};
+
+    ### determine which chain the rule should be added to (default
+    ### to the Snort_<EXTERNAL_INTF> chain).
+    my $chain = " -A Snort_${config{'EXTERNAL_INTF'}}";
+    if ($config{'NUM_INTERFACES'} > 1) {
+        if (defined $config{$hdr_href->{'src'}}
+            && defined $intf_net{$config{$hdr_href->{'src'}}}) {
+            $chain =
+                " -A Snort_${intf_net{$config{$hdr_href->{'src'}}}{'name'}}";
+        } elsif (defined $config{$hdr_href->{'dst'}}
+            && defined $intf_net{$hdr_href->{'dst'}}) {
+            $chain =
+                " -A Snort_${intf_net{$config{$hdr_href->{'dst'}}}{'name'}}";
+        }
     }
-    unless ($hdr_href->{'dst_p'} eq 'any') {
-        $src_port = "--dport $hdr_href->{'dst_p'}";
+
+    ### append the chain to the rule
+    $rule .= $chain;
+
+    ### append the protocol to the rule
+    $rule .= " -p $hdr_href->{'proto'}";
+
+    ### append the source
+    if (defined $config{$hdr_href->{'src'}}) {
+        if (! defined $intf_net{$config{$hdr_href->{'src'}}}) {
+            $rule .= " -s $hdr_href->{'src'}";
+        }
+    } elsif ($hdr_href->{'src'} ne 'any') {
+        $rule .= " -s $hdr_href->{'src'}";
     }
+
+    ### append the source port
+    if (defined $config{$hdr_href->{'src_p'}}) {
+        $rule .= " --sport $config{$hdr_href->{'src_p'}}";
+    } elsif ($hdr_href->{'src_p'} ne 'any') {
+        $rule .= " --sport $hdr_href->{'src_p'}";
+    }
+
+    ### append the destination
+    if ($hdr_href->{'dst'} eq 'EXTERNAL_NET') {  ### special case
+        $rule .= ' -d 0.0.0.0/0';
+    } elsif (defined $config{$hdr_href->{'dst'}}) {
+        if (defined $intf_net{$config{$hdr_href->{'dst'}}}) {
+            $rule .= " -d $intf_net{$config{$hdr_href->{'dst'}}}{'net'}";
+        } else {
+            $rule .= " -d $hdr_href->{'dst'}";
+        }
+    } elsif ($hdr_href->{'dst'} ne 'any') {
+        $rule .= " -d $hdr_href->{'dst'}";
+    }
+
+    ### append the destination port
+    if (defined $config{$hdr_href->{'dst_p'}}) {
+        $rule .= " --dport $config{$hdr_href->{'dst_p'}}";
+    } elsif ($hdr_href->{'dst_p'} ne 'any') {
+        $rule .= " --dport $hdr_href->{'dst_p'}";
+    }
+
+    for my $opt (keys %$opt_href) {
+        $rule .= " $opt $opt_href->{$opt}";
+    }
+
+    print $rule, "\n";
+    return;
+
+
+#    if (defined $config{$hdr_href->{'dst'}}) {
+#        $dst = $config{$hdr_href->{'dst'}};
+#    } else {  ### must trust the signature (could by "any" or a specific ip)
+#        $dst = $hdr_href->{'dst'};
+#    }
+#
+
+#    if (defined $config{$hdr_href->{'src'}}) {
+#        $src = $config{$hdr_href->{'src'}};
+#    } else {  ### must trust the signature (could by "any" or a specific ip)
+#        $src = $hdr_href->{'src'};
+#    }
+#    unless ($hdr_href->{'src_p'} eq 'any') {
+#        $src_port = "--sport $hdr_href->{'src_p'}";
+#    }
+#    unless ($hdr_href->{'dst_p'} eq 'any') {
+#        $dst_port = "--dport $hdr_href->{'dst_p'}";
+#    }
+
+#    unless (defined $config{$hdr_href->{'src'}} &&
+#        defined $config{$hdr_href->{'dst'}}) {
+#
+#        print " ** Bad: $hdr_href->{'src'}  $hdr_href->{'dst'}\n";
+#        return;
+#    }
+
+#    print "$hdr_href->{'proto'} $src $src_port -> $dst $dst_port\n";
+#    return;
+
     ### iptables  -A INPUT -p tcp --sport 3999 -m string
     ###     --hex-string "fsdf" -j LOG
-    if ($hdr_href->{'src'} eq '$EXTERNAL_NET' &&
-        $hdr_href->{'dst'} eq '$HOME_NET') {
-        for my $internal_intf (keys %snort_chains) {
-            my $net = $snort_chains{$internal_intf};
-            print "$cmds{'iptables'} -A Snort_${config{'EXTERNAL_INTF'}} ",
-                "-d $net -p $hdr_href->{'proto'} $src_port $dst_port ",
-                "-j LOG\n";
-        }
-    } elsif ($hdr_href->{'src'} eq '$HOME_NET' &&
-        $hdr_href->{'dst'} eq '$EXTERNAL_NET') {
-        for my $internal_intf (keys %snort_chains) {
-            my $net = $snort_chains{$internal_intf};
-            print "$cmds{'iptables'} -A Snort_${internal_intf} ",
-                "-s $net -p $hdr_href->{'proto'} $src_port $dst_port ",
-                "-j LOG\n";
-        }
-    } else {
-        print " ** Bad: $hdr_href->{'src'}  $hdr_href->{'dst'}\n";
-    }
-    return;
-}
-
-sub add_ipt_log_rule() {
-    my ($hdr_href, $opt_logprefix_href) = @_;
+#    if ($hdr_href->{'src'} eq '$EXTERNAL_NET' &&
+#        $hdr_href->{'dst'} eq '$HOME_NET') {
+#
+#
+#        if ($config{'NUM_INTERFACES'} == 1) {
+#            ### this chain should be jumped to from the INPUT chain only
+#            ### (no interface needs to be specified since there is only
+#            ### one and INPUT => source is external).
+#            print "$cmds{'iptables'} -A Snort_${config{'EXTERNAL_INTF'}} ",
+#                "-p $hdr_href->{'proto'} $src_port $dst_port -j REJECT\n";
+#        } elsif ($config{'NUM_INTERFACES'} == 2) {
+#            ### dst = INTERNAL_INTF network
+#            print "$cmds{'iptables'} -A Snort_${config{'EXTERNAL_INTF'}} ",
+#                "-d $intf_net{'INTERNAL_INTF'}{'net'} -p $hdr_href->{'proto'} ",
+#                "$src_port $dst_port -j REJECT\n";
+#        } else {
+#            ### dst = INTERNAL_INTF network
+#            print "$cmds{'iptables'} -A Snort_${config{'EXTERNAL_INTF'}} ",
+#                "-d $intf_net{'INTERNAL_INTF'}{'net'} -p $hdr_href->{'proto'} ",
+#                "$src_port $dst_port -j REJECT\n";
+#            ### dst = DMZ_INTF network
+#            print "$cmds{'iptables'} -A Snort_${config{'EXTERNAL_INTF'}} ",
+#                "-d $intf_net{'DMZ_INTF'}{'net'} -p $hdr_href->{'proto'} ",
+#                "$src_port $dst_port -j REJECT\n";
+#        }
+#    } elsif ($hdr_href->{'src'} eq '$HOME_NET' &&
+#        $hdr_href->{'dst'} eq '$EXTERNAL_NET') {
+#        if ($config{'NUM_INTERFACES'} == 1) {
+#            ### this chain should be jumped to from the OUTPUT chain only
+#            ### (no interface needs to be specified since there is only
+#            ### one and OUTPUT => source is the local system).
+#            print "$cmds{'iptables'} -A Snort_${config{'INTERNAL_INTF'}} ",
+#                "-p $hdr_href->{'proto'} $src_port $dst_port -j REJECT\n";
+#        } elsif ($config{'NUM_INTERFACES'} == 2) {
+#            ### dst = INTERNAL_INTF network
+#            print "$cmds{'iptables'} -A Snort_${config{'INTERNAL_INTF'}} ",
+#                "-i $config{'EXTERNAL_INTF'} -d $intf_net{'INTERNAL_INTF'}{'net'} ",
+#                "-p $hdr_href->{'proto'} $src_port $dst_port -j REJECT\n";
+#        } else {
+#            ### dst = INTERNAL_INTF network
+#            print "$cmds{'iptables'} -A Snort_${config{'EXTERNAL_INTF'}} ",
+#                "-d $intf_net{'INTERNAL_INTF'}{'net'} ",
+#                "-p $hdr_href->{'proto'} $src_port $dst_port -j REJECT\n";
+#            ### dst = DMZ_INTF network
+#            print "$cmds{'iptables'} -A Snort_${config{'EXTERNAL_INTF'}} ",
+#                "-i $config{'EXTERNAL_INTF'} -d $intf_net{'DMZ_INTF'}{'net'} ",
+#                "-p $hdr_href->{'proto'} $src_port $dst_port -j REJECT\n";
+#        }
+#    }
     return;
 }
 
@@ -461,19 +611,10 @@ sub readconf() {
         } elsif ($line =~ /^\s*(\S+)\s+(.*?);/) {
             my $var = $1;
             my $val = $2;
-            die " ** $fwsnort_conf: Variable \"$var\" is set to _CHANGEME_ at\n",
-                "    line $l_ctr.  Edit $fwsnort_conf.\n"
+            die " ** $fwsnort_conf: Variable \"$var\" is set to\n",
+                "    _CHANGEME_ at line $l_ctr.  Edit $fwsnort_conf.\n"
                 if $val eq '_CHANGEME_';
-            if ($val =~ /^\$(\w+)/) {  ### it is a variable
-                if (defined $config{$1}) {
-                    $config{$var} = $config{$1};
-                } else {
-                    die " ** $fwsnort_conf: Variable \"$1\" is not ",
-                        "defined at line: $l_ctr\n";
-                }
-            } else {
-                $config{$var} = $val;
-            }
+            $config{$var} = $val;
         }
     }
     return;
@@ -495,10 +636,9 @@ sub validateconf() {
     if ($config{'NUM_INTERFACES'} == 3) {
         die " ** $fwsnort_conf: DMZ_INTF is not defined. Exiting.\n"
             unless defined $config{'DMZ_INTF'};
-        $intf_to_type{$config{'DMZ_INTF'}} = 'DMZ_INTF';
-        $interfaces{'DMZ_INTF'}{'name'} = $config{'DMZ_INTF'};
-        $interfaces{'DMZ_INTF'}{'net'}
-            = &get_intf_net($config{'INTERNAL_INTF'});
+        $intf_type{$config{'DMZ_INTF'}} = 'DMZ_INTF';
+        $intf_net{'DMZ_INTF'}{'name'} = $config{'DMZ_INTF'};
+        $intf_net{'DMZ_INTF'}{'net'} = &get_intf_net($config{'DMZ_INTF'});
     }
     if ($config{'NUM_INTERFACES'} == 2 || $config{'NUM_INTERFACES'} == 3) {
         die " ** $fwsnort_conf: INTERNAL_INTF is not defined. Exiting.\n"
@@ -506,10 +646,9 @@ sub validateconf() {
         die " ** $fwsnort_conf: DMZ_INTF cannot be defined when ",
             "NUM_INTERFACES is 2. Exiting.\n"
             if defined $config{'DMZ_INTF'};
-        $intf_to_type{$config{'INTERNAL_INTF'}} = 'INTERNAL_INTF';
-        $interfaces{'INTERNAL_INTF'}{'name'} = $config{'INTERNAL_INTF'};
-        $interfaces{'INTERNAL_INTF'}{'net'}
-            = &get_intf_net($config{'INTERNAL_INTF'});
+        $intf_type{$config{'INTERNAL_INTF'}} = 'INTERNAL_INTF';
+        $intf_net{'INTERNAL_INTF'}{'name'} = $config{'INTERNAL_INTF'};
+        $intf_net{'INTERNAL_INTF'}{'net'} = &get_intf_net($config{'INTERNAL_INTF'});
     } elsif ($config{'NUM_INTERFACES'} == 1) {
         die " ** $fwsnort_conf: INTERNAL_INTF cannot be defined when ",
             "NUM_INTERFACES is 1. Exiting.\n"
@@ -520,35 +659,49 @@ sub validateconf() {
     }
     die " ** $fwsnort_conf: EXTERNAL_INTF is not defined. Exiting.\n"
         unless defined $config{'EXTERNAL_INTF'};
-    $intf_to_type{$config{'EXTERNAL_INTF'}} = 'EXTERNAL_INTF';
-    $interfaces{'EXTERNAL_INTF'}{'name'} = $config{'EXTERNAL_INTF'};
-    $interfaces{'EXTERNAL_INTF'}{'net'}
-        = &get_intf_net($config{'EXTERNAL_INTF'});
+    $intf_type{$config{'EXTERNAL_INTF'}} = 'EXTERNAL_INTF';
+    $intf_net{'EXTERNAL_INTF'}{'name'} = $config{'EXTERNAL_INTF'};
+    $intf_net{'EXTERNAL_INTF'}{'net'} = &get_intf_net($config{'EXTERNAL_INTF'});
 
-    if (defined $config{'HTTP_PORTS'}) {
-        @http_ports = split /,\s*/, $config{'HTTP_PORTS'};
-        for my $port (@http_ports) {
-            print $port, "\n";
-            die " ** $fwsnort_conf: HTTP_PORTS can only contain a comma\n",
-                "    separated list of port numbers.\n"
-                unless $port =~ /^\d+$/;
-        }
-        $conf_supported_vars{'HTTP_PORTS'} = '';
-    }
+    ### build ip arrays for the server variables
     &build_ip_arr('HTTP_SERVERS', \@http_servers);
     &build_ip_arr('SMTP_SERVERS', \@smtp_servers);
     &build_ip_arr('DNS_SERVERS', \@dns_servers);
     &build_ip_arr('SQL_SERVERS', \@sql_servers);
     &build_ip_arr('TELNET_SERVERS', \@telnet_servers);
+    &build_ip_arr('AIM_SERVERS', \@aim_servers);
+
+    ### build port arrays for the port variables
+    &build_port_arr('HTTP_PORTS', \@http_ports);
+    &build_port_arr('SHELLCODE_PORTS', \@shellcode_ports);
+    &build_port_arr('ORACLE_PORTS', \@oracle_ports);
+
+    return;
+}
+
+sub build_port_arr() {
+    my ($key, $aref) = @_;
+    if (defined $config{$key}) {
+        @$aref = split /,\s*/, $config{$key};
+        for my $port (@$aref) {
+            die " ** $fwsnort_conf: $key can only contain a comma\n",
+                "    separated list of port numbers.\n"
+                unless $port =~ /^\d+$/
+                or $port =~ /^\!\d+$/
+                or $port =~ /^\d+:\d+$/
+                or $port =~ /^!\d+:\d+$/;
+        }
+        $conf_supported_vars{$key} = '';
+    }
     return;
 }
 
 sub build_ip_arr() {
-    my ($key, $aref) = shift;
+    my ($key, $aref) = @_;
     if (defined $config{$key}) {
         my $intf_flag = 0;
-        for my $loc (keys %interfaces) {
-            if ($config{$key} eq $interfaces{$loc}{'name'}) {
+        for my $loc (keys %intf_net) {
+            if ($config{$key} eq $loc) {
                 ### the server variable is tied to an interface
                 $intf_flag = 1;
             }
@@ -558,10 +711,11 @@ sub build_ip_arr() {
             for my $ip (@$aref) {
                 die " ** $fwsnort_conf: $key can only contain a comma\n",
                     "    separated list of ip addresses.\n"
-                    unless $ip =~ /(?:\d{1,3}\.){3}\d{1,3}/;
+                    unless $ip =~ /^(?:\d{1,3}\.){3}\d{1,3}$/
+                    or $ip =~ m|^(?:\d{1,3}\.){3}\d{1,3}/\d+$|;
             }
         }
-        $conf_supported_vars{'HTTP_SERVERS'} = '';
+        $conf_supported_vars{$key} = '';
     }
     return;
 }
@@ -582,16 +736,16 @@ sub get_intf_net() {
 
 sub dump_conf() {
     print " .. Interfaces:\n";
-    for my $loc (keys %interfaces) {
-        print "    Type: $loc, Name: $interfaces{$loc}{'name'}, ",
-            "Net: $interfaces{$loc}{'net'}\n";
+    for my $loc (keys %intf_net) {
+        print "    Type: $loc, Name: $intf_net{$loc}{'name'}, ",
+            "Net: $intf_net{$loc}{'net'}\n";
     }
     print " .. HTTP_SERVERS: ";
     if (defined $config{'HTTP_SERVERS'}) {
         if (@http_servers) {
             print @http_servers, "\n";
         } else {
-            print $intf_to_type{$config{'HTTP_SERVERS'}}, "\n";
+            print $intf_type{$config{'HTTP_SERVERS'}}, "\n";
         }
     } else {
         print "Not Defined\n";
@@ -601,7 +755,7 @@ sub dump_conf() {
         if (@smtp_servers) {
             print @smtp_servers, "\n";
         } else {
-            print $intf_to_type{$config{'SMTP_SERVERS'}}, "\n";
+            print $intf_type{$config{'SMTP_SERVERS'}}, "\n";
         }
     } else {
         print "Not Defined\n";
@@ -611,7 +765,7 @@ sub dump_conf() {
         if (@dns_servers) {
             print @dns_servers, "\n";
         } else {
-            print $intf_to_type{$config{'DNS_SERVERS'}}, "\n";
+            print $intf_type{$config{'DNS_SERVERS'}}, "\n";
         }
     } else {
         print "Not Defined\n";
@@ -621,7 +775,7 @@ sub dump_conf() {
         if (@sql_servers) {
             print @sql_servers, "\n";
         } else {
-            print $intf_to_type{$config{'SQL_SERVERS'}}, "\n";
+            print $intf_type{$config{'SQL_SERVERS'}}, "\n";
         }
     } else {
         print "Not Defined\n";
@@ -631,7 +785,7 @@ sub dump_conf() {
         if (@telnet_servers) {
             print @telnet_servers, "\n";
         } else {
-            print $intf_to_type{$config{'TELNET_SERVERS'}}, "\n";
+            print $intf_type{$config{'TELNET_SERVERS'}}, "\n";
         }
     } else {
         print "Not Defined\n";
@@ -639,6 +793,24 @@ sub dump_conf() {
     print " .. AIM_SERVERS: ";
     if (@aim_servers) {
         print @aim_servers, "\n";
+    } else {
+        print "Not Defined\n";
+    }
+    print " .. HTTP_PORTS: ";
+    if (@http_ports) {
+        print @http_ports, "\n";
+    } else {
+        print "Not Defined\n";
+    }
+    print " .. SHELLCODE_PORTS: ";
+    if (@shellcode_ports) {
+        print @shellcode_ports, "\n";
+    } else {
+        print "Not Defined\n";
+    }
+    print " .. ORACLE_PORTS: ";
+    if (@oracle_ports) {
+        print @oracle_ports, "\n";
     } else {
         print "Not Defined\n";
     }
