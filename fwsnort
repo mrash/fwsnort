@@ -8,9 +8,9 @@
 #          fwsnort is based on the original snort2iptables shell script
 #          written by William Stearns.
 #
-# Author: Michael B. Rash <mbr@cipherdyne.com>
+# Author: Michael Rash <mbr@cipherdyne.com>
 #
-# Copyright (C) 2003 Michael B. Rash (mbr@cipherdyne.com)
+# Copyright (C) 2003 Michael Rash (mbr@cipherdyne.com)
 #
 # License (GNU Public License):
 #
@@ -83,6 +83,7 @@ use Net::IPv4Addr qw(ipv4_network);
 use File::Copy;
 use Sys::Hostname;
 use Getopt::Long;
+use Data::Dumper;
 use strict;
 
 #======================== config ========================
@@ -97,7 +98,7 @@ my $fwsnort_conf = "${fwsnort_dir}/fwsnort.conf";
 my $logfile = "${fwsnort_dir}/fwsnort.log";
 
 ### iptables script
-my $ipt_ruleset = "${fwsnort_dir}/ipt_ruleset.sh";
+my $ipt_script = "${fwsnort_dir}/fwsnort.sh";
 #===================== end config =======================
 
 ### version number
@@ -146,8 +147,7 @@ my %snort_opts = (
         'itype'   => '[\s;]itype:\s*(\d+)\s*;',
         'ttl'     => '[\s;]ttl:\s*(\d+)\s*;',
         'tos'     => '[\s;]tos:\s*(\d+)\s*;',
-#        'ipopts'  => '[\s;]ipopts:\s*(\w+)\s*;',
-        'ipopts'  => '[\s;]ipopts:\s*(rr|ssrr|lsrr)\s*;',
+#        'ipopts'  => '[\s;]ipopts:\s*(rr|ssrr|lsrr)\s*;',
 #       'flow'    => ''  ### not implemented yet
     },
 
@@ -182,6 +182,7 @@ my %snort_opts = (
         'rpc'          => '[\s;]rpc:\s*\S+\s*;',
         'offset'       => '[\s;]offset:\s*\d+\s*;',
         'depth'        => '[\s;]depth:\s*\d+\s*;',
+        'ipopts'  => '[\s;]ipopts:\s*(\w+)\s*;',
 
         ### the following fields get logged by iptables but
         ### we cannot filter them directly (yet).
@@ -226,6 +227,9 @@ my @aim_servers    = ();
 ### fwsnort rules
 my %fwsnort_chains;
 
+### contains a cach of the iptables policy
+my %ipt_policy;
+
 ### For each internal interface fwsnort will create two associated iptables
 ### chains.  For example, suppose eth0 is the external interface and
 ### eth1 is the internal interface:
@@ -248,24 +252,27 @@ my $strict     = 0;
 my $snort_sid  = 0;
 my $dump_conf  = 0;
 my $ver        = 0;
-my $ipt_rule_ctr = 1;
-my $rules_type = '';
+my $chk_ipt_policy = 1;
+my $ipt_rule_ctr   = 1;
+my $rules_type     = '';
+my $no_ipt_chk     = 0;
 
 &usage(1) unless (GetOptions(
-    'fw-apply'    => \$fw_apply,   # apply the generated ruleset
-    'fw-log'      => \$fw_log,
-    'fw-drop'     => \$fw_drop,
-    'fw-reject'   => \$fw_reject,
-    'snort-sid=i' => \$snort_sid,  # Parse only this particular snort rule
-    'type=s'      => \$rules_type, # process this type of snort rule (e.g. "ddos")
-    'logfile=s'   => \$logfile,
-    'stdout'      => \$stdout,     # print the fw ruleset on STDOUT
-    'strict'      => \$strict,
-    'debug'       => \$debug,
-    'dump-conf'   => \$dump_conf,  # display config variables
-    'config=s'    => \$fwsnort_conf, # manually specify the config file
-    'Version'     => \$ver,
-    'help'        => \$help
+    'fw-apply'     => \$fw_apply,   # apply the generated ruleset
+    'fw-log'       => \$fw_log,
+    'fw-drop'      => \$fw_drop,
+    'fw-reject'    => \$fw_reject,
+    'snort-sid=i'  => \$snort_sid,  # Parse only this particular snort rule
+    'type=s'       => \$rules_type, # process this type of snort rule (e.g. "ddos")
+    'logfile=s'    => \$logfile,
+    'stdout'       => \$stdout,     # print the fw ruleset on STDOUT
+    'no-ipt-check' => \$no_ipt_chk, # do not check the iptables policy
+    'strict'       => \$strict,
+    'debug'        => \$debug,
+    'dump-conf'    => \$dump_conf,  # display config variables
+    'config=s'     => \$fwsnort_conf, # manually specify the config file
+    'Version'      => \$ver,
+    'help'         => \$help
 ));
 
 &usage(0) if $help;
@@ -292,6 +299,8 @@ if ($strict) {
         = '[\s;]nocase\s*;';
 }
 
+$chk_ipt_policy = 0 if $no_ipt_chk;
+
 ### make sure some directories exist, etc.
 &setup();
 
@@ -304,6 +313,10 @@ if ($strict) {
 
 ### make sure the config is correct
 &validateconf();
+
+### if we are running with $chk_ipt_policy, then cache
+### the current iptables policy
+&cache_ipt_policy();
 
 ### cache all of the fwsnort iptables chains now that
 ### we know what all of the interfaces are
@@ -334,7 +347,7 @@ print "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=",
 &parse_snort_rules();
 
 print "\n .. Logfile:         $logfile\n";
-print " .. Iptables script: $ipt_ruleset\n";
+print " .. Iptables script: $ipt_script\n";
 print "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=",
     "-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=\n";
 
@@ -342,7 +355,7 @@ print "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=",
 ### FORWARD chains to our fwsnort chains
 &ipt_jump_chain();
 
-chmod 0500, $ipt_ruleset;
+chmod 0500, $ipt_script;
 
 exit 0;
 #===================== end main ======================
@@ -357,21 +370,21 @@ sub parse_snort_rules() {
     my $sabs_num = 0;
     FILE: for my $rfile (@rfiles) {
         next FILE unless $rfile =~ /\.rules$/;
+        my $printed_type = 0;
         if ($rules_type) {
             next FILE unless $rfile =~ /^${rules_type}\.rules$/;
         }
         my ($type) = ($rfile =~ /(\w+)\.rules/);
         printf("%-30s", " .. $rfile");
         &logr(" .. Parsing $rfile\n", $logfile);
-        &ipt_type($type);
-        open R, "< ${rules_dir}/${rfile}" or die " ** Could not " .
+        open R, "< ${rules_dir}/${rfile}" or die " ** Could not ",
             "open: ${rules_type}/${rfile}";
         my @lines = <R>;
         close R;
-        my $line_num    = 0;
-        my $rule_num    = 0;
-        my $parsed_ctr  = 0;
-        my $unsup_ctr   = 0;
+        my $line_num   = 0;
+        my $rule_num   = 0;
+        my $parsed_ctr = 0;
+        my $unsup_ctr  = 0;
         RULE: for my $line (@lines) {
             $line_num++;
             next RULE unless $line =~ /^alert/;
@@ -404,9 +417,12 @@ sub parse_snort_rules() {
                 next RULE;
             }
 
-            ### construct the iptables rule and add it to $ipt_ruleset
+            ### construct the iptables rule and add it to $ipt_script
+            unless ($printed_type) {
+                &ipt_type($type);
+                $printed_type = 1;
+            }
             &ipt_build($hdr_href, $opts_href);
-
             $parsed_ctr++;  ### keep track of successfully parsed rules
             $abs_num++;;
         }
@@ -444,6 +460,11 @@ sub parse_rule_options() {
                 "line: $line_num.  Skipping rule.\n", $logfile);
             return 0;
         }
+    }
+    if ($rule_options =~ /content\s*:.*content\s*:/) {
+        &logr(" ** Unsupported multiple content fields at " .
+            "line: $line_num.  Skipping rule.\n", $logfile);
+        return 0;
     }
 
     for my $opt (keys %{$snort_opts{'filter'}}) {
@@ -516,6 +537,94 @@ sub build_fwsnort_chains() {
     return;
 }
 
+sub ipt_allow_traffic() {
+    my ($hdr_href, $chain) = @_;
+    my $rv = 0;
+    ### check to see if the header is allowed through the
+    ### INPUT chain
+    my $h_proto = $hdr_href->{'proto'};
+
+    print "ipt_allow_traffic()  h_proto: $h_proto  chain: $chain\n";
+    return 1 if $h_proto eq 'icmp';
+
+    my $h_src = $hdr_href->{'src'};
+    my $h_dst = $hdr_href->{'dst'};
+    my $h_src_p;
+    my $h_dst_p;
+    if (defined $config{$hdr_href->{'src_p'}}) {
+        $h_src_p = $config{$hdr_href->{'src_p'}};
+    } else {
+        $h_src_p = $hdr_href->{'src_p'};
+    }
+    if (defined $config{$hdr_href->{'dst_p'}}) {
+        $h_dst_p = $config{$hdr_href->{'dst_p'}};
+    } else {
+        $h_dst_p = $hdr_href->{'dst_p'};
+    }
+    for my $proto (keys %{$ipt_policy{$chain}}) {
+        next unless $h_proto eq $proto;
+        print "proto: $proto\n";
+        for my $src_p (keys %{$ipt_policy{$chain}{$proto}}) {
+            if (&match_port($src_p, $h_src_p)) {
+                print "yep\n";
+                for my $dst_p (keys %{$ipt_policy{$chain}{$proto}{$src_p}}) {
+                    if (&match_port($dst_p, $h_dst_p)) {
+                        print "yep\n";
+                        print "match: ($src_p, $h_src_p) ($dst_p, $h_dst_p)\n";
+                        return 1;
+                    }
+                }
+            }
+        }
+    }
+    print "no match: ($h_src_p) ($h_dst_p)\n";
+    return 0;
+}
+
+sub match_port() {
+    my ($ipt_port, $h_port) = @_;
+    print "     trying to match $ipt_port -> $h_port\n";
+    return 1 if $ipt_port eq '0:0';
+    return 1 if $ipt_port eq $h_port;
+    if ($ipt_port =~ /(\d+):(\d+)/) {
+        my $s = $1;
+        my $e = $2;
+        if ($ipt_port !~ /!/) {
+            return 1 if $h_port > $s && $h_port < $e;
+        } else {
+            return 1 if $h_port < $s || $h_port > $e;
+        }
+    } elsif ($ipt_port =~ /(\d+):/) {
+        my $s = $1;
+        my $e = 65535;
+        if ($ipt_port !~ /!/) {
+            return 1 if $h_port > $s && $h_port < $e;
+        } else {
+            return 1 if $h_port < $s || $h_port > $e;
+        }
+    } elsif ($ipt_port =~ /:(\d+)/) {
+        my $s = 65535;
+        my $e = $1;
+        if ($ipt_port !~ /!/) {
+            return 1 if $h_port > $s && $h_port < $e;
+        } else {
+            return 1 if $h_port < $s || $h_port > $e;
+        }
+    } elsif ($ipt_port =~ /!(\d+)/) {
+        return 1 if $h_port ne $1;
+    }
+    return 0;
+}
+
+sub cache_ipt_policy() {
+    my $ipt = new IPTables::Parse;
+    $ipt_policy{'INPUT'} = $ipt->chain_action_rules('filter',
+        'INPUT', 'ACCEPT');
+    $ipt_policy{'FORWARD'} = $ipt->chain_action_rules('filter',
+        'FORWARD', 'ACCEPT');
+    return;
+}
+
 sub ipt_build() {
     my ($hdr_href, $opts_href) = @_;
 
@@ -579,6 +688,7 @@ sub ipt_build() {
         ### build as many iptables rules as we need based on
         ### the source and destination
         &ipt_build_rule(
+            'INPUT',
             "$cmds{'iptables'} -A $input_rules_chns[$ctr]",
             $hdr_href,
             $opts_href,
@@ -594,6 +704,7 @@ sub ipt_build() {
         ### build as many iptables rules as we need based on
         ### the source and destination
         &ipt_build_rule(
+            'FORWARD',
             "$cmds{'iptables'} -A $forward_rules_chn[$ctr]",
             $hdr_href,
             $opts_href,
@@ -602,12 +713,21 @@ sub ipt_build() {
         );
         $ctr++;
     }
-
     return;
 }
 
 sub ipt_build_rule() {
-    my ($rule, $hdr_href, $opts_href, $src, $dst) = @_;
+    my ($chain, $rule, $hdr_href, $opts_href, $src, $dst) = @_;
+
+    ### $chain is either INPUT or FORWARD, and is used only to
+    ### see whether or not we need to add the rule to the iptables
+    ### script based on whether the build-in chain will pass the
+    ### traffic in the first place.
+    if ($chk_ipt_policy) {
+        if (! &ipt_allow_traffic($hdr_href, $chain)) {
+            return 0;
+        }
+    }
 
     ### append the protocol to the rule
     $rule .= " $iptables_opts{'proto'} $hdr_href->{'proto'}";
@@ -639,7 +759,7 @@ sub ipt_build_rule() {
     }
 
     &ipt_build_opts($rule, $opts_href);
-    return;
+    return 1;
 }
 
 sub ipt_build_opts() {
@@ -719,9 +839,9 @@ sub ipt_build_opts() {
     $comment =~ s/,$//;
 
     ### write the rule out to the iptables script
-    &logr("/bin/echo \" .. rule $ipt_rule_ctr\"\n", $ipt_ruleset);
-    &logr("$comment\n", $ipt_ruleset);
-    &logr("$rule\n", $ipt_ruleset);
+    &logr("/bin/echo \" .. rule: $ipt_rule_ctr\"\n", $ipt_script);
+    &logr("$comment\n", $ipt_script);
+    &logr("$rule\n", $ipt_script);
     $ipt_rule_ctr++;
 
     return;
@@ -729,58 +849,64 @@ sub ipt_build_opts() {
 
 sub ipt_add_chains() {
     &logr("\n###\n############ Create fwsnort iptables chains. " .
-        "############\n###\n", $ipt_ruleset);
+        "############\n###\n", $ipt_script);
     for my $type (keys %fwsnort_chains) {
         for my $intf (keys %{$fwsnort_chains{$type}}) {
             &logr("$cmds{'iptables'} -N $fwsnort_chains{$type}{$intf} " .
-                "2> /dev/null\n", $ipt_ruleset);
+                "2> /dev/null\n", $ipt_script);
             &logr("$cmds{'iptables'} -F $fwsnort_chains{$type}{$intf}\n\n",
-                $ipt_ruleset);
+                $ipt_script);
         }
     }
     &logr("$cmds{'iptables'} -N fwsnort_FORWARD 2> /dev/null\n",
-        $ipt_ruleset);
+        $ipt_script);
     &logr("$cmds{'iptables'} -F fwsnort_FORWARD\n\n",
-        $ipt_ruleset);
+        $ipt_script);
     return;
 }
 
 sub ipt_jump_chain() {
     &logr("\n###\n############ Jump traffic to the fwsnort chains. " .
-        "############\n###\n", $ipt_ruleset);
+        "############\n###\n", $ipt_script);
     for my $type (keys %fwsnort_chains) {
         for my $intf (keys %{$fwsnort_chains{$type}}) {
             &logr("$cmds{'iptables'} -I $type 1 -i $intf " .
-                "-j $fwsnort_chains{$type}{$intf}\n", $ipt_ruleset);
+                "-j $fwsnort_chains{$type}{$intf}\n", $ipt_script);
         }
     }
     &logr("$cmds{'iptables'} -I FORWARD 1 -j fwsnort_FORWARD\n\n",
-        $ipt_ruleset);
-    &logr("\n### EOF ###\n", $ipt_ruleset);
+        $ipt_script);
+    &logr("\n### EOF ###\n", $ipt_script);
     return;
 }
 
 sub ipt_hdr() {
-    &logr("#!$cmds{'sh'}\n#\n", $ipt_ruleset);
+    &logr("#!$cmds{'sh'}\n#\n", $ipt_script);
     &logr("###########################################################" .
-        "#############\n", $ipt_ruleset);
-    &logr("#\n# File:  $ipt_ruleset\n", $ipt_ruleset);
+        "#############\n", $ipt_script);
+    &logr("#\n# File:  $ipt_script\n", $ipt_script);
     &logr("#\n# Purpose:  This script was auto generated by fwsnort, and " .
-        "implements\n", $ipt_ruleset);
-    &logr("#           an iptables ruleset based upon Snort rules.\n",
-        $ipt_ruleset);
-    &logr("#\n# Author:  Michael B. Rash (mbr\@cipherdyne.com)\n",
-        $ipt_ruleset);
-    &logr("#\n", $ipt_ruleset);
+        "implements\n", $ipt_script);
+    &logr("#           an iptables ruleset based upon Snort rules.  For " .
+        "more\n",
+        $ipt_script);
+    &logr("#           information see the fwsnort man page or the " .
+        "documentation\n", $ipt_script);
+    &logr("#           available at http://www.cipherdyne.com/fwsnort/\n",
+        $ipt_script);
+    &logr("#\n# Author:  Michael Rash <mbr\@cipherdyne.com>\n",
+        $ipt_script);
+    &logr("#\n", $ipt_script);
     &logr("###########################################################" .
-        "#############\n#\n\n", $ipt_ruleset);
+        "#############\n#\n\n", $ipt_script);
     return;
 }
 
 sub ipt_type() {
     my $type = shift;
     &logr("\n###\n############ ${type}.rules ############\n###\n",
-        $ipt_ruleset);
+        $ipt_script);
+    &logr("/bin/echo \" .. Adding iptables $type rules.\"\n", $ipt_script);
     return;
 }
 
@@ -1032,8 +1158,8 @@ sub setup() {
         mkdir $archive_dir, 0500 or die $!;
     }
 
-    ### archive any existing ipt_ruleset file
-    &archive($ipt_ruleset);
+    ### archive any existing ipt_script file
+    &archive($ipt_script);
 
     return;
 }
