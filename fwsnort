@@ -232,8 +232,8 @@ my @sql_servers    = ();
 my @telnet_servers = ();
 my @aim_servers    = ();
 
-### contains the names of user-defined iptables chains for
-### fwsnort rules
+### contains the names of user-defined iptables chains
+### for ### fwsnort rules
 my %fwsnort_chains;
 
 ### contains a cach of the iptables policy
