@@ -369,10 +369,18 @@ $ipt_sync = 0 if $no_ipt_sync;
 &logr(" .. Begin parsing cycle ..\n", $logfile);
 
 ### parse snort rules (signatures)
-print "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=",
-    "-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=\n",
-    sprintf("%-30s%-10s%-10s%-10s%-10s", '    Snort Rules File',
-        'Success', 'Fail', 'Total'), "\n\n";
+if ($ipt_sync) {
+    print "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=",
+        "-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=\n",
+        sprintf("%-30s%-10s%-10s%-10s%-10s", '    Snort Rules File',
+            'Success', 'Fail', 'Ipt_apply', 'Total'), "\n\n";
+} else {
+    print "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=",
+        "-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=\n",
+        sprintf("%-30s%-10s%-10s%-10s", '    Snort Rules File',
+            'Success', 'Fail', 'Total'), "\n\n";
+}
+
 &parse_snort_rules();
 
 ### jump packets (as appropriate) from the INPUT and
@@ -403,6 +411,7 @@ sub parse_snort_rules() {
     my $abs_num  = 0;
     my $sabs_num = 0;
     my $tot_ipt_apply = 0;
+    my $tot_unsup_ctr = 0;
     FILE: for my $rfile (@rfiles) {
         next FILE unless $rfile =~ /\.rules$/;
         $ipt_print_type = 0;
@@ -440,6 +449,7 @@ sub parse_snort_rules() {
                 &logr(" ** Unrecognized rule header: \"$rule_hdr\" at ",
                     "line: $line_num.  Skipping rule.\n", $logfile);
                 $unsup_ctr++;
+                $tot_unsup_ctr++;
                 next RULE;
             }
             if ($debug) {
@@ -451,6 +461,7 @@ sub parse_snort_rules() {
             my $opts_href = &parse_rule_options($rule_options, $line_num);
             unless ($opts_href) {
                 $unsup_ctr++;
+                $tot_unsup_ctr++;
                 next RULE;
             }
 
@@ -469,6 +480,17 @@ sub parse_snort_rules() {
         } else {
             printf("%-10s%-10s%-10s\n", $parsed_ctr, $unsup_ctr, $rule_num);
         }
+    }
+    if ($ipt_sync) {
+        printf("%30s", ' ');
+        print "=======================================\n";
+        printf("%30s%-10s%-10s%-10s%-10s\n", ' ',
+            $abs_num, $tot_unsup_ctr, $tot_ipt_apply, $sabs_num);
+    } else {
+        printf("%30s", ' ');
+        print "=============================\n";
+        printf("%30s%-10s%-10s%-10s\n", ' ',
+            $abs_num, $tot_unsup_ctr, $sabs_num);
     }
     print "\n";
     if ($abs_num) {  ### we parsed at least one rule
