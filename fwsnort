@@ -411,6 +411,8 @@ if ($ipt_sync) {
             'Success', 'Fail', 'Total'), "\n\n";
 }
 
+### main subroutine to parse snort rules and add them to the
+### fwsnort.sh script.
 &parse_snort_rules();
 
 ### jump packets (as appropriate) from the INPUT and
@@ -651,7 +653,6 @@ sub parse_rule_hdr() {
 sub build_fwsnort_chains() {
     ### note that the FORWARD chain is not tied to a
     ### specific interface
-
     $fwsnort_chains{'INPUT'}{$config{'EXTERNAL_INTF'}}
         = "fwsnort_INPUT_$config{'EXTERNAL_INTF'}";
 
@@ -751,11 +752,10 @@ sub cache_ipt_policy() {
         'INPUT', 'ACCEPT');
     my $cached_forward = 0;
     if (defined $config{'INTERNAL_INTF'}
-        && $config{'INTERNAL_INTF'} ne $config{'EXTERNAL_INTF'}) {
+            && $config{'INTERNAL_INTF'} ne $config{'EXTERNAL_INTF'}) {
         $ipt_policy{'FORWARD'} = $ipt->chain_action_rules('filter',
             'FORWARD', 'ACCEPT');
         $cached_forward = 1;
-
     }
     if (defined $config{'DMZ_INTF'} && ! $cached_forward) {
         $ipt_policy{'FORWARD'} = $ipt->chain_action_rules('filter',
@@ -778,9 +778,9 @@ sub ipt_build() {
     my $src = $hdr_href->{'src'};
     my $dst = $hdr_href->{'dst'};
 
-    if (defined $config{$dst} && defined $intf_net{$config{$dst}}) {
+    if (defined $config{$dst} and defined $intf_net{$config{$dst}}) {
         if ($intf_type{$intf_net{$config{$dst}}{'name'}}
-            eq 'INTERNAL_INTF') {
+                eq 'INTERNAL_INTF') {
             ### snort:      EXTERNAL   -> HOME
             ### iptables:   any source -> external intf  (for INPUT chain)
             push @input_rules_sd, $intf_net{'EXTERNAL_INTF'}{'ip'};
@@ -790,7 +790,7 @@ sub ipt_build() {
             ### snort:      EXTERNAL   -> HOME
             ### iptables:   any source -> internal net (for FORWARD chain)
             if (defined $config{'INTERNAL_INTF'}
-                && $config{'INTERNAL_INTF'} ne $config{'EXTERNAL_INTF'}) {
+                    and $config{'INTERNAL_INTF'} ne $config{'EXTERNAL_INTF'}) {
                 push @forward_rules_sd, "$iptables_opts{'dst'} " .
                     $intf_net{'INTERNAL_INTF'}{'net'};
                 push @forward_rules_chn, 'fwsnort_FORWARD';
@@ -801,7 +801,7 @@ sub ipt_build() {
                 push @forward_rules_chn, 'fwsnort_FORWARD';
             }
         } elsif ($intf_type{$intf_net{$config{$dst}}{'name'}}
-            eq 'EXTERNAL_INTF' && defined $config{'INTERNAL_INTF'}) {
+                eq 'EXTERNAL_INTF' and defined $config{'INTERNAL_INTF'}) {
             ### snort:      INTERNAL   -> EXTERNAL
             ### iptables:   any source -> internal intf  (for INPUT chain)
             push @input_rules_sd, $intf_net{'INTERNAL_INTF'}{'ip'};
@@ -816,6 +816,9 @@ sub ipt_build() {
                 push @forward_rules_chn, 'fwsnort_FORWARD';
             }
             if (defined $config{'DMZ_INTF'}) {
+                push @input_rules_sd, $intf_net{'DMZ_INTF'}{'ip'};
+                push @input_rules_chns,
+                    "fwsnort_INPUT_${intf_net{'DMZ_INTF'}{'name'}}";
                 push @forward_rules_sd, "$iptables_opts{'src'} " .
                     $intf_net{'DMZ_INTF'}{'net'};
                 push @forward_rules_chn, 'fwsnort_FORWARD';
@@ -834,10 +837,16 @@ sub ipt_build() {
                 push @input_rules_chns,
                     "fwsnort_INPUT_$config{'INTERNAL_INTF'}";
             }
+            if (defined $config{'DMZ_INTF'}) {
+                push @input_rules_sd, "$iptables_opts{'dst'} " .
+                    $intf_net{'DMZ_INTF'}{'ip'};
+                push @input_rules_chns,
+                    "fwsnort_INPUT_$config{'DMZ_INTF'}";
+            }
             ### traffic through the FORWARD chain originating from either
             ### the internal or external nets
             if (defined $config{'INTERNAL_INTF'}
-                && $config{'INTERNAL_INTF'} ne $config{'EXTERNAL_INTF'}) {
+                    and $config{'INTERNAL_INTF'} ne $config{'EXTERNAL_INTF'}) {
                 push @forward_rules_sd, "$iptables_opts{'dst'} " .
                     $intf_net{'INTERNAL_INTF'}{'net'};
                 push @forward_rules_chn, 'fwsnort_FORWARD';
@@ -884,7 +893,7 @@ sub ipt_build() {
     $ctr = 0;
     ### build iptables FORWARD rules
     if (defined $config{'INTERNAL_INTF'}
-        || defined $config{'DMZ_INTF'}) {
+            or defined $config{'DMZ_INTF'}) {
         for my $sd (@forward_rules_sd) {
             ### build as many iptables rules as we need based on
             ### the source and destination
@@ -1103,7 +1112,7 @@ sub ipt_add_chains() {
     }
     my $added_forward = 0;
     if (defined $config{'INTERNAL_INTF'}
-        && $config{'INTERNAL_INTF'} ne $config{'EXTERNAL_INTF'}) {
+            && $config{'INTERNAL_INTF'} ne $config{'EXTERNAL_INTF'}) {
         push @ipt_script_lines, "\$IPTABLES -N fwsnort_FORWARD 2> /dev/null";
         push @ipt_script_lines, "\$IPTABLES -F fwsnort_FORWARD\n";
         $added_forward = 1;
@@ -1155,6 +1164,7 @@ sub ipt_hdr() {
     push @ipt_script_lines, "####################################################" .
         "####################\n#\n";
 
+    ### add paths to system binaries (iptables included)
     &ipt_config_section();
     return;
 }
