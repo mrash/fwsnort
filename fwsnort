@@ -145,7 +145,7 @@ my %snort_opts = (
         'itype'   => '[\s;]itype:\s*(\d+)\s*;',
         'ttl'     => '[\s;]ttl:\s*(\d+)\s*;',
         'tos'     => '[\s;]tos:\s*(\d+)\s*;',
-        'ipopts'  => '[\s;]ipopts:\s*.*?\s*;',
+        'ipopts'  => '[\s;]ipopts:\s*(\w+)\s*;',
     },
 
     ### snort options which are logged within iptables
@@ -189,7 +189,10 @@ my %snort_opts = (
 
     ### snort options that fwsnort will ignore
     'ignore' => {
-        'rev' => '[\s;]rev:\s*(\d+)\s*;'
+        'rev'    => '[\s;]rev:\s*(\d+)\s*;',
+        'offset' => '[\s;]offset:\s*\d+\s*;',
+        'depth'  => '[\s;]depth:\s*\d+\s*;',
+        'nocase' => '[\s;]nocase\s*;'
     }
 );
 
@@ -263,10 +266,13 @@ if ($strict) {
     delete $snort_opts{'filter'}{'uricontent'};
     $snort_opts{'unsupported'}{'uricontent'}
         = '[\s;]uricontent:\s*\"(.*?)\"\s*;';
+    delete $snort_opts{'ignore'}{'offset'};
     $snort_opts{'unsupported'}{'offset'}
         = '[\s;]offset:\s*\d+\s*;';
+    delete $snort_opts{'ignore'}{'depth'};
     $snort_opts{'unsupported'}{'depth'}
         = '[\s;]depth:\s*\d+\s*;';
+    delete $snort_opts{'ignore'}{'nocase'};
     $snort_opts{'unsupported'}{'nocase'}
         = '[\s;]nocase\s*;';
 }
