@@ -167,9 +167,18 @@ sub install() {
     ### install the fwsnort.8 man page
     &install_manpage();
 
-    print " .. Copying fwsnort.conf -> ${fwsnort_dir}/fwsnort.conf\n";
-    copy 'fwsnort.conf', "${fwsnort_dir}/fwsnort.conf";
-    chmod 0600, "${fwsnort_dir}/fwsnort.conf";
+    my $preserve_rv = 0;
+    if (-e "${fwsnort_dir}/fwsnort.conf") {
+        $preserve_rv = &query_preserve_config();
+    }
+
+    if ($preserve_rv) {
+        &preserve_config();
+    } else {
+        print " .. Copying fwsnort.conf -> ${fwsnort_dir}/fwsnort.conf\n";
+        copy 'fwsnort.conf', "${fwsnort_dir}/fwsnort.conf";
+        chmod 0600, "${fwsnort_dir}/fwsnort.conf";
+    }
 
     print " .. Copying fwsnort -> ${sbin_dir}/fwsnort\n";
     copy 'fwsnort', "${sbin_dir}/fwsnort";
@@ -304,6 +313,61 @@ sub check_commands() {
         }
     }
 
+    return;
+}
+
+sub query_preserve_config() {
+    my $ans = '';
+    while ($ans ne 'y' && $ans ne 'n') {
+        print " .. Would you like to preserve the config from the\n",
+            '    existing fwsnort installation ([y]/n)?  ';
+        $ans = <STDIN>;
+        return 1 if $ans eq "\n";
+        chomp $ans;
+    }
+    if ($ans eq 'y') {
+        return 1;
+    }
+    return 0;
+}
+
+sub preserve_config() {
+    my $file = 'fwsnort.conf';
+    open C, "< $file" or die " ** Could not open $file: $!";
+    my @new_lines = <C>;
+    close C;
+
+    open CO, "< ${fwsnort_dir}/$file" or die " ** Could not open ",
+        "${fwsnort_dir}/$file: $!";
+    my @orig_lines = <CO>;
+    close CO;
+
+    print " .. Preserving existing config: ${fwsnort_dir}/$file\n";
+    ### write to a tmp file and then move.
+    open CONF, "> ${fwsnort_dir}/${file}.new" or die " ** Could not open ",
+        "${fwsnort_dir}/${file}.new: $!";
+    for my $new_line (@new_lines) {
+        if ($new_line =~ /^\s*#/) {
+            print CONF $new_line;
+        } elsif ($new_line =~ /^\s*(\S+)/) {
+            my $var = $1;
+            my $found = 0;
+            for my $orig_line (@orig_lines) {
+                if ($orig_line =~ /^\s*$var\s/) {
+                    print CONF $orig_line;
+                    $found = 1;
+                    last;
+                }
+            }
+            unless ($found) {
+                print CONF $new_line;
+            }
+        } else {
+            print CONF $new_line;
+        }
+    }
+    close CONF;
+    move "${fwsnort_dir}/${file}.new", "${fwsnort_dir}/$file";
     return;
 }
 
