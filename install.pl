@@ -139,9 +139,10 @@ sub install() {
     copy 'fwsnort', "${sbin_dir}/fwsnort";
     chmod 0500, "${sbin_dir}/fwsnort";
 
-    print "\n .. fwsnort will generate an iptables script located at\n",
-        "    /etc/fwsnort/fwsnort.sh when executed.\n";
-    print "\n .. fwsnort has been successfully installed!\n\n";
+    print "\n========================================================\n",
+        "\n .. fwsnort will generate an iptables script located at:\n",
+        "    /etc/fwsnort/fwsnort.sh when executed.\n",
+        "\n .. fwsnort has been successfully installed!\n\n";
 
     return;
 }
