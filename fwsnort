@@ -1,0 +1,137 @@
+#!/usr/bin/perl -w
+#
+#######################################################################
+#
+# File: fwsnort
+#
+# Purpose: To translate snort rules into equivalent iptables rules.
+#
+# Author: Michael B. Rash
+#
+# License: GPL
+#
+#######################################################################
+#
+# $Id$
+#
+
+use Getopt::Long;
+use strict;
+
+#======================== config ========================
+my $fwsnort_dir = '/etc/fwsnort';
+my $rules_dir   = "${fwsnort_dir}/snort_rules";
+my $fwrules     = "${fwsnort_dir}/fw_ruleset.sh";
+
+### system binaries
+my $shCmd       = '/bin/sh';
+my $iptablesCmd = '/sbin/iptables';
+#====================== end config ======================
+
+### version number
+my $version = '0.1';
+
+### establish some default behavior
+my $fw_apply   = 0;
+my $fw_log     = 0;
+my $fw_drop    = 0;
+my $fw_reject  = 0;
+my $help       = 0;
+my $stdout     = 0;
+my $rules_type = '';
+my $logfile    = '';
+
+
+my %cmds = (
+    'iptables' => $iptablesCmd,
+    'sh'       => $shCmd
+);
+
+&usage(1) unless (GetOptions(
+    'fw-apply'  => \$fw_apply,    ### apply the generated ruleset
+    'fw-log'    => \$fw_log,
+    'fw-drop'   => \$fw_drop,
+    'fw-reject' => \$fw_reject,
+    'type=s'    => \$rules_type,  ### process this type of snort rules
+    'logfile=s' => \$logfile,
+    'stdout'    => \$stdout,      ### print the fw ruleset on STDOUT
+    'help'      => \$help
+));
+
+&usage(0) if $help;
+
+### make sure some things exist, etc.
+&setup();
+
+### make sure the specified <type>.rules file exists
+&check_type() if $rules_type;
+
+
+#===================== end main ======================
+sub check_type() {
+    unless (-e "${rules_dir}/${rules_type}.rules") {
+        print " ** \"$rules_type\" is not a valid type.\n",
+            "    Choose one of:\n";
+        opendir D, $rules_dir or die "Could not open $rules_dir";
+        my @rfiles = readdir D;
+        closedir D;
+        shift @rfiles; shift @rfiles;
+        for my $file (@rfiles) {
+            if ($file =~ /^(\S+)\.rules/) {
+                print "    $1\n";
+            }
+        }
+        print " ** Exiting.\n";
+        exit 1;
+    }
+    return;
+}
+
+sub setup() {
+    die " ** No fwsnort directory: $fwsnort_dir"
+        unless -d $fwsnort_dir;
+    die " ** No snort rules directory: $rules_dir"
+        unless -d $rules_dir;
+
+    ### make sure the command are where they are supposed to be
+    &chk_commands();
+    return;
+}
+
+sub chk_commands() {
+    for my $cmd (keys %cmds) {
+        die " ** $cmd is not located at $cmds{$cmd}"
+            unless -e $cmds{$cmd};
+        die " ** $cmd is not executable at $cmds{$cmd}"
+            unless -x $cmds{$cmd};
+    }
+    return;
+}
+
+sub logr() {
+    my $msg = shift;
+    if ($logfile) {
+        open LOG, ">> $logfile" or die " ** Could not open $logfile " .
+            "$!";
+        print LOG $msg;
+        close LOG;
+    } else {
+        print STDOUT $msg;
+    }
+    return;
+}
+
+sub usage() {
+    my $exit = shift;
+    print <<_USAGE_;
+
+fwsnort usage:
+    --fw-apply
+    --fw-log
+    --fw-drop
+    --fw-reject
+    -s, --stdout
+    -h, --help
+_USAGE_
+    exit $exit;
+}
