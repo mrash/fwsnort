@@ -105,6 +105,7 @@ my $archive_dir = "${fwsnort_dir}/archive";
 my $log_dir     = '/var/log';
 
 my $snort_website = 'www.snort.org';
+my $download_rules_file = 'snortrules-snapshot-CURRENT.tar.gz';
 
 ### config file
 my $fwsnort_conf = "${fwsnort_dir}/fwsnort.conf";
@@ -1693,12 +1694,12 @@ sub setup() {
 sub update_rules() {
     ### make sure we can actually reach snort.org.
     print " .. Downloading latest rules:\n",
-        "    http://$snort_website/dl/rules/snortrules-stable.tar.gz\n";
+        "    http://$snort_website/dl/rules/$download_rules_file\n";
     if (&test_snort_website()) {
         chdir $fwsnort_dir or die " ** Could not chdir $fwsnort_dir: $!";
         system "$cmds{'wget'} http://$snort_website/dl/rules/" .
-            "snortrules-stable.tar.gz";
-        system "$cmds{'tar'} xvfz snortrules-stable.tar.gz";
+            "$download_rules_file";
+        system "$cmds{'tar'} xvfz $download_rules_file";
         if (-d 'rules') {
             if (-d 'snort_rules') {
                 rmtree 'snort_rules.orig' if -d 'snort_rules.orig';
@@ -1707,7 +1708,7 @@ sub update_rules() {
             move 'rules', 'snort_rules' or die " ** Could not ",
                 "move rules -> snort_rules: $!";
         } else {
-            print " ** snortrules-stable.tar.gz did not appear to ",
+            print " ** $download_rules_file did not appear to ",
                 "contain a\n    \"rules\" directory.  Defaulting to ",
                 "existing snort-2.0 rules.\n";
         }
