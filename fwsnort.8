@@ -19,9 +19,13 @@ the iptables ruleset on the machine to determine which snort rules are
 applicable to the specific iptables policy.  After all, if iptables is
 blocking all inbound http traffic from external addresses, it is probably
 not of much use to try detecting inbound attacks against against tcp/80.
+
 .B fwsnort
 relies on the iptables string match module to match snort content fields
-in the application portion of ip traffic.
+in the application portion of ip traffic.  Since snort rules can contain
+hex data in content fields, fwsnort implements a patch against
+iptables-1.2.7a which adds a "--hex-string" option which will accept
+content fields such as "|0d0a5b52504c5d3030320d0a|".
 
 .SH OPTIONS
 .PP
