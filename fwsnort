@@ -76,6 +76,7 @@
 
 use IPTables::Parse;
 use Net::IPv4Addr qw(:all);
+use Tie::IxHash;
 use File::Copy;
 use Sys::Hostname;
 use Getopt::Long;
@@ -117,38 +118,80 @@ my %snort_vars = (
     'ORACLE_PORTS'    => ''
 );
 
+my %logprefix;
+tie %logprefix, 'Tie::IxHash';  ### need to maintain ordering
+
+%logprefix = (
+    ### snort options that can be put into iptables
+    ### ruleset, but only in log messages with --log-prefix
+    'msg'       => 'msg:\s*\"(.*?)\";',
+    'classtype' => '[\s;]classtype:\s*(.*?);',
+    'sid'       => '[\s;]sid:\s*(\d+);',
+    'reference' => '[\s;]reference:\s*(.*?);',
+);
+
 my %snort_opts = (
     ### snort options that we can directly filter on
     ### in iptables rulesets (snort options are separate
     ### from the snort "header" which include protocol,
     ### source, destination, etc.)
     'filter' => {
-        'uricontent' => '[\s;]uricontent:\s*\"(.*?)\";',
-        'content' => '[\s;]content:\s*\"(.*?)\";',
-        'flags'   => '[\s;]flags:\s*(.*?);',
-        'itype'   => '[\s;]itype:\s*(\d+);',
-        'ttl'     => '[\s;]ttl:\s*(\d+);',
-        'tos'     => '[\s;]tos:\s*(\d+);'
+        'uricontent' => {
+            'regex'   => '[\s;]uricontent:\s*\"(.*?)\";',
+            'ipt_opt' => '-m string --string'
+        },
+        'content' => {
+            'regex'   => '[\s;]content:\s*\"(.*?)\";',
+            'ipt_opt' => '-m string --string'
+        },
+        'flags' => {
+            'regex'   => '[\s;]flags:\s*(.*?);',
+            'ipt_opt' => '--tcp-flags'
+        },
+        'itype' => {
+            'regex'   => '[\s;]itype:\s*(\d+);',
+            'ipt_opt' => '--icmp-type'
+        },
+        'ttl' => {
+            'regex'   => '[\s;]ttl:\s*(\d+);',
+            'ipt_opt' => '--ttl'
+        },
+        'tos' => {
+            'regex'   => '[\s;]tos:\s*(\d+);',
+            'ipt_opt' => '--tos'
+        }
     },
+
     ### snort options which are logged within iptables
     ### logging statements (so we can detect these values
     ### but just not filter them directly)
-    'log' => {
-        'id'       => '[\s;]id:\s*(\d+);',
-        'seq'      => '[\s;]seq:\s*(\d+);',
-        'icmp_seq' => '[\s;]icmp_seq:\s*(\d+);',
-        'icmp_id'  => '[\s;]icmp_id:\s*(\d+);',
-        'icode'    => '[\s;]icode:\s*(\d+);',
+    'log_only' => {
+        'id' => {
+            'regex'   => '[\s;]id:\s*(\d+);',
+            'ipt_opt' => 'NA'
+        },
+        'seq' => {
+            'regex'   => '[\s;]seq:\s*(\d+);',
+            'ipt_opt' => '--log-tcp-sequence'
+        },
+        'icmp_seq' => {
+            'regex'   => '[\s;]icmp_seq:\s*(\d+);',
+            'ipt_opt' => 'NA'
+        },
+        'icmp_id' => {
+            'regex'   => '[\s;]icmp_id:\s*(\d+);',
+            'ipt_opt' => 'NA'
+        },
+        'icode' => {
+            'regex'   => '[\s;]icode:\s*(\d+);',
+            'opt_opt' => 'NA'
+        }
     },
+
     ### snort options that can be put into iptables
     ### ruleset, but only in log messages with --log-prefix
-    'logprefix' => {
-        'msg'       => 'msg:\s*\"(.*?)\";',
-        'reference' => '[\s;]reference:\s*(.*?);',
-        'sid'       => '[\s;]sid:\s*(\d+);',
-        'rev'       => '[\s;]rev:\s*(\d+);',
-        'classtype' => '[\s;]classtype:\s*(.*?);'
-    },
+    'logprefix' => \%logprefix,
+
     ### snort options that cannot be included directly
     ### within iptables filter statements (yet :)
     'unsupported' => {
@@ -161,6 +204,11 @@ my %snort_opts = (
         'content-list' => '[\s;]content\-list:\s*\".*?\";',
         'ipopts'       => '[\s;]ipopts:\s*.*?;',
         'rpc'          => '[\s;]rpc:\s*\S+;',
+    },
+
+    ### snort options that fwsnort will ignore
+    'ignore' => {
+        'rev'       => '[\s;]rev:\s*(\d+);'
     }
 );
 
@@ -356,18 +404,26 @@ sub parse_rule_options() {
         }
     }
 
-    for my $type ('filter', 'log', 'logprefix') {
+    for my $type ('filter', 'log_only') {
         for my $opt (keys %{$snort_opts{$type}}) {
             ### see if we match the option regex
-            if ($rule_options =~ /$snort_opts{$type}{$opt}/) {
+            if ($rule_options =~ /$snort_opts{$type}{$opt}{'regex'}/) {
                 $opts{$opt} = $1;
             }
         }
     }
 
+    for my $opt (keys %{$snort_opts{'logprefix'}}) {
+        ### see if we match the option regex
+        if ($rule_options =~ /$snort_opts{'logprefix'}{$opt}/) {
+            $opts{$opt} = $1;
+        }
+    }
+
     while ($rule_options =~ /(\w+):\s*.*?;/g) {
         my $option = $1;
-        if (! defined $opts{$option}) {
+        if (! defined $opts{$option}
+            && ! defined $snort_opts{'ignore'}{$option}) {
             print "$line_num option: \"$option\" -- $rule_options\n";
         }
     }
@@ -468,95 +524,73 @@ sub build_ipt_rule() {
         $rule .= " --dport $hdr_href->{'dst_p'}";
     }
 
-    for my $opt (keys %$opt_href) {
-        $rule .= " $opt $opt_href->{$opt}";
+#    for my $opt (keys %$opt_href) {
+#        $rule .= " $opt $opt_href->{$opt}";
+#    }
+#
+
+    ### handle tcp flags
+    if ($hdr_href->{'proto'} eq 'tcp'
+        && defined $opt_href->{'flags'}) {
+        my $f_str = '';
+
+        $f_str .= 'URG,' if $opt_href->{'flags'} =~ /U/;
+        $f_str .= 'ACK,' if $opt_href->{'flags'} =~ /A/;
+        $f_str .= 'PSH,' if $opt_href->{'flags'} =~ /P/;
+        $f_str .= 'RST,' if $opt_href->{'flags'} =~ /R/;
+        $f_str .= 'SYN,' if $opt_href->{'flags'} =~ /S/;
+        $f_str .= 'FIN,' if $opt_href->{'flags'} =~ /F/;
+        $f_str =~ s/\,$//;
+
+        ### e.g.  --tcp-flags ACK ACK
+        $rule .= " --tcp-flags $f_str $f_str";
+    }
+
+    ### handle snort content options
+    my $content = '';
+    if (defined $opt_href->{'uricontent'}) {
+        $content = $opt_href->{'uricontent'};
+    } elsif (defined $opt_href->{'content'}) {
+        $content = $opt_href->{'content'};
+    }
+    if ($content) {
+        if ($content =~ /\|.+\|/) {  ### there is hex data in the content
+            $rule .= " -m string --hex-string \"$content\"";
+        } else {
+            $rule .= " -m string --string \"$content\"";
+        }
+    }
+
+#    my $log_only_flag = 0;
+#    for my $opt (keys %{$snort_opts{'log_only'}) {
+#        if (defined $opt_href->{$opt}) {
+#            $log_only_flag = 1;
+
+    ### construct the log-prefix
+    my $log_prefix = " -j LOG --log-prefix \"";
+
+    ### the ordering was preserved for the logprefix hash
+    ### reference, so "msg" will always appear first in the
+    ### --log-prefix output, followed by "classtype:", etc.
+    my $pref_flag = 0;
+    for my $opt (keys %{$snort_opts{'logprefix'}}) {
+        if (defined $opt_href->{$opt}) {
+            $log_prefix .= "$opt: $opt_href->{$opt}, ";
+            $pref_flag = 1;
+        }
+    }
+    if ($pref_flag) {
+        ### all snort signatures should have an option
+        ### that should be included within a --log-prefix
+        ### string, e.g. "msg" and "sid"
+        $log_prefix =~ s/\,\s$//;
+        $log_prefix .= "\"";
+        $rule .= $log_prefix;
     }
 
     print $rule, "\n";
     return 1;
 
-
-#    if (defined $config{$hdr_href->{'dst'}}) {
-#        $dst = $config{$hdr_href->{'dst'}};
-#    } else {  ### must trust the signature (could by "any" or a specific ip)
-#        $dst = $hdr_href->{'dst'};
-#    }
-#
-
-#    if (defined $config{$hdr_href->{'src'}}) {
-#        $src = $config{$hdr_href->{'src'}};
-#    } else {  ### must trust the signature (could by "any" or a specific ip)
-#        $src = $hdr_href->{'src'};
-#    }
-#    unless ($hdr_href->{'src_p'} eq 'any') {
-#        $src_port = "--sport $hdr_href->{'src_p'}";
-#    }
-#    unless ($hdr_href->{'dst_p'} eq 'any') {
-#        $dst_port = "--dport $hdr_href->{'dst_p'}";
-#    }
-
-#    unless (defined $config{$hdr_href->{'src'}} &&
-#        defined $config{$hdr_href->{'dst'}}) {
-#
-#        print " ** Bad: $hdr_href->{'src'}  $hdr_href->{'dst'}\n";
-#        return;
-#    }
-
-#    print "$hdr_href->{'proto'} $src $src_port -> $dst $dst_port\n";
-#    return;
-
-    ### iptables  -A INPUT -p tcp --sport 3999 -m string
-    ###     --hex-string "fsdf" -j LOG
-#    if ($hdr_href->{'src'} eq '$EXTERNAL_NET' &&
-#        $hdr_href->{'dst'} eq '$HOME_NET') {
-#
-#
-#        if ($config{'NUM_INTERFACES'} == 1) {
-#            ### this chain should be jumped to from the INPUT chain only
-#            ### (no interface needs to be specified since there is only
-#            ### one and INPUT => source is external).
-#            print "$cmds{'iptables'} -A Snort_${config{'EXTERNAL_INTF'}} ",
-#                "-p $hdr_href->{'proto'} $src_port $dst_port -j REJECT\n";
-#        } elsif ($config{'NUM_INTERFACES'} == 2) {
-#            ### dst = INTERNAL_INTF network
-#            print "$cmds{'iptables'} -A Snort_${config{'EXTERNAL_INTF'}} ",
-#                "-d $intf_net{'INTERNAL_INTF'}{'net'} -p $hdr_href->{'proto'} ",
-#                "$src_port $dst_port -j REJECT\n";
-#        } else {
-#            ### dst = INTERNAL_INTF network
-#            print "$cmds{'iptables'} -A Snort_${config{'EXTERNAL_INTF'}} ",
-#                "-d $intf_net{'INTERNAL_INTF'}{'net'} -p $hdr_href->{'proto'} ",
-#                "$src_port $dst_port -j REJECT\n";
-#            ### dst = DMZ_INTF network
-#            print "$cmds{'iptables'} -A Snort_${config{'EXTERNAL_INTF'}} ",
-#                "-d $intf_net{'DMZ_INTF'}{'net'} -p $hdr_href->{'proto'} ",
-#                "$src_port $dst_port -j REJECT\n";
-#        }
-#    } elsif ($hdr_href->{'src'} eq '$HOME_NET' &&
-#        $hdr_href->{'dst'} eq '$EXTERNAL_NET') {
-#        if ($config{'NUM_INTERFACES'} == 1) {
-#            ### this chain should be jumped to from the OUTPUT chain only
-#            ### (no interface needs to be specified since there is only
-#            ### one and OUTPUT => source is the local system).
-#            print "$cmds{'iptables'} -A Snort_${config{'INTERNAL_INTF'}} ",
-#                "-p $hdr_href->{'proto'} $src_port $dst_port -j REJECT\n";
-#        } elsif ($config{'NUM_INTERFACES'} == 2) {
-#            ### dst = INTERNAL_INTF network
-#            print "$cmds{'iptables'} -A Snort_${config{'INTERNAL_INTF'}} ",
-#                "-i $config{'EXTERNAL_INTF'} -d $intf_net{'INTERNAL_INTF'}{'net'} ",
-#                "-p $hdr_href->{'proto'} $src_port $dst_port -j REJECT\n";
-#        } else {
-#            ### dst = INTERNAL_INTF network
-#            print "$cmds{'iptables'} -A Snort_${config{'EXTERNAL_INTF'}} ",
-#                "-d $intf_net{'INTERNAL_INTF'}{'net'} ",
-#                "-p $hdr_href->{'proto'} $src_port $dst_port -j REJECT\n";
-#            ### dst = DMZ_INTF network
-#            print "$cmds{'iptables'} -A Snort_${config{'EXTERNAL_INTF'}} ",
-#                "-i $config{'EXTERNAL_INTF'} -d $intf_net{'DMZ_INTF'}{'net'} ",
-#                "-p $hdr_href->{'proto'} $src_port $dst_port -j REJECT\n";
-#        }
-#    }
-    return;
 }
 
 sub check_type() {
