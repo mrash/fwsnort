@@ -17,7 +17,7 @@ iptables-1.2.7a).  The basic steps to do this are:
 
 -download iptables-1.2.7a.tar.bz2 from http://www.netfilter.org
 -tar xvfj iptables-1.2.7a.tar.bz2
--cp fwsnort-0.1/libipt_string.c.patch iptables-1.2.7a/extensions
+-cp fwsnort/libipt_string.c.patch iptables-1.2.7a/extensions
 -cd iptables-1.2.7a/extensions
 -patch libipt_string.c libipt_string.c.patch
 -compile and install iptables

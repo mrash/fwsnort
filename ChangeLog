@@ -1,4 +1,4 @@
-fwsnort-0.2 (12//2003):
+fwsnort-0.5 (12//2003):
     - Added "-j REJECT --reject-with tcp-reset" for tcp sessions
       if the --ipt-block option is specified.
     - Added ability to download latest snort rules from snort.org.
