@@ -9,9 +9,11 @@ you run fwsnort.
 fwsnort requires the iptables string match module in order to be able to
 detect application layer attacks.  In addition, fwsnort extends iptables by
 adding a "--hex-string" option with a patch against
-iptables/extensions/libipt_string.c.  The patch is against iptables 1.2.7a,
-and you will need to apply it in order for fwsnort to work properly.  The
-basic steps to do this are:
+iptables/extensions/libipt_string.c.  This patch has been accepted by the
+iptables maintainers and is a part of iptables as of the 1.2.9 release.
+If you are running a version of iptables that is less than 1.2.9, then you
+will need to apply the patch yourself (the patch is against
+iptables-1.2.7a).  The basic steps to do this are:
 
 -download iptables-1.2.7a.tar.bz2 from http://www.netfilter.org
 -tar xvfj iptables-1.2.7a.tar.bz2
