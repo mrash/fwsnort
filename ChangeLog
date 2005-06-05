@@ -1,3 +1,8 @@
+fwsnort-0.6.6 (06/04/2005):
+    - Added support for the Snort pass action by using the ACCEPT target.
+    - Added support for the Snort log action by using the ULOG target
+      (which can then log the packet via the pcap writer).
+
 fwsnort-0.6.5 (03/20/2005):
     - Updated to not attempt to download Snort rules from snort.org
       because the rules are no longer available for automatic downloads

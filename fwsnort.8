@@ -10,7 +10,7 @@
 .I snort-rule-type
 .B ] [-l
 .I logfile
-.B ] [-v] [-V] [-h] [-t] [-u] [-c
+.B ] [-v] [-V] [-h] [-t] [-U] [-c
 .I config-file
 .B ] [--snort-sid
 .I sid
@@ -18,6 +18,9 @@
 .I script
 .B ] [--ipt-apply] [--ipt-drop] [--ipt-reject] [--no-ipt-sync] [--no-ipt-log] [--no-ipt-test]
 .B [--no-ipt-test] [--internal-net] [--dmz-net] [--dump-conf] [--debug] [--strict]
+.B [--ulog-nlgroup
+.I groupnum
+.B ] [--update-rules]
 .SH DESCRIPTION
 .B fwsnort
 translates snort rules into equivalent iptables rules and generates a
@@ -65,7 +68,7 @@ Restrict to processing snort rules of <rules type>.  Example rule
 types would include "ddos", "backdoor", and "web-attacks".
 .TP
 
-.BR \-u ", " \-\^\-update-rules
+.BR \-\^\-update-rules
 Download the latest Bleeding Snort rules from http://www.bleedingsnort.com/.
 This will overwrite the bleeding-all.rules file in the
 /etc/fwsnort/snort_rules/ directory.  Note that the automatic downloading
@@ -162,6 +165,20 @@ to be written to STDOUT instead.
 .BR \-\^\-strict
 Run fwsnort in "strict" mode.  This will prevent fwsnort from translating
 snort rules that contain the keywords "offset", "uricontent", and "depth".
+.TP
+
+.BR \-U ", " \-\^\-Ulog
+Force the usage of the ULOG target for all log messages instead of the
+default LOG target.
+.TP
+
+.BR \-\^\-ulog-nlgroup
+Specify the netlink group for ULOG rules.  Such rules are only added for
+Snort rules that have an action of "log", or when
+.B fwsnort
+is run in
+.B --Ulog
+mode.
 .TP
 
 .BR \-l ", " \-\^\-logfile\ <logfile>

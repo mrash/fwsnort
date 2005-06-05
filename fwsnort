@@ -12,7 +12,7 @@
 #
 # Credits: (see the CREDITS file)
 #
-# Version: 0.6.5
+# Version: 0.6.6
 #
 # Copyright (C) 2003 Michael Rash (mbr@cipherdyne.org)
 #
@@ -118,7 +118,7 @@ my $ipt_script = "${fwsnort_dir}/fwsnort.sh";
 #===================== end config =======================
 
 ### version number
-my $version = '0.6.5';
+my $version = '0.6.6';
 
 ### supported variables in snort signatures
 my %snort_vars = (
@@ -301,6 +301,8 @@ my $rules_type     = '';
 my $snort_type     = '';
 my $int_net        = '';
 my $dmz_net        = '';
+my $ulog_nlgroup   = 1;
+my $ulog_mode      = 0;
 
 ### make Getopts case sensitive
 Getopt::Long::Configure('no_ignore_case');
@@ -330,6 +332,8 @@ Getopt::Long::Configure('no_ignore_case');
     'debug'          => \$debug,        # Debug mode.
     'dump-conf'      => \$dump_conf,    # Display config variables
     'config=s'       => \$fwsnort_conf, # Manually specify the config file
+    'Ulog'           => \$ulog_mode,    # Force ULOG mode.
+    'ulog-nlgroup=i' => \$ulog_nlgroup, # Specify the ulogd nl group.
     'verbose'        => \$verbose,
     'logfile=s'      => \$logfile,      # Specify the logfile path.
     'stdout'         => \$stdout,       # Print log messages to stdout.
@@ -503,7 +507,11 @@ sub parse_snort_rules() {
         RULE: for my $rule (@lines) {
             chomp $rule;
             $line_num++;
-            next RULE unless $rule =~ /^\s*alert/;
+            ### pass == ACCEPT, log == ULOG
+            unless ($rule =~ /^\s*alert/ or $rule =~ /^\s*pass/
+                    or $rule =~ /^\s*log/) {
+                next RULE;
+            }
             $rule_num++;  ### keep track of the abs num of rules
             my $rule_hdr;
             my $rule_options;
@@ -531,10 +539,10 @@ sub parse_snort_rules() {
                 next RULE;
             }
             if ($debug) {
-                print STDOUT "[+] Header: Proto: $hdr_href->{'proto'}, Src: ",
-                    "$hdr_href->{'src'}, Src_p: $hdr_href->{'src_p'}, ",
-                    "bidir: $hdr_href->{'bidir'}, Dst: $hdr_href->{'dst'}, ",
-                    "Dst_p: $hdr_href->{'dst_p'}\n";
+                print STDOUT
+"[+] Header: Action: $hdr_href->{'action'}, Proto: $hdr_href->{'proto'}, ",
+"Src: $hdr_href->{'src'}, Src_p: $hdr_href->{'src_p'}, bidir: ",
+"$hdr_href->{'bidir'}, Dst: $hdr_href->{'dst'}, Dst_p: $hdr_href->{'dst_p'}\n";
             }
             my $opts_href = &parse_rule_options($rule_options, $line_num);
             unless ($opts_href) {
@@ -648,14 +656,20 @@ sub parse_rule_options() {
 sub parse_rule_hdr() {
     my ($rule_hdr, $line_num) = @_;
     my $bidir = 0;
-    if ($rule_hdr =~ m|^alert\s+(\S+)\s+\$?(\S+)\s+\$?(\S+)
-                        \s+(\S+)\s+\$?(\S+)\s+\$?(\S+)|x) {
-        my $proto = $1;
-        my $src   = $2;
-        my $src_p = $3;
-        my $bidir = $4;
-        my $dst   = $5;
-        my $dst_p = $6;
+    my $action = 'alert';  ### default
+    if ($rule_hdr =~ /^\s*pass/) {
+        $action = 'pass';
+    } elsif ($rule_hdr =~ /^\s*log/) {
+        $action = 'log';
+    }
+    if ($rule_hdr =~ m|^\s*\w+\s+(\S+)\s+\$?(\S+)\s+\$?(\S+)
+                        \s+(\S+)\s+\$?(\S+)\s+\$?(\S+)|ix) {
+        my $proto  = lc($1);
+        my $src    = $2;
+        my $src_p  = $3;
+        my $bidir  = $4;
+        my $dst    = $5;
+        my $dst_p  = $6;
 
         unless ($proto =~ /^\w+$/) {
             &logr("[-] Unsupported protocol: \"$proto\" at line: " .
@@ -671,12 +685,13 @@ sub parse_rule_hdr() {
         my $bidir_flag = 0;
         $bidir_flag = 1 if $bidir eq '<>';
         return {
-            'proto' => $proto,
-            'src'   => $src,
-            'src_p' => $src_p,
-            'bidir' => $bidir_flag,
-            'dst'   => $dst,
-            'dst_p' => $dst_p,
+            'action' => $action,
+            'proto'  => $proto,
+            'src'    => $src,
+            'src_p'  => $src_p,
+            'bidir'  => $bidir_flag,
+            'dst'    => $dst,
+            'dst_p'  => $dst_p,
         };
     } else {
         return 0;
@@ -1077,10 +1092,17 @@ sub ipt_build_opts() {
         }
     }
 
-    ### construct the log-prefix (should only contain the sid
-    ### to conserve kernel memory).
-    my $log_prefix = " -j LOG --log-prefix \"SID$opts_href->{'sid'} \""
-        if defined $opts_href->{'sid'};
+    my $log_target = '';
+    if ($hdr_href->{'action'} eq 'log' or $ulog_mode) {
+        $log_target = " -j ULOG --ulog-nlgroup $ulog_nlgroup " .
+            "--ulog-prefix \"SID$opts_href->{'sid'} \""
+            if defined $opts_href->{'sid'};
+    } else {
+        ### construct the log-prefix (should only contain the sid
+        ### to conserve kernel memory).
+        $log_target = " -j LOG --log-prefix \"SID$opts_href->{'sid'} \""
+            if defined $opts_href->{'sid'};
+    }
 
     ### print the rest of the logprefix snort options in a comment
     ### one line above the rule
@@ -1101,32 +1123,47 @@ sub ipt_build_opts() {
 
     ### write the rule out to the iptables script
     &ipt_add_rule($hdr_href, $orig_snort_rule, $rule,
-        $log_prefix, $comment);
+        $log_target, $comment);
     return;
 }
 
 sub ipt_add_rule() {
-    my ($hdr_href, $orig_snort_rule, $rule, $log_prefix, $comment) = @_;
+    my ($hdr_href, $orig_snort_rule, $rule_base,
+        $log_target, $comment) = @_;
 
-    my $drop_rule;
-    if ($ipt_drop or $ipt_reject) {
+    my $action_rule;
+    if ($ipt_drop or $ipt_reject or $hdr_href->{'action'} eq 'pass') {
         if ($hdr_href->{'proto'} eq 'tcp') {
-            if ($ipt_drop) {
-                $drop_rule = "$rule -j DROP";
+            if ($hdr_href->{'action'} eq 'pass') {
+                $action_rule = "$rule_base -j ACCEPT";
             } else {
-                $drop_rule = "$rule -j REJECT --reject-with tcp-reset";
+                if ($ipt_drop) {
+                    $action_rule = "$rule_base -j DROP";
+                } else {
+                    $action_rule = "$rule_base -j REJECT " .
+                        "--reject-with tcp-reset";
+                }
             }
         } elsif ($hdr_href->{'proto'} eq 'udp') {
-            if ($ipt_drop) {
-                $drop_rule = "$rule -j DROP";
+            if ($hdr_href->{'action'} eq 'pass') {
+                $action_rule = "$rule_base -j ACCEPT";
             } else {
-                $drop_rule = "$rule -j REJECT --reject-with icmp-port-unreachable";
+                if ($ipt_drop) {
+                    $action_rule = "$rule_base -j DROP";
+                } else {
+                    $action_rule = "$rule_base -j REJECT " .
+                        "--reject-with icmp-port-unreachable";
+                }
             }
         } else {
-            $drop_rule = "$rule -j DROP";
+            if ($hdr_href->{'action'} eq 'pass') {
+                $action_rule = "$rule_base -j ACCEPT";
+            } else {
+                $action_rule = "$rule_base -j DROP";
+            }
         }
     }
-    $rule .= $log_prefix;
+    my $log_rule = $rule_base . $log_target;
 
     if ($verbose) {
         push @ipt_script_lines, "### snort rule: $orig_snort_rule";
@@ -1134,28 +1171,31 @@ sub ipt_add_rule() {
     } else {
         push @ipt_script_lines, $comment;
     }
-    push @ipt_script_lines, $rule unless $no_ipt_log;
-    push @ipt_script_lines, $drop_rule if $ipt_drop or $ipt_reject;
+    if ($hdr_href->{'action'} ne 'pass') {
+        push @ipt_script_lines, $log_rule unless $no_ipt_log;
+    }
+    push @ipt_script_lines, $action_rule
+        if $ipt_drop or $ipt_reject or $hdr_href->{'action'} eq 'pass';
     $ipt_rule_ctr++;
     return;
 }
 
 sub ipt_ignore_rules() {
     if (@ignore_ips or @ignore_nets) {
-        push @ipt_script_lines, "\n###\n############ Add IP/network ignore rules. " .
-            "############\n###";
+        push @ipt_script_lines, "\n###\n############ Add IP/network " .
+            "ignore rules. ############\n###";
     } else {
         return;
     }
     for my $type (keys %fwsnort_chains) {
         for my $intf (keys %{$fwsnort_chains{$type}}) {
             for my $ip (@ignore_ips) {
-                push @ipt_script_lines, "\$IPTABLES -A $fwsnort_chains{$type}{$intf} " .
-                    "-s $ip -j RETURN";
+                push @ipt_script_lines, "\$IPTABLES -A " .
+                    "$fwsnort_chains{$type}{$intf} -s $ip -j RETURN";
             }
             for my $net (@ignore_nets) {
-                push @ipt_script_lines, "\$IPTABLES -A $fwsnort_chains{$type}{$intf} " .
-                    "-s $net -j RETURN";
+                push @ipt_script_lines, "\$IPTABLES -A " .
+                    "$fwsnort_chains{$type}{$intf} -s $net -j RETURN";
             }
         }
     }
@@ -1186,12 +1226,12 @@ sub ipt_ignore_rules() {
 }
 
 sub ipt_add_chains() {
-    push @ipt_script_lines, "\n###\n############ Create fwsnort iptables chains. " .
-        "############\n###";
+    push @ipt_script_lines, "\n###\n############ Create " .
+        "fwsnort iptables chains. ############\n###";
     for my $type (keys %fwsnort_chains) {
         for my $intf (keys %{$fwsnort_chains{$type}}) {
-            push @ipt_script_lines, "\$IPTABLES -N $fwsnort_chains{$type}{$intf} " .
-                "2> /dev/null";
+            push @ipt_script_lines, "\$IPTABLES -N " .
+                "$fwsnort_chains{$type}{$intf} 2> /dev/null";
             push @ipt_script_lines, "\$IPTABLES -F " .
                 "$fwsnort_chains{$type}{$intf}\n";
         }
@@ -1212,8 +1252,8 @@ sub ipt_add_chains() {
 }
 
 sub ipt_jump_chain() {
-    push @ipt_script_lines, "\n###\n############ Jump traffic to the fwsnort " .
-        "chains. ############\n###";
+    push @ipt_script_lines, "\n###\n############ Jump traffic " .
+        "to the fwsnort chains. ############\n###";
     for my $type (keys %fwsnort_chains) {
         for my $intf (keys %{$fwsnort_chains{$type}}) {
             push @ipt_script_lines, "\$IPTABLES -I $type 1 -i $intf " .
@@ -1234,21 +1274,21 @@ sub ipt_jump_chain() {
 
 sub ipt_hdr() {
     push @ipt_script_lines, "#!$cmds{'sh'}\n#";
-    push @ipt_script_lines, "####################################################" .
-        "####################";
+    push @ipt_script_lines, "##########################################" .
+        "##############################";
     push @ipt_script_lines, "#\n# File:  $ipt_script";
-    push @ipt_script_lines, "#\n# Purpose:  This script was auto generated by " .
-        "fwsnort, and implements";
-    push @ipt_script_lines, "#           an iptables ruleset based upon Snort " .
-        "rules.  For more";
-    push @ipt_script_lines, "#           information see the fwsnort man page or " .
-        "the documentation";
+    push @ipt_script_lines, "#\n# Purpose:  This script was auto " .
+        "generated by fwsnort, and implements";
+    push @ipt_script_lines, "#           an iptables ruleset based upon " .
+        "Snort rules.  For more";
+    push @ipt_script_lines, "#           information see the fwsnort man " .
+        "page or the documentation";
     push @ipt_script_lines, "#           available at " .
         "http://www.cipherdyne.org/fwsnort/";
     push @ipt_script_lines, "#\n# Author:  Michael Rash <mbr\@cipherdyne.org>";
     push @ipt_script_lines, "#";
-    push @ipt_script_lines, "####################################################" .
-        "####################\n#\n";
+    push @ipt_script_lines, "###############################################" .
+        "#########################\n#\n";
 
     ### add paths to system binaries (iptables included)
     &ipt_config_section();
@@ -1266,7 +1306,8 @@ sub ipt_config_section() {
 
 sub ipt_type() {
     my $type = shift;
-    push @ipt_script_lines, "\n###\n############ ${type}.rules ############\n###";
+    push @ipt_script_lines, "\n###\n############ ${type}.rules #######" .
+        "#####\n###";
     push @ipt_script_lines, "\$ECHO \"[+] Adding $type rules.\"";
     return;
 }
@@ -1811,7 +1852,7 @@ Options:
                                 (CIDR or standard notation).
     --dmz-net <net/mask>      - Manually specify a dmz network
                                 (CIDR or standard notation).
-    -u   --update-rules       - Download latest Bleeding-Snort rules
+    --update-rules            - Download latest Bleeding-Snort rules
                                 from http://$bleeding_snort_website/
     -t   --type=<type>        - Only process snort rules of type <type>
                                 (e.g. "ddos" or "backdoor")
@@ -1821,6 +1862,12 @@ Options:
     -l   --logfile=<file>     - Log messages to <file> instead of the
                                 normal location at
                                 $logfile
+    -U   --Ulog               - Force ULOG target for all log generation.
+    -ulog-nlgroup=<groupnum>  - Specify a ULOG netlink group (the default
+                                is 1).  This gets used in -U mode, or for
+                                "log" rules since then we need all of the
+                                packet to be logged (via the ULOG pcap
+                                writer).
     --dump-conf               - Dump configuration on STDOUT and exit.
     --debug                   - Run in debug mode.
     -v   --verbose            - Run in verbose mode.
