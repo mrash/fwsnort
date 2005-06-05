@@ -4,6 +4,12 @@ fwsnort-0.6.6 (06/04/2005):
       (which can then log the packet via the pcap writer).
     - Added support for all fwsnort alerts to be logged via the ULOG
       target instead of the LOG target.
+    - Added support for the "resp" keyword to allow it to drive the
+      Netfilter argument to the REJECT target.
+    - Added "pcre" to the unsupported list... this knocks the fwsnort
+      translation rate down to about 50% for Snort-2.3 rules (pcre is
+      heavily utilized).
+    - Added "priority" and "rev" to comment lines.
 
 fwsnort-0.6.5 (03/20/2005):
     - Updated to not attempt to download Snort rules from snort.org

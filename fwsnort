@@ -151,7 +151,8 @@ my %iptables_opts = (
     'dst'      => '-d',
     'dst_p'    => '--dport',
     'proto'    => '-p',
-    'ip_proto' => '-p'
+    'ip_proto' => '-p',
+    'resp'     => '-j REJECT'
 );
 
 my %snort_opts = (
@@ -168,19 +169,9 @@ my %snort_opts = (
         'tos'      => '[\s;]tos:\s*(\d+)\s*;',
         'ipopts'   => '[\s;]ipopts:\s*(rr|ssrr|lsrr|lsrre)\s*;',
         'flow'     => '[\s;]flow:\s*(.*?)\s*;',
-        'ip_proto' => '[\s;]ip_proto:\s*(.*?)\s*;'
+        'ip_proto' => '[\s;]ip_proto:\s*(.*?)\s*;',
+        'resp'     => '[\s;]resp:\s*(.*?)\s*;'
     },
-
-    ### snort options which are logged within iptables
-    ### logging statements (so we can detect these values
-    ### but just not filter them directly)
-#    'log_only' => {
-#        'id'       => '[\s;]id:\s*(\d+)\s*;',
-#        'seq'      => '[\s;]seq:\s*(\d+)\s*;',
-#        'icmp_seq' => '[\s;]icmp_seq:\s*(\d+)\s*;',
-#        'icmp_id'  => '[\s;]icmp_id:\s*(\d+)\s*;',
-#        'icode'    => '[\s;]icode:\s*(\d+)\s*;'
-#    },
 
     ### snort options that can be put into iptables
     ### ruleset, but only in log messages with --log-prefix
@@ -188,12 +179,16 @@ my %snort_opts = (
         'sid'       => '[\s;]sid:\s*(\d+)\s*;',
         'msg'       => 'msg:\s*\"(.*?)\"\s*;',
         'classtype' => '[\s;]classtype:\s*(.*?)\s*;',
-        'reference' => '[\s;]reference:\s*(.*?)\s*;'
+        'reference' => '[\s;]reference:\s*(.*?)\s*;',
+        'priority'  => '[\s;]priority:\s*(\d+)\s*;',
+        'rev'       => '[\s;]rev:\s*(\d+)\s*;',
     },
 
     ### snort options that cannot be included directly
     ### within iptables filter statements (yet :)
     'unsupported' => {
+        'pcre'         => '[\s;]pcre:\s*.*?\s*;',
+        'content-list' => '[\s;]content-list:\s*.*?\s*;',
         'dsize'        => '[\s;]dsize:\s*\S+\s*;',
         'ack'          => '[\s;]ack:\s*\d+\s*;',
         'fragbits'     => '[\s;]fragbits:\s*\S+\s*;',
@@ -209,26 +204,32 @@ my %snort_opts = (
 #        'ipopts'  => '[\s;]ipopts:\s*(\w+)\s*;',
 
         ### the following fields get logged by iptables but
-        ### we cannot filter them directly (yet).
+        ### we cannot filter them directly (yet).  Functionality
+        ### is being built into psad to generate alerts based
+        ### on these Snort options.
         'id'       => '[\s;]id:\s*(\d+)\s*;',
         'seq'      => '[\s;]seq:\s*(\d+)\s*;',  ### --log-tcp-sequence
         'icmp_seq' => '[\s;]icmp_seq:\s*(\d+)\s*;',
         'icmp_id'  => '[\s;]icmp_id:\s*(\d+)\s*;',
         'icode'    => '[\s;]icode:\s*(\d+)\s*;',
         'sameip'   => '[\s;]sameip\s*;',
+        'regex'    => '[\s;]regex:\s*.*?\s*;',
     },
 
     ### snort options that fwsnort will ignore
     'ignore' => {
-        'rev'    => '[\s;]rev:\s*(\d+)\s*;',
-        'offset' => '[\s;]offset:\s*\d+\s*;',
-        'depth'  => '[\s;]depth:\s*\d+\s*;',
-        'nocase' => '[\s;]nocase\s*;'
+        'offset'  => '[\s;]offset:\s*\d+\s*;',
+        'depth'   => '[\s;]depth:\s*\d+\s*;',
+        'nocase'  => '[\s;]nocase\s*;',
+        'logto'   => '[\s;]logto:\s*\S+\s*;',
+        'session' => '[\s;]session\s*;',
+        'tag'     => '[\s;]tag:\s*.*?\s*;',
+        'react'   => '[\s;]react:\s*.*?\s*;'  ### psad can react
     }
 );
 
 ### array that contains iptables script (will be written
-### to $ipt_script
+### to $ipt_script)
 my @ipt_script_lines = ();
 
 ### variables that are supported by the fwsnort config
@@ -360,18 +361,18 @@ if ($ipt_drop and $ipt_reject) {
 
 if ($strict) {
     ### make the snort options parser very strict
-    delete $snort_opts{'filter'}{'uricontent'};
     $snort_opts{'unsupported'}{'uricontent'}
-        = '[\s;]uricontent:\s*\"(.*?)\"\s*;';
-    delete $snort_opts{'ignore'}{'offset'};
+        = $snort_opts{'filter'}{'uricontent'};
+    delete $snort_opts{'filter'}{'uricontent'};
     $snort_opts{'unsupported'}{'offset'}
-        = '[\s;]offset:\s*\d+\s*;';
-    delete $snort_opts{'ignore'}{'depth'};
+        = $snort_opts{'ignore'}{'offset'};
+    delete $snort_opts{'ignore'}{'offset'};
     $snort_opts{'unsupported'}{'depth'}
-        = '[\s;]depth:\s*\d+\s*;';
-    delete $snort_opts{'ignore'}{'nocase'};
+        = $snort_opts{'ignore'}{'depth'};
+    delete $snort_opts{'ignore'}{'depth'};
     $snort_opts{'unsupported'}{'nocase'}
-        = '[\s;]nocase\s*;';
+        = $snort_opts{'ignore'}{'nocase'};
+    delete $snort_opts{'ignore'}{'nocase'};
 }
 
 $ipt_sync = 0 if $no_ipt_sync;
@@ -1021,12 +1022,12 @@ sub ipt_build_opts() {
     if (defined $opts_href->{'flags'}) {
         my $f_str = '';
 
-        $f_str .= 'URG,' if $opts_href->{'flags'} =~ /U/;
-        $f_str .= 'ACK,' if $opts_href->{'flags'} =~ /A/;
-        $f_str .= 'PSH,' if $opts_href->{'flags'} =~ /P/;
-        $f_str .= 'RST,' if $opts_href->{'flags'} =~ /R/;
-        $f_str .= 'SYN,' if $opts_href->{'flags'} =~ /S/;
-        $f_str .= 'FIN,' if $opts_href->{'flags'} =~ /F/;
+        $f_str .= 'URG,' if $opts_href->{'flags'} =~ /U/i;
+        $f_str .= 'ACK,' if $opts_href->{'flags'} =~ /A/i;
+        $f_str .= 'PSH,' if $opts_href->{'flags'} =~ /P/i;
+        $f_str .= 'RST,' if $opts_href->{'flags'} =~ /R/i;
+        $f_str .= 'SYN,' if $opts_href->{'flags'} =~ /S/i;
+        $f_str .= 'FIN,' if $opts_href->{'flags'} =~ /F/i;
         $f_str =~ s/\,$//;
 
         if ($opts_href->{'flags'} =~ /\+/) {
@@ -1046,6 +1047,8 @@ sub ipt_build_opts() {
     ### this... we need to do the same.
     if (defined $opts_href->{'flow'} && ! defined $opts_href->{'flags'}) {
         if ($opts_href->{'flow'} =~ /established/) {
+            ### note that this ignores the "stateless" keyword
+            ### as it should...
             $rule .= " $iptables_opts{'flow'} ACK ACK";
         }
     }
@@ -1107,12 +1110,15 @@ sub ipt_build_opts() {
     ### print the rest of the logprefix snort options in a comment
     ### one line above the rule
     my $comment = '###';
-    $comment .= " msg: \"$opts_href->{'msg'}\","
-        if defined $opts_href->{'msg'};
-    $comment .= " classtype: \"$opts_href->{'classtype'}\","
-        if defined $opts_href->{'classtype'};
-    $comment .= " reference: \"$opts_href->{'reference'}\","
-        if defined $opts_href->{'reference'};
+    for my $key qw(msg classtype reference priority rev) {
+        if (defined $opts_href->{$key}) {
+            if ($key eq 'msg') {
+                $comment .= qq| $key: "$opts_href->{$key}";|;
+            } else {
+                $comment .= qq| $key: $opts_href->{$key};|;
+            }
+        }
+    }
     $comment =~ s/,$//;
 
     ### print the snort rules type header to the fwsnort.sh script
@@ -1122,45 +1128,65 @@ sub ipt_build_opts() {
     }
 
     ### write the rule out to the iptables script
-    &ipt_add_rule($hdr_href, $orig_snort_rule, $rule,
-        $log_target, $comment);
+    &ipt_add_rule($hdr_href, $opts_href, $orig_snort_rule,
+        $rule, $log_target, $comment);
     return;
 }
 
 sub ipt_add_rule() {
-    my ($hdr_href, $orig_snort_rule, $rule_base,
+    my ($hdr_href, $opts_href, $orig_snort_rule, $rule_base,
         $log_target, $comment) = @_;
 
-    my $action_rule;
-    if ($ipt_drop or $ipt_reject or $hdr_href->{'action'} eq 'pass') {
-        if ($hdr_href->{'proto'} eq 'tcp') {
-            if ($hdr_href->{'action'} eq 'pass') {
-                $action_rule = "$rule_base -j ACCEPT";
-            } else {
-                if ($ipt_drop) {
-                    $action_rule = "$rule_base -j DROP";
-                } else {
-                    $action_rule = "$rule_base -j REJECT " .
-                        "--reject-with tcp-reset";
-                }
+    my $action_rule = '';
+    if ($hdr_href->{'proto'} eq 'tcp') {
+        if ($hdr_href->{'action'} eq 'pass') {
+            $action_rule = "$rule_base -j ACCEPT";
+        } else {
+            if (defined $opts_href->{'resp'}
+                    and $opts_href->{'resp'} =~ /rst/i) {
+                ### Netfilter can only send tcp resets to the connection
+                ### client, so we can't support rst_rcv, but we should
+                ### try to tear the connection down anyway.
+                $action_rule = "$rule_base -j REJECT " .
+                    "--reject-with tcp-reset";
+            } elsif ($ipt_drop) {
+                $action_rule = "$rule_base -j DROP";
+            } elsif ($ipt_reject) {
+                $action_rule = "$rule_base -j REJECT " .
+                    "--reject-with tcp-reset";
             }
-        } elsif ($hdr_href->{'proto'} eq 'udp') {
-            if ($hdr_href->{'action'} eq 'pass') {
-                $action_rule = "$rule_base -j ACCEPT";
-            } else {
-                if ($ipt_drop) {
-                    $action_rule = "$rule_base -j DROP";
-                } else {
+        }
+    } elsif ($hdr_href->{'proto'} eq 'udp') {
+        if ($hdr_href->{'action'} eq 'pass') {
+            $action_rule = "$rule_base -j ACCEPT";
+        } else {
+            if (defined $opts_href->{'resp'}
+                    and $opts_href->{'resp'} =~ /icmp/i) {
+                if ($opts_href->{'resp'} =~ /all/i) {  ### icmp_all
+                    $action_rule = "$rule_base -j REJECT " .
+                        "--reject-with icmp-port-unreachable";
+                } elsif ($opts_href->{'resp'} =~ /net/i) {  ### icmp_net
+                    $action_rule = "$rule_base -j REJECT " .
+                        "--reject-with icmp-net-unreachable";
+                } elsif ($opts_href->{'resp'} =~ /host/i) {  ### icmp_host
+                    $action_rule = "$rule_base -j REJECT " .
+                        "--reject-with icmp-host-unreachable";
+                } elsif ($opts_href->{'resp'} =~ /port/i) {  ### icmp_port
                     $action_rule = "$rule_base -j REJECT " .
                         "--reject-with icmp-port-unreachable";
                 }
-            }
-        } else {
-            if ($hdr_href->{'action'} eq 'pass') {
-                $action_rule = "$rule_base -j ACCEPT";
-            } else {
+            } elsif ($ipt_drop) {
                 $action_rule = "$rule_base -j DROP";
+            } elsif ($ipt_reject) {
+                $action_rule = "$rule_base -j REJECT " .
+                    "--reject-with icmp-port-unreachable";
             }
+        }
+    } else {
+        if ($hdr_href->{'action'} eq 'pass') {
+            $action_rule = "$rule_base -j ACCEPT";
+        } else {
+            $action_rule = "$rule_base -j DROP";
         }
     }
     my $log_rule = $rule_base . $log_target;
@@ -1175,7 +1201,8 @@ sub ipt_add_rule() {
         push @ipt_script_lines, $log_rule unless $no_ipt_log;
     }
     push @ipt_script_lines, $action_rule
-        if $ipt_drop or $ipt_reject or $hdr_href->{'action'} eq 'pass';
+        if $action_rule and ($ipt_drop or $ipt_reject or
+            $hdr_href->{'action'} eq 'pass' or defined $opts_href->{'resp'});
     $ipt_rule_ctr++;
     return;
 }
