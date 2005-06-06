@@ -12,7 +12,7 @@
 #
 # Credits: (see the CREDITS file)
 #
-# Version: 0.6.6
+# Version: 0.7.0
 #
 # Copyright (C) 2003 Michael Rash (mbr@cipherdyne.org)
 #
@@ -118,7 +118,7 @@ my $ipt_script = "${fwsnort_dir}/fwsnort.sh";
 #===================== end config =======================
 
 ### version number
-my $version = '0.6.6';
+my $version = '0.7.0';
 
 ### supported variables in snort signatures
 my %snort_vars = (
