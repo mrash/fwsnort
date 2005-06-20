@@ -138,13 +138,13 @@ my %snort_vars = (
 my %iptables_opts = (
     'uricontent' => '-m string',
     'content'  => '-m string',
-    'ipopts'   => '-m ipv4options',
+    'ipopts'   => '-m ipv4options',  ### requires ipv4options extension
     'flags'    => '--tcp-flags',
     'flow'     => '--tcp-flags',  ### revert to keeping track of ACK
                                   ### flags (usually ok).
     'itype'    => '--icmp-type',
-    'ttl'      => '-m ttl',
-    'tos'      => '--tos',
+    'ttl'      => '-m ttl', ### requires CONFIG_IP_NF_MATCH_TTL
+    'tos'      => '--tos', ### requires CONFIG_IP_NF_MATCH_TOS
     'seq'      => '--log-tcp-sequence',
     'src'      => '-s',
     'src_p'    => '--sport',
@@ -167,7 +167,7 @@ my %snort_opts = (
         'itype'    => '[\s;]itype:\s*(\d+)\s*;',
         'ttl'      => '[\s;]ttl:\s*(.*?)\s*;',
         'tos'      => '[\s;]tos:\s*(\d+)\s*;',
-        'ipopts'   => '[\s;]ipopts:\s*(rr|ssrr|lsrr|lsrre)\s*;',
+        'ipopts'   => '[\s;]ipopts:\s*(\w+)\s*;',
         'flow'     => '[\s;]flow:\s*(.*?)\s*;',
         'ip_proto' => '[\s;]ip_proto:\s*(.*?)\s*;',
         'resp'     => '[\s;]resp:\s*(.*?)\s*;'
@@ -177,7 +177,7 @@ my %snort_opts = (
     ### ruleset, but only in log messages with --log-prefix
     'logprefix' =>  {
         'sid'       => '[\s;]sid:\s*(\d+)\s*;',
-        'msg'       => 'msg:\s*\"(.*?)\"\s*;',
+        'msg'       => '[\s;]msg:\s*\"(.*?)\"\s*;',  ### we create a space
         'classtype' => '[\s;]classtype:\s*(.*?)\s*;',
         'reference' => '[\s;]reference:\s*(.*?)\s*;',
         'priority'  => '[\s;]priority:\s*(\d+)\s*;',
@@ -213,18 +213,20 @@ my %snort_opts = (
         'icmp_id'  => '[\s;]icmp_id:\s*(\d+)\s*;',
         'icode'    => '[\s;]icode:\s*(\d+)\s*;',
         'sameip'   => '[\s;]sameip\s*;',
-        'regex'    => '[\s;]regex:\s*.*?\s*;',
+        'regex'    => '[\s;]regex:\s*(.*?)\s*;',
+        'isdataat' => '[\s;]isdataat:\s*(.*?)\s*;',
     },
 
     ### snort options that fwsnort will ignore
     'ignore' => {
-        'offset'  => '[\s;]offset:\s*\d+\s*;',
-        'depth'   => '[\s;]depth:\s*\d+\s*;',
-        'nocase'  => '[\s;]nocase\s*;',
-        'logto'   => '[\s;]logto:\s*\S+\s*;',
-        'session' => '[\s;]session\s*;',
-        'tag'     => '[\s;]tag:\s*.*?\s*;',
-        'react'   => '[\s;]react:\s*.*?\s*;'  ### psad can react
+        'offset'    => '[\s;]offset:\s*\d+\s*;',
+        'depth'     => '[\s;]depth:\s*\d+\s*;',
+        'nocase'    => '[\s;]nocase\s*;',
+        'logto'     => '[\s;]logto:\s*\S+\s*;',
+        'session'   => '[\s;]session\s*;',
+        'tag'       => '[\s;]tag:\s*.*?\s*;',
+        'threshold' => '[\s;]threshold:\s*.*?\s*;',
+        'react'     => '[\s;]react:\s*.*?\s*;'  ### psad can react
     }
 );
 
@@ -373,6 +375,9 @@ if ($strict) {
     $snort_opts{'unsupported'}{'nocase'}
         = $snort_opts{'ignore'}{'nocase'};
     delete $snort_opts{'ignore'}{'nocase'};
+    $snort_opts{'unsupported'}{'threshold'}
+        = $snort_opts{'ignore'}{'threshold'};
+    delete $snort_opts{'ignore'}{'threshold'};
 }
 
 $ipt_sync = 0 if $no_ipt_sync;
@@ -400,6 +405,11 @@ $ipt_sync = 0 if $no_ipt_sync;
 ### the current iptables policy
 &cache_ipt_policy() if $ipt_sync;
 
+### truncate old log (does anyone actually use the fwsnort
+### parsing log?)
+open L, "> $logfile" or die "[*] Could not open $logfile: $!";
+close L;
+
 ### check to make sure iptables has --hex-strings, etc.
 &ipt_test() unless $no_ipt_test;
 
@@ -426,12 +436,7 @@ $ipt_sync = 0 if $no_ipt_sync;
 ### specified on the command line
 &check_type() if $rules_type;
 
-### truncate old log (does anyone actually use the fwsnort
-### parsing log?)
-open L, "> $logfile" or die "[*] Could not open $logfile: $!";
-close L;
-
-&logr(localtime() . "[+] Begin parsing cycle.");
+&logr(localtime() . " [+] Begin parsing cycle.");
 
 ### parse snort rules (signatures)
 if ($ipt_sync) {
@@ -519,7 +524,7 @@ sub parse_snort_rules() {
             $sabs_num++;
             if ($rule =~ m|^(.*?)\s+\((.*)\)|) {
                 $rule_hdr     = $1;
-                $rule_options = $2;
+                $rule_options = " $2 ";
             } else {  ### don't know what type of snort rule it is
                 next RULE;
             }
@@ -604,7 +609,7 @@ sub parse_rule_options() {
         if ($rule_options =~ /sid:\s*$snort_sid\s*;/) {
             &logr("[+] matched sid:$snort_sid: $rule_options");
         } else {
-            return 0;
+            return '';
         }
     }
 
@@ -616,18 +621,18 @@ sub parse_rule_options() {
         if ($rule_options =~ /$snort_opts{'unsupported'}{$opt}/) {
             &logr("[-] SID: $sid  Unsupported option: \"$opt\" at " .
                 "line: $line_num.  Skipping rule.");
-            return 0;
+            return '';
         }
     }
     if ($rule_options =~ /content\s*:.*content\s*:/) {
         &logr("[-] SID: $sid  Unsupported multiple content fields at " .
             "line: $line_num.  Skipping rule.");
-        return 0;
+        return '';
     }
     if ($rule_options =~ /ip_proto\s*:.*ip_proto\s*:/) {
         &logr("[-] SID: $sid  Unsupported multiple ip_proto fields at " .
             "line: $line_num.  Skipping rule.");
-        return 0;
+        return '';
     }
 
     for my $opt (keys %{$snort_opts{'filter'}}) {
@@ -647,10 +652,23 @@ sub parse_rule_options() {
         my $option = $1;
         if (! defined $opts{$option}
             && ! defined $snort_opts{'ignore'}{$option}) {
-            &logr("$line_num SID: $sid  bad option: \"$option\" ",
+            &logr("[-] SID: $sid bad option: \"$option\" at line: $line_num " .
                 "-- $rule_options");
+            return '';
         }
     }
+
+    if (defined $opts{'ipopts'}
+            and $opts{'ipopts'} ne 'rr'
+            and $opts{'ipopts'} ne 'ts'
+            and $opts{'ipopts'} ne 'ssrr'
+            and $opts{'ipopts'} ne 'lsrr'
+            and $opts{'ipopts'} ne 'any') {
+        &logr("[-] SID: $sid  Unsupported ipopts field at " .
+            "line: $line_num.  Skipping rule.");
+        return '';
+    }
+
     return \%opts;
 }
 
@@ -675,13 +693,13 @@ sub parse_rule_hdr() {
         unless ($proto =~ /^\w+$/) {
             &logr("[-] Unsupported protocol: \"$proto\" at line: " .
                 "$line_num.  Skipping rule.");
-            return 0;
+            return '';
         }
-        if ($proto eq 'ip') {
-            &logr("[-] Unsupported protocol: \"$proto\" at line: " .
-                "$line_num.  Skipping rule.");
-            return 0;
-        }
+#        if ($proto eq 'ip') {
+#            &logr("[-] Unsupported protocol: \"$proto\" at line: " .
+#                "$line_num.  Skipping rule.");
+#            return 0;
+#        }
 
         my $bidir_flag = 0;
         $bidir_flag = 1 if $bidir eq '<>';
@@ -695,7 +713,7 @@ sub parse_rule_hdr() {
             'dst_p'  => $dst_p,
         };
     } else {
-        return 0;
+        return '';
     }
 }
 
@@ -1053,12 +1071,12 @@ sub ipt_build_opts() {
         }
     }
 
-    ### append tos
+    ### append tos (requires CONFIG_IP_NF_MATCH_TOS)
     if (defined $opts_href->{'tos'}) {
         $rule .= " $iptables_opts{'tos'} $opts_href->{'tos'}"
     }
 
-    ### append ttl
+    ### append ttl (requires CONFIG_IP_NF_MATCH_TTL)
     if (defined $opts_href->{'ttl'}) {
         if ($opts_href->{'ttl'} =~ /\<\s*(\d+)/) {
             $rule .= " $iptables_opts{'ttl'} -ttl-lt $1";
@@ -1522,23 +1540,54 @@ sub ipt_test() {
     }
 
     ### test for the ipv4options extension.
-    $rv = (system "$cmds{'iptables'} -I INPUT 1 -p icmp --icmp-type 0 -m " .
+    $rv = (system "$cmds{'iptables'} -I INPUT 1 -p icmp -m " .
         "ipv4options --rr -s 127.0.0.2 -j LOG 2> /dev/null") >> 8;
     if ($rv == 0) {
         system "$cmds{'iptables'} -D INPUT 1";
     } else {
+        &logr("[-] Netfilter ipv4options extension not available, " .
+            "disabling ipopts translation.");
         ### put ipopts in the unsupported list
-        $snort_opts{'unsupported'}{'ipopts'} = '[\s;]ipopts:\s*(\w+)\s*;';
+        if (defined $snort_opts{'filter'}{'ipopts'}) {
+            $snort_opts{'unsupported'}{'ipopts'} =
+                $snort_opts{'filter'}{'ipopts'};
+        } else {
+            $snort_opts{'unsupported'}{'ipopts'} = '[\s;]ipopts:\s*(\w+)\s*;';
+        }
     }
 
-    ### test for the ttl extension.
+    ### test for the ttl match.
     $rv = (system "$cmds{'iptables'} -I INPUT 1 -p icmp -s 127.0.0.2 " .
-        "-m ttl --ttl 1 --icmp-type 8 -j LOG 2> /dev/null") >> 8;
+        "-m ttl --ttl-eq 1 -j LOG 2> /dev/null") >> 8;
     if ($rv == 0) {
         system "$cmds{'iptables'} -D INPUT 1";
     } else {
         ### put ttl in the unsupported list
-        $snort_opts{'unsupported'}{'ttl'} = '[\s;]ttl:\s*(.*?)\s*;';
+        &logr("[-] Netfilter TTL match not available, " .
+            "disabling ttl translation.");
+        if (defined $snort_opts{'filter'}{'ttl'}) {
+            $snort_opts{'unsupported'}{'ttl'} =
+                $snort_opts{'filter'}{'ttl'};
+        } else {
+            $snort_opts{'unsupported'}{'ttl'} = '[\s;]ttl:\s*(.*?)\s*;';
+        }
+    }
+
+    ### test for the TOS match.
+    $rv = (system "$cmds{'iptables'} -I INPUT 1 -p icmp -s 127.0.0.2 " .
+        "-m tos --tos 8 -j LOG 2> /dev/null") >> 8;
+    if ($rv == 0) {
+        system "$cmds{'iptables'} -D INPUT 1";
+    } else {
+        ### put tos in the unsupported list
+        &logr("[-] Netfilter TOS match not available, " .
+            "disabling tos translation.");
+        if (defined $snort_opts{'filter'}{'tos'}) {
+            $snort_opts{'unsupported'}{'tos'} =
+                $snort_opts{'filter'}{'tos'};
+        } else {
+            $snort_opts{'unsupported'}{'ttl'} = '[\s;]ttl:\s*(.*?)\s*;';
+        }
     }
 
     ### test for string match support.
