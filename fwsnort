@@ -135,6 +135,14 @@ my %snort_vars = (
     'ORACLE_PORTS'    => ''
 );
 
+my %ipt_hdr_opts = (
+    'src'      => '-s',
+    'sport'    => '--sport',
+    'dst'      => '-d',
+    'dport'    => '--dport',
+    'proto'    => '-p',
+);
+
 my %iptables_opts = (
     'uricontent' => '-m string',
     'content'  => '-m string',
@@ -146,11 +154,6 @@ my %iptables_opts = (
     'ttl'      => '-m ttl', ### requires CONFIG_IP_NF_MATCH_TTL
     'tos'      => '--tos', ### requires CONFIG_IP_NF_MATCH_TOS
     'seq'      => '--log-tcp-sequence',
-    'src'      => '-s',
-    'src_p'    => '--sport',
-    'dst'      => '-d',
-    'dst_p'    => '--dport',
-    'proto'    => '-p',
     'ip_proto' => '-p',
     'resp'     => '-j REJECT'
 );
@@ -407,8 +410,7 @@ $ipt_sync = 0 if $no_ipt_sync;
 
 ### truncate old log (does anyone actually use the fwsnort
 ### parsing log?)
-open L, "> $logfile" or die "[*] Could not open $logfile: $!";
-close L;
+&truncate_logfile();
 
 ### check to make sure iptables has --hex-strings, etc.
 &ipt_test() unless $no_ipt_test;
@@ -854,12 +856,12 @@ sub ipt_build() {
             ### iptables:   any source -> internal net (for FORWARD chain)
             if (defined $config{'INTERNAL_INTF'}
                     and $config{'INTERNAL_INTF'} ne $config{'EXTERNAL_INTF'}) {
-                push @forward_rules_sd, "$iptables_opts{'dst'} " .
+                push @forward_rules_sd, "$ipt_hdr_opts{'dst'} " .
                     $intf_net{'INTERNAL_INTF'}{'net'};
                 push @forward_rules_chn, 'fwsnort_FORWARD';
             }
             if (defined $config{'DMZ_INTF'}) {
-                push @forward_rules_sd, "$iptables_opts{'dst'} " .
+                push @forward_rules_sd, "$ipt_hdr_opts{'dst'} " .
                     $intf_net{'DMZ_INTF'}{'net'};
                 push @forward_rules_chn, 'fwsnort_FORWARD';
             }
@@ -874,7 +876,7 @@ sub ipt_build() {
             ### snort:      HOME -> EXTERNAL
             ### iptables:   internal net -> any destination (for FORWARD chain)
             if ($config{'INTERNAL_INTF'} ne $config{'EXTERNAL_INTF'}) {
-                push @forward_rules_sd, "$iptables_opts{'src'} " .
+                push @forward_rules_sd, "$ipt_hdr_opts{'src'} " .
                     $intf_net{'INTERNAL_INTF'}{'net'};
                 push @forward_rules_chn, 'fwsnort_FORWARD';
             }
@@ -882,7 +884,7 @@ sub ipt_build() {
                 push @input_rules_sd, $intf_net{'DMZ_INTF'}{'ip'};
                 push @input_rules_chns,
                     "fwsnort_INPUT_${intf_net{'DMZ_INTF'}{'name'}}";
-                push @forward_rules_sd, "$iptables_opts{'src'} " .
+                push @forward_rules_sd, "$ipt_hdr_opts{'src'} " .
                     $intf_net{'DMZ_INTF'}{'net'};
                 push @forward_rules_chn, 'fwsnort_FORWARD';
             }
@@ -890,18 +892,18 @@ sub ipt_build() {
     } elsif ($dst eq 'any') {
         if ($src eq 'any') {
             ### traffic in the INPUT chain on _both_ interfaces
-            push @input_rules_sd, "$iptables_opts{'dst'} " .
+            push @input_rules_sd, "$ipt_hdr_opts{'dst'} " .
                 $intf_net{'EXTERNAL_INTF'}{'ip'};
             push @input_rules_chns, "fwsnort_INPUT_$config{'EXTERNAL_INTF'}";
 
             if (defined $config{'INTERNAL_INTF'}) {
-                push @input_rules_sd, "$iptables_opts{'dst'} " .
+                push @input_rules_sd, "$ipt_hdr_opts{'dst'} " .
                     $intf_net{'INTERNAL_INTF'}{'ip'};
                 push @input_rules_chns,
                     "fwsnort_INPUT_$config{'INTERNAL_INTF'}";
             }
             if (defined $config{'DMZ_INTF'}) {
-                push @input_rules_sd, "$iptables_opts{'dst'} " .
+                push @input_rules_sd, "$ipt_hdr_opts{'dst'} " .
                     $intf_net{'DMZ_INTF'}{'ip'};
                 push @input_rules_chns,
                     "fwsnort_INPUT_$config{'DMZ_INTF'}";
@@ -910,18 +912,18 @@ sub ipt_build() {
             ### the internal or external nets
             if (defined $config{'INTERNAL_INTF'}
                     and $config{'INTERNAL_INTF'} ne $config{'EXTERNAL_INTF'}) {
-                push @forward_rules_sd, "$iptables_opts{'dst'} " .
+                push @forward_rules_sd, "$ipt_hdr_opts{'dst'} " .
                     $intf_net{'INTERNAL_INTF'}{'net'};
                 push @forward_rules_chn, 'fwsnort_FORWARD';
-                push @forward_rules_sd, "$iptables_opts{'src'} " .
+                push @forward_rules_sd, "$ipt_hdr_opts{'src'} " .
                     $intf_net{'INTERNAL_INTF'}{'net'};
                 push @forward_rules_chn, 'fwsnort_FORWARD';
             }
             if (defined $config{'DMZ_INTF'}) {
-                push @forward_rules_sd, "$iptables_opts{'dst'} " .
+                push @forward_rules_sd, "$ipt_hdr_opts{'dst'} " .
                     $intf_net{'DMZ_INTF'}{'net'};
                 push @forward_rules_chn, 'fwsnort_FORWARD';
-                push @forward_rules_sd, "$iptables_opts{'src'} " .
+                push @forward_rules_sd, "$ipt_hdr_opts{'src'} " .
                     $intf_net{'DMZ_INTF'}{'net'};
                 push @forward_rules_chn, 'fwsnort_FORWARD';
             }
@@ -995,38 +997,38 @@ sub ipt_build_rule() {
         $rule .= " $iptables_opts{'ip_proto'} $opts_href->{'ip_proto'}";
     } else {
         return 0 unless $hdr_href->{'proto'} =~ /^\w+$/;
-        $rule .= " $iptables_opts{'proto'} $hdr_href->{'proto'}";
+        $rule .= " $ipt_hdr_opts{'proto'} $hdr_href->{'proto'}";
     }
 
     ### append the source (this will always be either "-s <net>" or
     ### "-d <net>" instead of "-s <ip>" or "-d <ip>" (the IP tied to
     ### a firewall interface is never actually used since everything
     ### is done by interface instead).  This is definitely a kludge.
-    if ($src_dst =~ m|$iptables_opts{'src'}|) {
+    if ($src_dst =~ m|$ipt_hdr_opts{'src'}|) {
         $rule .= " $src_dst";
     }
 
     ### append the source port
     if (defined $config{$hdr_href->{'src_p'}}) {
         $config{$hdr_href->{'src_p'}} =~ s/\!(\d)/! $1/;
-        $rule .= " $iptables_opts{'src_p'} $config{$hdr_href->{'src_p'}}";
+        $rule .= " $ipt_hdr_opts{'sport'} $config{$hdr_href->{'src_p'}}";
     } elsif ($hdr_href->{'src_p'} ne 'any') {
         $hdr_href->{'src_p'} =~ s/\!(\d)/! $1/;
-        $rule .= " $iptables_opts{'src_p'} $hdr_href->{'src_p'}";
+        $rule .= " $ipt_hdr_opts{'sport'} $hdr_href->{'src_p'}";
     }
 
     ### append the destination
-    if ($src_dst =~ m|$iptables_opts{'dst'}|) {
+    if ($src_dst =~ m|$ipt_hdr_opts{'dst'}|) {
         $rule .= " $src_dst";
     }
 
     ### append the destination port
     if (defined $config{$hdr_href->{'dst_p'}}) {
         $config{$hdr_href->{'dst_p'}} =~ s/\!(\d)/! $1/;
-        $rule .= " $iptables_opts{'dst_p'} $config{$hdr_href->{'dst_p'}}";
+        $rule .= " $ipt_hdr_opts{'dport'} $config{$hdr_href->{'dst_p'}}";
     } elsif ($hdr_href->{'dst_p'} ne 'any') {
         $hdr_href->{'dst_p'} =~ s/\!(\d)/! $1/;
-        $rule .= " $iptables_opts{'dst_p'} $hdr_href->{'dst_p'}";
+        $rule .= " $ipt_hdr_opts{'dport'} $hdr_href->{'dst_p'}";
     }
 
     &ipt_build_opts($rule, $hdr_href, $opts_href, $orig_snort_rule);
@@ -1870,6 +1872,12 @@ sub write_ipt_script() {
     open F, "> $ipt_script" or die "[*] Could not open $ipt_script: $!";
     print F "$_\n" for @ipt_script_lines;
     close F;
+    return;
+}
+
+sub truncate_logfile() {
+    open L, "> $logfile" or die "[*] Could not open $logfile: $!";
+    close L;
     return;
 }
 
