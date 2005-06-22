@@ -143,37 +143,52 @@ my %ipt_hdr_opts = (
     'proto'    => '-p',
 );
 
-my %iptables_opts = (
-    'uricontent' => '-m string',
-    'content'  => '-m string',
-    'ipopts'   => '-m ipv4options',  ### requires ipv4options extension
-    'flags'    => '--tcp-flags',
-    'flow'     => '--tcp-flags',  ### revert to keeping track of ACK
-                                  ### flags (usually ok).
-    'itype'    => '--icmp-type',
-    'ttl'      => '-m ttl', ### requires CONFIG_IP_NF_MATCH_TTL
-    'tos'      => '--tos', ### requires CONFIG_IP_NF_MATCH_TOS
-    'seq'      => '--log-tcp-sequence',
-    'ip_proto' => '-p',
-    'resp'     => '-j REJECT'
-);
-
 my %snort_opts = (
     ### snort options that we can directly filter on
     ### in iptables rulesets (snort options are separate
     ### from the snort "header" which include protocol,
     ### source, destination, etc.)
     'filter' => {
-        'uricontent' => '[\s;]uricontent:\s*\"(.*?)\"\s*;',
-        'content'  => '[\s;]content:\s*\"(.*?)\"\s*;',
-        'flags'    => '[\s;]flags:\s*(.*?)\s*;',
-        'itype'    => '[\s;]itype:\s*(\d+)\s*;',
-        'ttl'      => '[\s;]ttl:\s*(.*?)\s*;',
-        'tos'      => '[\s;]tos:\s*(\d+)\s*;',
-        'ipopts'   => '[\s;]ipopts:\s*(\w+)\s*;',
-        'flow'     => '[\s;]flow:\s*(.*?)\s*;',
-        'ip_proto' => '[\s;]ip_proto:\s*(.*?)\s*;',
-        'resp'     => '[\s;]resp:\s*(.*?)\s*;'
+        'uricontent' => {
+            'iptopt' => '-m string',
+            'regex'  => '[\s;]uricontent:\s*\"(.*?)\"\s*;'
+        },
+        'content' => {
+            'iptopt' => '-m string',
+            'regex'  => '[\s;]content:\s*\"(.*?)\"\s*;'
+        },
+        'flags' => {
+            'iptopt' => '--tcp-flags',
+            'regex'  => '[\s;]flags:\s*(.*?)\s*;'
+        },
+        'itype' => {
+            'iptopt' => '--icmp-type',
+            'regex'  => '[\s;]itype:\s*(\d+)\s*;'
+        },
+        'ttl' => {
+            'iptopt' => '-m ttl', ### requires CONFIG_IP_NF_MATCH_TTL
+            'regex'  => '[\s;]ttl:\s*(.*?)\s*;'
+        },
+        'tos' => {
+            'iptopt' => '--tos', ### requires CONFIG_IP_NF_MATCH_TOS
+            'regex'  => '[\s;]tos:\s*(\d+)\s*;'
+        },
+        'ipopts' => {
+            'iptopt' => '-m ipv4options',  ### requires ipv4options extension
+            'regex'  => '[\s;]ipopts:\s*(\w+)\s*;'
+        },
+        'flow' => {
+            'iptopt' => '--tcp-flags',
+            'regex'  => '[\s;]flow:\s*(.*?)\s*;'
+        },
+        'ip_proto' => {
+            'iptopt' => '-p',
+            'regex'  => '[\s;]ip_proto:\s*(.*?)\s*;'
+        },
+        'resp' => {
+            'iptopt' => '-j REJECT',
+            'regex'  => '[\s;]resp:\s*(.*?)\s*;'
+        }
     },
 
     ### snort options that can be put into iptables
@@ -639,7 +654,7 @@ sub parse_rule_options() {
 
     for my $opt (keys %{$snort_opts{'filter'}}) {
         ### see if we match the option regex
-        if ($rule_options =~ /$snort_opts{'filter'}{$opt}/) {
+        if ($rule_options =~ /$snort_opts{'filter'}{$opt}{'regex'}/) {
             $opts{$opt} = $1;
         }
     }
@@ -994,7 +1009,8 @@ sub ipt_build_rule() {
     ### append the protocol to the rule
     if (defined $opts_href->{'ip_proto'}) {
         return 0 unless $opts_href->{'ip_proto'} =~ /^\w+$/;
-        $rule .= " $iptables_opts{'ip_proto'} $opts_href->{'ip_proto'}";
+        $rule .= " $snort_opts{'filter'}{'ip_proto'}{'iptopt'} " .
+            "$opts_href->{'ip_proto'}";
     } else {
         return 0 unless $hdr_href->{'proto'} =~ /^\w+$/;
         $rule .= " $ipt_hdr_opts{'proto'} $hdr_href->{'proto'}";
@@ -1052,10 +1068,12 @@ sub ipt_build_opts() {
 
         if ($opts_href->{'flags'} =~ /\+/) {
             ### --tcp-flags ACK ACK
-            $rule .= " $iptables_opts{'flags'} $f_str $f_str";
+            $rule .= " $snort_opts{'filter'}{'flags'}{'iptopt'} " .
+                "$f_str $f_str";
         } else {
             ### --tcp-flags ALL URG,PSH,SYN,FIN
-            $rule .= " $iptables_opts{'flags'} ALL $f_str";
+            $rule .= " $snort_opts{'filter'}{'flags'}{'iptopt'} " .
+                "ALL $f_str";
         }
     }
 
@@ -1069,34 +1087,38 @@ sub ipt_build_opts() {
         if ($opts_href->{'flow'} =~ /established/) {
             ### note that this ignores the "stateless" keyword
             ### as it should...
-            $rule .= " $iptables_opts{'flow'} ACK ACK";
+            $rule .= " $snort_opts{'filter'}{'flow'}{'iptopt'} ACK ACK";
         }
     }
 
     ### append tos (requires CONFIG_IP_NF_MATCH_TOS)
     if (defined $opts_href->{'tos'}) {
-        $rule .= " $iptables_opts{'tos'} $opts_href->{'tos'}"
+        $rule .= " $snort_opts{'filter'}{'tos'}{'iptopt'} " .
+            "$opts_href->{'tos'}"
     }
 
     ### append ttl (requires CONFIG_IP_NF_MATCH_TTL)
     if (defined $opts_href->{'ttl'}) {
         if ($opts_href->{'ttl'} =~ /\<\s*(\d+)/) {
-            $rule .= " $iptables_opts{'ttl'} -ttl-lt $1";
+            $rule .= " $snort_opts{'filter'}{'ttl'}{'iptopt'} --ttl-lt $1";
         } elsif ($opts_href->{'ttl'} =~ /\>\s*(\d+)/) {
-            $rule .= " $iptables_opts{'ttl'} -ttl-gt $1";
+            $rule .= " $snort_opts{'filter'}{'ttl'}{'iptopt'} --ttl-gt $1";
         } else {
-            $rule .= " $iptables_opts{'ttl'} -ttl-eq $opts_href->{'ttl'}";
+            $rule .= " $snort_opts{'filter'}{'ttl'}{'iptopt'} " .
+                "--ttl-eq $opts_href->{'ttl'}";
         }
     }
 
     ### append icmp type
     if (defined $opts_href->{'itype'}) {
-        $rule .= " $iptables_opts{'itype'} $opts_href->{'itype'}"
+        $rule .= " $snort_opts{'filter'}{'itype'}{'iptopt'} " .
+            "$opts_href->{'itype'}"
     }
 
     ### append ip options
     if (defined $opts_href->{'ipopts'}) {
-        $rule .= " $iptables_opts{'ipopts'} --$opts_href->{'ipopts'}"
+        $rule .= " $snort_opts{'filter'}{'ipopts'}{'iptopt'} " .
+            "--$opts_href->{'ipopts'}"
     }
 
     ### append snort content options
@@ -1109,9 +1131,11 @@ sub ipt_build_opts() {
     if ($content) {
         $content =~ s/`/\\`/g;
         if ($content =~ /\|.+\|/) {  ### there is hex data in the content
-            $rule .= " $iptables_opts{'content'} --hex-string \"$content\"";
+            $rule .= " $snort_opts{'filter'}{'content'}{'iptopt'} " .
+                "--hex-string \"$content\"";
         } else {
-            $rule .= " $iptables_opts{'content'} --string \"$content\"";
+            $rule .= " $snort_opts{'filter'}{'content'}{'iptopt'} " .
+                "--string \"$content\"";
         }
     }
 
@@ -1483,14 +1507,6 @@ sub validate_conf() {
     &build_port_arr('SHELLCODE_PORTS', \@shellcode_ports);
     &build_port_arr('ORACLE_PORTS', \@oracle_ports);
 
-    ### make sure all necessary iptables options are defined
-    ### based on the options in %snort_opts
-    for my $snort_opt (keys %{$snort_opts{'filter'}}) {
-        die "[*] Equivalent iptables filter option not defined\n",
-            "    for snort option \"$snort_opt\""
-        unless defined $iptables_opts{$snort_opt};
-    }
-
     return;
 }
 
@@ -1552,7 +1568,8 @@ sub ipt_test() {
         ### put ipopts in the unsupported list
         if (defined $snort_opts{'filter'}{'ipopts'}) {
             $snort_opts{'unsupported'}{'ipopts'} =
-                $snort_opts{'filter'}{'ipopts'};
+                $snort_opts{'filter'}{'ipopts'}{'regex'};
+            delete $snort_opts{'filter'}{'ipopts'};
         } else {
             $snort_opts{'unsupported'}{'ipopts'} = '[\s;]ipopts:\s*(\w+)\s*;';
         }
@@ -1569,7 +1586,8 @@ sub ipt_test() {
             "disabling ttl translation.");
         if (defined $snort_opts{'filter'}{'ttl'}) {
             $snort_opts{'unsupported'}{'ttl'} =
-                $snort_opts{'filter'}{'ttl'};
+                $snort_opts{'filter'}{'ttl'}{'regex'};
+            delete $snort_opts{'filter'}{'ttl'};
         } else {
             $snort_opts{'unsupported'}{'ttl'} = '[\s;]ttl:\s*(.*?)\s*;';
         }
@@ -1586,9 +1604,10 @@ sub ipt_test() {
             "disabling tos translation.");
         if (defined $snort_opts{'filter'}{'tos'}) {
             $snort_opts{'unsupported'}{'tos'} =
-                $snort_opts{'filter'}{'tos'};
+                $snort_opts{'filter'}{'tos'}{'regex'};
+            delete $snort_opts{'filter'}{'tos'};
         } else {
-            $snort_opts{'unsupported'}{'ttl'} = '[\s;]ttl:\s*(.*?)\s*;';
+            $snort_opts{'unsupported'}{'tos'} = '[\s;]tos:\s*(.*?)\s*;';
         }
     }
 
