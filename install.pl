@@ -103,7 +103,7 @@ sub install() {
     }
 
     ### install Net::IPv4Addr
-    print "[+] Installing the Net::IPv4Addr perl module.\n";
+    print "[+] Installing the Net::IPv4Addr perl module in $lib_dir/.\n";
     chdir 'Net-IPv4Addr' or die "[*] Could not chdir to ",
         "Net-IPv4Addr: $!";
     unless (-e 'Makefile.PL' && -e 'IPv4Addr.pm') {
@@ -116,7 +116,7 @@ sub install() {
     chdir '..';
 
     ### installing IPTables::Parse
-    print "[+] Installing the IPTables::Parse perl module\n";
+    print "[+] Installing the IPTables::Parse perl module in $lib_dir/\n";
     chdir 'IPTables/Parse' or die "[*] Could not chdir to ",
         "IPTables/Parse: $!";
     unless (-e 'Makefile.PL') {
