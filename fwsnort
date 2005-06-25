@@ -295,12 +295,16 @@ my $no_ipt_sync    = 0;
 my $no_ipt_log     = 0;
 my $no_ipt_test    = 0;
 my $no_ipt_jumps   = 0;
+my $no_ipt_input   = 0;
+my $no_ipt_output  = 0;
+my $no_ipt_forward = 0;
 my $add_deleted    = 0;
 my $rules_type     = '';
 my $snort_type     = '';
 my $ulog_nlgroup   = 1;
 my $ulog_mode      = 0;
 my $no_ipt_conntrack = 0;
+my $ipt_restrict_intf = '';
 
 ### make Getopts case sensitive
 Getopt::Long::Configure('no_ignore_case');
@@ -326,6 +330,14 @@ Getopt::Long::Configure('no_ignore_case');
                                         # FORWARD chains.
     'no-ipt-conntrack' => \$no_ipt_conntrack, # Don't use Netfitler connection
                                         # tracking (falls back to ACK flag test).
+    'no-ipt-INPUT'   => \$no_ipt_input, # Disable fwsnort rules processed via
+                                        # the INPUT chain.
+    'no-ipt-OUTPUT'  => \$no_ipt_output, # Disable fwsnort rules processed via
+                                         # the OUTPUT chain.
+    'no-ipt-FORWARD' => \$no_ipt_forward, # Disable fwsnort rules processed via
+                                          # the FORWARD chain.
+    'restrict-intf=s' => \$ipt_restrict_intf, # Restrict Netfilter rules to an
+                                        # individual interface.
     'update-rules'   => \$update_rules, # Download latest snort rules.
     'add-deleted'    => \$add_deleted,  # Add deleted rules.
     'strict'         => \$strict,       # Strict mode.
@@ -868,11 +880,19 @@ sub ipt_build() {
         ### build iptables INPUT rules
         for my $src_dst (@ipt_input_rules) {
             my $rule = "\$IPTABLES -A ";
+
+            ### see if we can jump to the ESTABLISHED inspection
+            ### chain.
             if ($flow_established) {
                 $rule .= $fws_in_established;
             } else {
                 $rule .= $fws_in;
             }
+
+            ### append interface restriction if necessary
+            $rule .= " -i $ipt_restrict_intf" if $ipt_restrict_intf;
+
+            ### append source and destination criteria
             $rule .= " $src_dst" if $src_dst;
 
             my $rv = &ipt_build_rule(
@@ -891,11 +911,18 @@ sub ipt_build() {
         ### build iptables INPUT rules
         for my $src_dst (@ipt_output_rules) {
             my $rule = "\$IPTABLES -A ";
+
+            ### see if we can jump to the ESTABLISHED inspection
             if ($flow_established) {
                 $rule .= $fws_out_established;
             } else {
                 $rule .= $fws_out;
             }
+
+            ### append interface restriction if necessary
+            $rule .= " -o $ipt_restrict_intf" if $ipt_restrict_intf;
+
+            ### append source and destination criteria
             $rule .= " $src_dst" if $src_dst;
 
             my $rv = &ipt_build_rule(
@@ -914,11 +941,18 @@ sub ipt_build() {
         ### build iptables INPUT rules
         for my $src_dst (@ipt_forward_rules) {
             my $rule = "\$IPTABLES -A ";
+
+            ### see if we can jump to the ESTABLISHED inspection
             if ($flow_established) {
                 $rule .= $fws_forward_established;
             } else {
                 $rule .= $fws_forward;
             }
+
+            ### append interface restriction if necessary
+            $rule .= " -i $ipt_restrict_intf" if $ipt_restrict_intf;
+
+            ### append source and destination criteria
             $rule .= " $src_dst" if $src_dst;
 
             my $rv = &ipt_build_rule(
@@ -1401,6 +1435,7 @@ sub fwsnort_init() {
 }
 
 sub handle_cmd_line() {
+
     ### Print the version number and exit if -V given on the command line.
     if ($print_ver) {
         print "[+] fwsnort v$version, by Michael Rash (mbr\@cipherdyne.org)\n";
@@ -1436,6 +1471,9 @@ sub handle_cmd_line() {
     }
 
     $ipt_sync = 0 if $no_ipt_sync;
+    $ipt_input   = 0 if $no_ipt_input;
+    $ipt_output  = 0 if $no_ipt_output;
+    $ipt_forward = 0 if $no_ipt_forward;
 
     return;
 }
