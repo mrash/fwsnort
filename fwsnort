@@ -890,7 +890,11 @@ sub ipt_build() {
             }
 
             ### append interface restriction if necessary
-            $rule .= " -i $ipt_restrict_intf" if $ipt_restrict_intf;
+            if ($ipt_restrict_intf) {
+                $rule .= " -i $ipt_restrict_intf";
+            } elsif ($src_dst =~ m|127\.0\.0\.\d/|) {
+                $rule .= " -i ! lo";
+            }
 
             ### append source and destination criteria
             $rule .= " $src_dst" if $src_dst;
@@ -920,7 +924,11 @@ sub ipt_build() {
             }
 
             ### append interface restriction if necessary
-            $rule .= " -o $ipt_restrict_intf" if $ipt_restrict_intf;
+            if ($ipt_restrict_intf) {
+                $rule .= " -o $ipt_restrict_intf";
+            } elsif ($src_dst =~ m|127\.0\.0\.\d/|) {
+                $rule .= " -o ! lo";
+            }
 
             ### append source and destination criteria
             $rule .= " $src_dst" if $src_dst;
@@ -950,7 +958,11 @@ sub ipt_build() {
             }
 
             ### append interface restriction if necessary
-            $rule .= " -i $ipt_restrict_intf" if $ipt_restrict_intf;
+            if ($ipt_restrict_intf) {
+                $rule .= " -i $ipt_restrict_intf";
+            } elsif ($src_dst =~ m|127\.0\.0\.\d/|) {
+                $rule .= " -i ! lo";
+            }
 
             ### append source and destination criteria
             $rule .= " $src_dst" if $src_dst;
