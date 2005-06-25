@@ -1,3 +1,24 @@
+fwsnort-0.8.0 (06//2005):
+    - Completely re-structured fwsnort w.r.t. how it creates Netfilter
+      chains.  There are no longer any per-interface chains (this
+      greatly simplifies the Netfilter chains).
+    - Added three new chains "FWSNORT_INPUT_ESTAB", "FWSNORT_OUTPUT_ESTAB"
+      and "FWSNORT_FORWARD_ESTAB" to which tcp connections in the
+      ESTABLISHED state are jumped.  This allows fwsnort to use the
+      Netfilter tcp connection tracking mechanism to ignore Stick and Snot
+      style attacks (similar to the flow:established Snort rule option).
+    - Added true variable resolution (i.e. HTTP_SERVERS -> HOME_NET -> any)
+      for the Snort rule header.  This directly emulates the behavior of
+      the Snort IDS.
+    - Added IP protocol support in the translation of the Snort rule
+      header.  The Snort rule translation rate is now at about 51% for
+      Snort-2.3.
+    - Bugfix for ipopts Snort option (several arguments are not supported
+      by the ipv4options extension).
+    - Better tests for Netfiler TTL, TOS, and ipv4options matches.
+    - Replaced IGNORE_IP and IGNORE_NET keywords with single IGNORE_ADDR
+      keywork in fwsnort.conf.
+
 fwsnort-0.7.0 (06/05/2005):
     - Added support for the Snort pass action by using the ACCEPT target.
     - Added support for the Snort log action by using the ULOG target
