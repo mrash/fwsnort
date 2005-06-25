@@ -300,6 +300,7 @@ my $rules_type     = '';
 my $snort_type     = '';
 my $ulog_nlgroup   = 1;
 my $ulog_mode      = 0;
+my $no_ipt_conntrack = 0;
 
 ### make Getopts case sensitive
 Getopt::Long::Configure('no_ignore_case');
@@ -323,6 +324,8 @@ Getopt::Long::Configure('no_ignore_case');
                                         # iptables.
     'no-ipt-jumps'   => \$no_ipt_jumps, # Don't jump packets from the INPUT or
                                         # FORWARD chains.
+    'no-ipt-conntrack' => \$no_ipt_conntrack, # Don't use Netfitler connection
+                                        # tracking (falls back to ACK flag test).
     'update-rules'   => \$update_rules, # Download latest snort rules.
     'add-deleted'    => \$add_deleted,  # Add deleted rules.
     'strict'         => \$strict,       # Strict mode.
@@ -374,7 +377,7 @@ Getopt::Long::Configure('no_ignore_case');
 
 ### add jump rules for established tcp connections to
 ### the fwsnort state tracking chains
-&ipt_add_conntrack_jumps();
+&ipt_add_conntrack_jumps() unless $no_ipt_conntrack;
 
 ### display the config on STDOUT
 &dump_conf() if $dump_conf;
@@ -851,12 +854,14 @@ sub ipt_build() {
     }
 
     ### determine which chain (stateful/stateless)
-    my $flow_established = 0;
-    if (defined $snort_hdr_href->{'proto'}
-            and $snort_hdr_href->{'proto'} =~ /tcp/i
-            and defined $snort_opts_href->{'flow'}
-            and $snort_opts_href->{'flow'} =~ /established/i) {
-        $flow_established = 1;
+    my $flow_established = '';
+    unless ($no_ipt_conntrack) {
+        if (defined $snort_hdr_href->{'proto'}
+                and $snort_hdr_href->{'proto'} =~ /tcp/i
+                and defined $snort_opts_href->{'flow'}
+                and $snort_opts_href->{'flow'} =~ /established/i) {
+            $flow_established = 'ESTABLISHED';
+        }
     }
 
     if ($ipt_input and @ipt_input_rules) {
@@ -876,6 +881,7 @@ sub ipt_build() {
                 $snort_hdr_href,
                 $snort_opts_href,
                 $orig_snort_rule,
+                $flow_established
             );
             $found_rule = 1 if $rv;
         }
@@ -898,6 +904,7 @@ sub ipt_build() {
                 $snort_hdr_href,
                 $snort_opts_href,
                 $orig_snort_rule,
+                $flow_established
             );
             $found_rule = 1 if $rv;
         }
@@ -920,6 +927,7 @@ sub ipt_build() {
                 $snort_hdr_href,
                 $snort_opts_href,
                 $orig_snort_rule,
+                $flow_established
             );
             $found_rule = 1 if $rv;
         }
@@ -934,7 +942,7 @@ sub is_local() {
 
 sub ipt_build_rule() {
     my ($chain, $rule, $hdr_href, $opts_href,
-        $orig_snort_rule) = @_;
+        $orig_snort_rule, $flow_logging_prefix) = @_;
 
     ### $chain is either INPUT or FORWARD, and is used only to
     ### see whether or not we need to add the rule to the iptables
@@ -974,12 +982,14 @@ sub ipt_build_rule() {
         $rule .= " $ipt_hdr_opts{'dport'} $hdr_href->{'dport'}";
     }
 
-    &ipt_build_opts($rule, $hdr_href, $opts_href, $orig_snort_rule);
+    &ipt_build_opts($rule, $hdr_href,
+        $opts_href, $orig_snort_rule, $flow_logging_prefix);
     return 1;
 }
 
 sub ipt_build_opts() {
-    my ($rule, $hdr_href, $opts_href, $orig_snort_rule) = @_;
+    my ($rule, $hdr_href, $opts_href,
+        $orig_snort_rule, $flow_logging_prefix) = @_;
 
     ### append tcp flags
     if (defined $opts_href->{'flags'}) {
@@ -1001,6 +1011,22 @@ sub ipt_build_opts() {
             ### --tcp-flags ALL URG,PSH,SYN,FIN
             $rule .= " $snort_opts{'filter'}{'flags'}{'iptopt'} " .
                 "ALL $f_str";
+        }
+    }
+
+    if ($no_ipt_conntrack) {
+        ### fall back to appending --tcp-flags ACK ACK if flow=established.
+        ### NOTE: we can't really handle "flow" in the same way snort can,
+        ### since there is no way to keep track of which side initiated the
+        ### tcp session (where the SYN packet came from), but older versions
+        ### of snort (pre 1.9) just used tcp flags "A+" to keep track of
+        ### this... we need to do the same.
+        if (defined $opts_href->{'flow'} && ! defined $opts_href->{'flags'}) {
+            if ($opts_href->{'flow'} =~ /established/i) {
+                ### note that this ignores the "stateless" keyword
+                ### as it should...
+                $rule .= " $snort_opts{'filter'}{'flow'}{'iptopt'} ACK ACK";
+            }
         }
     }
 
@@ -1060,8 +1086,14 @@ sub ipt_build_opts() {
     } else {
         ### construct the log-prefix (should only contain the sid
         ### to conserve kernel memory).
-        $log_target = " -j LOG --log-prefix \"SID$opts_href->{'sid'} \""
-            if defined $opts_href->{'sid'};
+        if ($flow_logging_prefix) {
+            $log_target = " -j LOG --log-prefix \"SID$opts_href->{'sid'} " .
+                "$flow_logging_prefix \""
+                if defined $opts_href->{'sid'};
+        } else {
+            $log_target = " -j LOG --log-prefix \"SID$opts_href->{'sid'} \""
+                if defined $opts_href->{'sid'};
+        }
     }
 
     ### print the rest of the logprefix snort options in a comment
@@ -1188,6 +1220,9 @@ sub ipt_add_chains() {
         "fwsnort Netfilter chains. ############\n###";
     if ($ipt_input) {
         for my $chain ($fws_in, $fws_in_established) {
+            if ($no_ipt_conntrack) {
+                next if $chain eq $fws_in_established;
+            }
             push @ipt_script_lines, "\$IPTABLES -N " .
                 "$chain 2> /dev/null";
             push @ipt_script_lines, "\$IPTABLES -F " .
@@ -1196,6 +1231,9 @@ sub ipt_add_chains() {
     }
     if ($ipt_output) {
         for my $chain ($fws_out, $fws_out_established) {
+            if ($no_ipt_conntrack) {
+                next if $chain eq $fws_out_established;
+            }
             push @ipt_script_lines, "\$IPTABLES -N " .
                 "$chain 2> /dev/null";
             push @ipt_script_lines, "\$IPTABLES -F " .
@@ -1204,6 +1242,9 @@ sub ipt_add_chains() {
     }
     if ($ipt_forward) {
         for my $chain ($fws_forward, $fws_forward_established) {
+            if ($no_ipt_conntrack) {
+                next if $chain eq $fws_forward_established;
+            }
             push @ipt_script_lines, "\$IPTABLES -N " .
                 "$chain 2> /dev/null";
             push @ipt_script_lines, "\$IPTABLES -F " .
@@ -1251,15 +1292,16 @@ sub ipt_hdr() {
     push @ipt_script_lines, "##########################################" .
         "##############################";
     push @ipt_script_lines, "#\n# File:  $ipt_script";
-    push @ipt_script_lines, "#\n# Purpose:  This script was auto " .
+    push @ipt_script_lines, "#\n# Purpose:  This script was auto-" .
         "generated by fwsnort, and implements";
-    push @ipt_script_lines, "#           an iptables ruleset based upon " .
+    push @ipt_script_lines, "#           a Netfilter ruleset based upon " .
         "Snort rules.  For more";
     push @ipt_script_lines, "#           information see the fwsnort man " .
         "page or the documentation";
     push @ipt_script_lines, "#           available at " .
         "http://www.cipherdyne.org/fwsnort/";
     push @ipt_script_lines, "#\n# Author:  Michael Rash <mbr\@cipherdyne.org>";
+    push @ipt_script_lines, "#\n# Version: $version";
     push @ipt_script_lines, "#";
     push @ipt_script_lines, "###############################################" .
         "#########################\n#\n";
@@ -1394,6 +1436,7 @@ sub handle_cmd_line() {
     }
 
     $ipt_sync = 0 if $no_ipt_sync;
+
     return;
 }
 
@@ -1481,28 +1524,46 @@ sub ipt_test() {
 
     ### test for string match support.
     $rv = (system "$cmds{'iptables'} -I INPUT 1 -s " .
-        qq|127.0.0.2 -m string --string "test" 2> /dev/null|) >> 8;
+        qq|127.0.0.2 -m string --string "test" -j LOG 2> /dev/null|) >> 8;
     if ($rv == 0) {
         system "$cmds{'iptables'} -D INPUT 1";
     } else {
-        die "[*] It does not appear that string match support is ",
-            "compiled into\n    iptables.  fwsnort will not be of very ",
-            "much use without this.\n    ** NOTE: If you want to have ",
-            "fwsnort generate an iptables script\n    anyway, ",
-            "specify the --no-ipt-test option.  Exiting.\n";
+        die
+"[*] It does not appear that string match support has been compiled into\n",
+"    Netfilter.  Fwsnort will not be of very much use without this.\n",
+"    ** NOTE: If you want to have fwsnort generate a Netfilter policy\n",
+"    anyway, specify the --no-ipt-test option.  Exiting.\n";
     }
 
     ### test for --hex-string
     $rv = (system "$cmds{'iptables'} -I INPUT 1 -s 127.0.0.2 " .
-        "-m string --hex-string \"|0a 5d|\" 2> /dev/null") >> 8;
+        "-m string --hex-string \"|0a 5d|\" -j LOG 2> /dev/null") >> 8;
     if ($rv == 0) {
         system "$cmds{'iptables'} -D INPUT 1";
     } else {
-        die "[*] It does not appear that the --hex-string patch has ",
-            "been applied.\n    fwsnort will not be of very much use ",
-            "without this.\n    ** NOTE: If you want to have ",
-            "fwsnort generate an iptables script\n    anyway, ",
-            "specify the --no-ipt-test option.  Exiting.\n";
+        die
+"[*] It does not appear that the --hex-string patch has been applied.\n",
+"    fwsnort will not be of very much use without this. ** NOTE: If you\n",
+"    want to have fwsnort generate an Netfilter policy anyway, then",
+"    specify the --no-ipt-test option.  Exiting.\n";
+    }
+
+    unless ($no_ipt_conntrack) {
+        ### test for tcp connection tracking support
+        $rv = (system "$cmds{'iptables'} -I INPUT 1 -s 127.0.0.2 -p tcp " .
+            "--dport 3001 -m state --state ESTABLISHED -j LOG 2> " .
+            "/dev/null") >> 8;
+        if ($rv == 0) {
+            system "$cmds{'iptables'} -D INPUT 1";
+        } else {
+        die
+"[*] It does not appear that Netfilter has been compiled with connection\n",
+"    tracking support.  If you want fwsnort to generated a policy anyway\n",
+"    and just use a tcp flags check for established tcp connections, then\n",
+"    use the --no-ipt-conntrack option.  **NOTE: The resulting fwsnort\n",
+"    Netfilter policy will be susceptible to a stick or snot-style attack.\n",
+"    Exiting.\n";
+        }
     }
 
     if ($ipt_reject) {
@@ -1513,10 +1574,10 @@ sub ipt_test() {
         if ($rv == 0) {
             system "$cmds{'iptables'} -D INPUT 1";
         } else {
-            die "[*] It does not appear that the REJECT target has ",
-                "been compiled into iptables.\n    The --ipt-reject option ",
-                "requires this option so that tcp sessions can be killed.\n",
-                "    Exiting.\n";
+            die
+"[*] It does not appear that the REJECT target has been compiled into\n",
+"    Netfilter.  The --ipt-reject option requires this option so that tcp\n",
+"    sessions can be killed.  Exiting.\n";
         }
     }
 
