@@ -170,8 +170,12 @@ my %snort_opts = (
             'regex'  => '[\s;]flags:\s*(.*?)\s*;'
         },
         'itype' => {
+            'iptopt' => 'NONE',  ### --icmp-type type/code
+            'regex'  => '[\s;]itype:\s*(.*?)\s*;'
+        },
+        'icode' => {
             'iptopt' => '--icmp-type',
-            'regex'  => '[\s;]itype:\s*(\d+)\s*;'
+            'regex'  => '[\s;]icode:\s*(.*?)\s*;'
         },
         'ttl' => {
             'iptopt' => '-m ttl', ### requires CONFIG_IP_NF_MATCH_TTL
@@ -237,7 +241,6 @@ my %snort_opts = (
         'seq'      => '[\s;]seq:\s*(\d+)\s*;',  ### --log-tcp-sequence
         'icmp_seq' => '[\s;]icmp_seq:\s*(\d+)\s*;',
         'icmp_id'  => '[\s;]icmp_id:\s*(\d+)\s*;',
-        'icode'    => '[\s;]icode:\s*(\d+)\s*;',
         'sameip'   => '[\s;]sameip\s*;',
         'regex'    => '[\s;]regex:\s*(.*?)\s*;',
         'isdataat' => '[\s;]isdataat:\s*(.*?)\s*;',
@@ -472,6 +475,7 @@ sub parse_snort_rules() {
         my $parsed_ctr = 0;
         my $unsup_ctr  = 0;
         my $ipt_apply  = 0;
+        my $added_rules_index = $#ipt_script_lines;
         RULE: for my $rule (@lines) {
             chomp $rule;
             my $rule_hdr;
@@ -532,6 +536,16 @@ sub parse_snort_rules() {
             $parsed_ctr++;  ### keep track of successfully parsed rules
             $abs_num++;;
         }
+
+        ### write the rules counter out to the fwsnort.sh script
+        my $added_rules_ctr = 0;
+        for (my $i = $added_rules_index; $i <= $#ipt_script_lines; $i++) {
+            $added_rules_ctr++ if $ipt_script_lines[$i] =~ /\$IPTABLES/;
+        }
+        push @ipt_script_lines,
+            qq|\$ECHO "    Rules added: $added_rules_ctr"|;
+        $added_rules_index = $#ipt_script_lines;
+
         if ($ipt_sync) {
             printf("%-10s%-10s%-10s%-10s\n", $parsed_ctr, $unsup_ctr,
                 $ipt_apply, $rule_num);
@@ -631,6 +645,19 @@ sub parse_rule_options() {
             and $opts{'ipopts'} ne 'lsrr'
             and $opts{'ipopts'} ne 'any') {
         &logr("[-] SID: $sid  Unsupported ipopts field at " .
+            "line: $line_num.  Skipping rule.");
+        return '';
+    }
+
+    if (defined $opts{'itype'}
+            and ($opts{'itype'} =~ m|<| or $opts{'itype'} =~ m|>|)) {
+        &logr("[-] SID: $sid  Unsupported range operator in itype field " .
+            "line: $line_num.  Skipping rule.");
+        return '';
+    }
+    if (defined $opts{'icode'}
+            and ($opts{'icode'} =~ m|<| or $opts{'icode'} =~ m|>|)) {
+        &logr("[-] SID: $sid  Unsupported range operator in icode field " .
             "line: $line_num.  Skipping rule.");
         return '';
     }
@@ -1097,7 +1124,11 @@ sub ipt_build_opts() {
     ### append icmp type
     if (defined $opts_href->{'itype'}) {
         $rule .= " $snort_opts{'filter'}{'itype'}{'iptopt'} " .
-            "$opts_href->{'itype'}"
+            "$opts_href->{'itype'}";
+        ### append icmp code (becomes "--icmp-type type/code")
+        if (defined $opts_href->{'icode'}) {
+            $rule .= "/$opts_href->{'icode'}";
+        }
     }
 
     ### append ip options
@@ -1228,7 +1259,7 @@ sub ipt_add_rule() {
 
     if ($verbose) {
         push @ipt_script_lines, "### snort rule: $orig_snort_rule";
-        push @ipt_script_lines, "\$ECHO \"[+] rule $ipt_rule_ctr\"";
+        push @ipt_script_lines, qq|\$ECHO "[+] rule $ipt_rule_ctr"|;
     } else {
         push @ipt_script_lines, $comment;
     }
@@ -1382,7 +1413,7 @@ sub check_type() {
         my @rfiles = readdir D;
         closedir D;
         shift @rfiles; shift @rfiles;
-        for my $file (@rfiles) {
+        for my $file (sort @rfiles) {
             if ($file =~ /^(\S+)\.rules/) {
                 print "        $1\n";
             }
