@@ -306,7 +306,8 @@ my $rules_type     = '';
 my $snort_type     = '';
 my $ulog_nlgroup   = 1;
 my $ulog_mode      = 0;
-my $no_ipt_conntrack = 0;
+my $no_ipt_conntrack  = 0;
+my $snort_conf_file   = '';
 my $ipt_restrict_intf = '';
 
 ### make Getopts case sensitive
@@ -321,6 +322,8 @@ Getopt::Long::Configure('no_ignore_case');
     'Home-net=s'     => \$home_net,     # Manually specify home network.
     'External-net=s' => \$ext_net,      # Manually specify external network.
     'snort-sid=i'    => \$snort_sid,    # Parse only this particular snort rule.
+    'snort-conf=s'   => \$snort_conf_file, # Get HOME_NET, etc. vars from
+                                        # existing Snort config file.
     'type=s'         => \$rules_type,   # Process this type of snort rule
                                         # (e.g. "ddos")
     'snort-rdir=s'   => \$rules_dir,    # Manually specify the snort rules
@@ -1448,7 +1451,9 @@ sub readconf() {
             die "[*] $fwsnort_conf: Variable \"$var\" is set to\n",
                 "    _CHANGEME_ at line $l_ctr.  Edit $fwsnort_conf.\n"
                 if $val eq '_CHANGEME_';
-            $config{$var} = $val;
+            ### may have already been defined in existing snort.conf
+            ### file if --snort-conf was given.
+            $config{$var} = $val unless defined $config{$var};
         }
     }
     return;
@@ -1524,6 +1529,27 @@ sub handle_cmd_line() {
     $ipt_output  = 0 if $no_ipt_output;
     $ipt_forward = 0 if $no_ipt_forward;
 
+    ### import HOME_NET, etc. from existing Snort config file.
+    &import_snort_conf() if $snort_conf_file;
+
+    return;
+}
+
+sub import_snort_conf() {
+    unless (-e $snort_conf_file) {
+        die "[*] Snort config file $snort_conf_file does not exist.";
+    }
+    open F, "< $snort_conf_file" or die "[*] Could not open Snort ",
+        "config $snort_conf_file: $!";
+    my @lines = <F>;
+    close F;
+    for my $line (@lines) {
+        chomp $line;
+        next if $line =~ /^\s*#/;
+        if ($line =~ /^\s*var\s+(\w+)\s+(.*)\s*/) {
+            $config{$1} = $2;
+        }
+    }
     return;
 }
 
@@ -1811,12 +1837,14 @@ sub usage() {
 fwsnort v$version
 [+] By Michael Rash <mbr\@cipherdyne.org>, http://www.cipherdyne.org/
 
-Usage: fwsnort [-t <snort rule type>] [-l <logfile>] [-v] [-V] [-h]
+Usage: fwsnort [-t <rule type>] [-l <logfile>] [-v] [-V] [-h]
        [-u] [-c <config file>] [--snort-sid=<sid>] [--ipt-apply]
        [--Home-net <net>] [--External-net <net>] [--ipt-drop]
        [--ipt-script=<script>] [--no-ipt-sync] [--no-ipt-log]
-       [--no-ipt-test] [--no-ipt-jumps] [--dump-conf] [--debug]
-       [--strict]
+       [--no-ipt-test] [--no-ipt-jumps] [--Dump-conf] [--debug]
+       [--strict] [--snort-conf <file>] [--restrict-intf <intf>]
+       [--add-deleted] [--no-ipt-INPUT] [--no-ipt-OUTPUT]
+       [--no-ipt-FORWARD]
 
 Options:
     --strict                  - Make snort parser very strict about
@@ -1833,6 +1861,8 @@ Options:
     --ipt-drop                - Add a DROP rule for every logging rule.
     --snort-sid=<sid>         - Generate an equivalent iptables rule
                                 for the specific snort id <sid>.
+    --snort-conf=<file>       - Read Snort specific variables out of
+                                existing snort.conf file.
     --no-ipt-sync             - Add iptables rules for signatures that
                                 are already blocked by iptables.
     --no-ipt-log              - Do not generate iptables log rules
@@ -1843,6 +1873,11 @@ Options:
     --no-ipt-jumps            - Do not jump packets from built-in
                                 iptables INPUT or FORWARD chains to
                                 chains created by fwsnort.
+    --no-ipt-INPUT            - Exclude INPUT chain processing.
+    --no-ipt-OUTPUT           - Exclude OUTPUT chain processing.
+    --no-ipt-FORWARD          - Exclude FORWARD chain processing.
+    --restrict-intf=<intf>    - Restrict fwsnort rules to a specified
+                                interface (e.g. "eth0").
     --Home-net <net/mask>     - Manually specify the Home network
                                 (CIDR or standard notation).
     --External-net <net/mask> - Manually specify the external network
@@ -1863,7 +1898,8 @@ Options:
                                 "log" rules since then we need all of the
                                 packet to be logged (via the ULOG pcap
                                 writer).
-    --dump-conf               - Dump configuration on STDOUT and exit.
+    --Dump-conf               - Dump configuration on STDOUT and exit.
+    --add-deleted             - Added Snort deleted rules.
     --debug                   - Run in debug mode.
     -v   --verbose            - Run in verbose mode.
     -V   --Version            - Print fwsnort version number and exit.
