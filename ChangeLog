@@ -11,13 +11,15 @@ fwsnort-0.8.0 (06//2005):
       for the Snort rule header.  This directly emulates the behavior of
       the Snort IDS.
     - Added IP protocol support in the translation of the Snort rule
-      header.  The Snort rule translation rate is now at about 51% for
+      header.  The Snort rule translation rate is now at about 53% for
       Snort-2.3.
     - Bugfix for ipopts Snort option (several arguments are not supported
       by the ipv4options extension).
     - Better tests for Netfiler TTL, TOS, and ipv4options matches.
     - Replaced IGNORE_IP and IGNORE_NET keywords with single IGNORE_ADDR
       keywork in fwsnort.conf.
+    - Updated to correctly handle ICMP type and code rules (itype and
+      icode Snort options) via the "--icmp-types type/code" convention.
 
 fwsnort-0.7.0 (06/05/2005):
     - Added support for the Snort pass action by using the ACCEPT target.
