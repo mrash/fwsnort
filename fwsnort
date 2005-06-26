@@ -661,6 +661,12 @@ sub parse_rule_options() {
             "line: $line_num.  Skipping rule.");
         return '';
     }
+    if (defined $opts{'ip_proto'}
+            and ($opts{'ip_proto'} =~ m|<| or $opts{'ip_proto'} =~ m|>|)) {
+        &logr("[-] SID: $sid  Unsupported range operator in ip_proto field " .
+            "line: $line_num.  Skipping rule.");
+        return '';
+    }
     return \%opts;
 }
 
