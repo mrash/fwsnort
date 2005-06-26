@@ -310,6 +310,9 @@ my $no_ipt_conntrack  = 0;
 my $snort_conf_file   = '';
 my $ipt_restrict_intf = '';
 
+### save a copy of the command line args
+my @argv_cp = @ARGV;
+
 ### make Getopts case sensitive
 Getopt::Long::Configure('no_ignore_case');
 
@@ -1386,6 +1389,7 @@ sub ipt_hdr() {
         "page or the documentation";
     push @ipt_script_lines, "#           available at " .
         "http://www.cipherdyne.org/fwsnort/";
+    push @ipt_script_lines, "#\n# Generated with: fwsnort @argv_cp";
     push @ipt_script_lines, "#\n# Author:  Michael Rash <mbr\@cipherdyne.org>";
     push @ipt_script_lines, "#\n# Version: $version";
     push @ipt_script_lines, "#";
