@@ -1785,6 +1785,24 @@ sub ipt_test() {
         qq|127.0.0.2 -m string --string "test" -j LOG 2> /dev/null|) >> 8;
     if ($rv == 0) {
         system "$cmds{'iptables'} -D INPUT 1";
+
+        ### test for --replace-string support (this will only be available
+        ### if the replace-string patch has been applied).
+        $rv = (system "$cmds{'iptables'} -I INPUT 1 -s " .
+            qq|127.0.0.2 -m string --string "test" --replace-string "repl"| .
+            " -j LOG 2> /dev/null") >> 8;
+        if ($rv == 0) {
+            system "$cmds{'iptables'} -D INPUT 1";
+        } else {
+            if (defined $snort_opts{'filter'}{'replace'}) {
+                $snort_opts{'unsupported'}{'replace'} =
+                    $snort_opts{'filter'}{'replace'}{'regex'};
+                delete $snort_opts{'filter'}{'replace'};
+            } else {
+                $snort_opts{'unsupported'}{'replace'}
+                    = '[\s;]replace:\s*(.*?)\s*;';
+            }
+        }
     } else {
         die
 "[*] It does not appear that string match support has been compiled into\n",
