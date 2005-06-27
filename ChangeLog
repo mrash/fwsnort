@@ -20,6 +20,8 @@ fwsnort-0.8.0 (06//2005):
       keywork in fwsnort.conf.
     - Updated to correctly handle ICMP type and code rules (itype and
       icode Snort options) via the "--icmp-types type/code" convention.
+    - Added support for emulating the dsize Snort option through the use
+      of the Netfilter length match.
 
 fwsnort-0.7.0 (06/05/2005):
     - Added support for the Snort pass action by using the ACCEPT target.
