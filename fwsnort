@@ -1073,6 +1073,13 @@ sub ipt_build_rule() {
             "$opts_href->{'ip_proto'}";
     } else {
         return 0 unless $hdr_href->{'proto'} =~ /^\w+$/;
+        if ((defined $hdr_href->{'sport'} or defined $hdr_href->{'dport'})
+                and $hdr_href->{'proto'} !~ /tcp/i
+                and $hdr_href->{'proto'} !~ /udp/i) {
+            ### force to tcp because Netfiler does not like src/dst
+            ### ports with anything other than tcp or udp
+            $hdr_href->{'proto'} = 'tcp';
+        }
         $rule .= " $ipt_hdr_opts{'proto'} $hdr_href->{'proto'}";
     }
 
@@ -1136,24 +1143,6 @@ sub ipt_build_opts() {
         }
     }
 
-    ### append tos (requires CONFIG_IP_NF_MATCH_TOS)
-    if (defined $opts_href->{'tos'}) {
-        $rule .= " $snort_opts{'filter'}{'tos'}{'iptopt'} " .
-            "$opts_href->{'tos'}"
-    }
-
-    ### append ttl (requires CONFIG_IP_NF_MATCH_TTL)
-    if (defined $opts_href->{'ttl'}) {
-        if ($opts_href->{'ttl'} =~ /\<\s*(\d+)/) {
-            $rule .= " $snort_opts{'filter'}{'ttl'}{'iptopt'} --ttl-lt $1";
-        } elsif ($opts_href->{'ttl'} =~ /\>\s*(\d+)/) {
-            $rule .= " $snort_opts{'filter'}{'ttl'}{'iptopt'} --ttl-gt $1";
-        } else {
-            $rule .= " $snort_opts{'filter'}{'ttl'}{'iptopt'} " .
-                "--ttl-eq $opts_href->{'ttl'}";
-        }
-    }
-
     ### append icmp type
     if (defined $opts_href->{'itype'}) {
         $rule .= " $snort_opts{'filter'}{'itype'}{'iptopt'} " .
@@ -1168,6 +1157,25 @@ sub ipt_build_opts() {
     if (defined $opts_href->{'ipopts'}) {
         $rule .= " $snort_opts{'filter'}{'ipopts'}{'iptopt'} " .
             "--$opts_href->{'ipopts'}"
+    }
+
+    ### append tos (requires CONFIG_IP_NF_MATCH_TOS)
+    if (defined $opts_href->{'tos'}) {
+        $rule .= " $snort_opts{'filter'}{'tos'}{'iptopt'} " .
+            "$opts_href->{'tos'}"
+    }
+
+
+    ### append ttl (requires CONFIG_IP_NF_MATCH_TTL)
+    if (defined $opts_href->{'ttl'}) {
+        if ($opts_href->{'ttl'} =~ /\<\s*(\d+)/) {
+            $rule .= " $snort_opts{'filter'}{'ttl'}{'iptopt'} --ttl-lt $1";
+        } elsif ($opts_href->{'ttl'} =~ /\>\s*(\d+)/) {
+            $rule .= " $snort_opts{'filter'}{'ttl'}{'iptopt'} --ttl-gt $1";
+        } else {
+            $rule .= " $snort_opts{'filter'}{'ttl'}{'iptopt'} " .
+                "--ttl-eq $opts_href->{'ttl'}";
+        }
     }
 
     ### append dsize option (requires CONFIG_IP_NF_MATCH_LENGTH)
@@ -1206,8 +1214,11 @@ sub ipt_build_opts() {
                 "$avg_hdr_len:$netfilter_len";
         } elsif ($opts_href->{'dsize'} =~ m|>\s*(\d+)|) {
             my $netfilter_len = $1 + $avg_hdr_len;
-            $rule .= " $snort_opts{'filter'}{'dsize'}{'iptopt'} " .
-                "$netfilter_len:$config{'MAX_FRAME_LEN'}";
+            if ($netfilter_len < $config{'MAX_FRAME_LEN'} + $avg_hdr_len) {
+                $rule .= " $snort_opts{'filter'}{'dsize'}{'iptopt'} " .
+                    "$netfilter_len:" . $config{'MAX_FRAME_LEN'}
+                        . $avg_hdr_len;
+            }
         } elsif ($opts_href->{'dsize'} =~ m|(\d+)|) {
             my $netfilter_len = $1 + $avg_hdr_len;
             $rule .= " $snort_opts{'filter'}{'dsize'}{'iptopt'} " .
