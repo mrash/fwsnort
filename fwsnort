@@ -1073,7 +1073,9 @@ sub ipt_build_rule() {
             "$opts_href->{'ip_proto'}";
     } else {
         return 0 unless $hdr_href->{'proto'} =~ /^\w+$/;
-        if ((defined $hdr_href->{'sport'} or defined $hdr_href->{'dport'})
+        if ((($hdr_href->{'sport'} =~ /any/i and $hdr_href->{'sport'} ne '')
+                or ($hdr_href->{'dport'} =~ /any/i
+                and $hdr_href->{'dport'} ne ''))
                 and $hdr_href->{'proto'} !~ /tcp/i
                 and $hdr_href->{'proto'} !~ /udp/i) {
             ### force to tcp because Netfiler does not like src/dst
@@ -1216,8 +1218,8 @@ sub ipt_build_opts() {
             my $netfilter_len = $1 + $avg_hdr_len;
             if ($netfilter_len < $config{'MAX_FRAME_LEN'} + $avg_hdr_len) {
                 $rule .= " $snort_opts{'filter'}{'dsize'}{'iptopt'} " .
-                    "$netfilter_len:" . $config{'MAX_FRAME_LEN'}
-                        . $avg_hdr_len;
+                    "$netfilter_len:" .
+                    ($config{'MAX_FRAME_LEN'} + $avg_hdr_len);
             }
         } elsif ($opts_href->{'dsize'} =~ m|(\d+)|) {
             my $netfilter_len = $1 + $avg_hdr_len;
