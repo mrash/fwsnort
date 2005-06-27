@@ -888,7 +888,7 @@ sub ipt_build() {
             return 0;
         }
         if ($snort_hdr_href->{'src'} =~ /any/i) {
-            my $negate = 0;
+            my $negate = '';
             $negate = '! ' if $snort_hdr_href->{'dst'} =~ m|!|;
             for my $dst (@$dst_addr_aref) {
                 if (&is_local($dst)) {
@@ -903,9 +903,9 @@ sub ipt_build() {
             }
         } else {
             my $src_addr_aref = &expand_addresses($snort_hdr_href->{'src'});
-            my $negate_src = 0;
+            my $negate_src = '';
             $negate_src = '! ' if $snort_hdr_href->{'src'} =~ m|!|;
-            my $negate_dst = 0;
+            my $negate_dst = '';
             $negate_dst = '! ' if $snort_hdr_href->{'dst'} =~ m|!|;
             unless ($src_addr_aref) {
                 &logr("[-] No valid source IPs/networks in Snort rule " .
