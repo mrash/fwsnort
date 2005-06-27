@@ -128,21 +128,6 @@ my $fws_forward_established = 'FWSNORT_FORWARD_ESTAB';
 ### version number
 my $version = '0.7.0';
 
-### supported variables in snort signatures
-my %snort_vars = (
-    'EXTERNAL_NET'    => '',
-    'HOME_NET'        => '',
-    'HTTP_SERVERS'    => '',
-    'SMTP_SERVERS'    => '',
-    'DNS_SERVERS'     => '',
-    'HTTP_PORTS'      => '',
-    'TELNET_SERVERS'  => '',
-    'AIM_SERVERS'     => '',
-    'SQL_SERVERS'     => '',
-    'SHELLCODE_PORTS' => '',
-    'ORACLE_PORTS'    => ''
-);
-
 my %ipt_hdr_opts = (
     'src'      => '-s',
     'sport'    => '--sport',
@@ -164,6 +149,10 @@ my %snort_opts = (
         'content' => {
             'iptopt' => '-m string',
             'regex'  => '[\s;]content:\s*\"(.*?)\"\s*;'
+        },
+        'replace' => {  ### for Snort running in inline mode
+            'iptopt' => '--replace-string',
+            'regex'  => '[\s;]replace:\s*\"(.*?)\"\s*;'
         },
         'flags' => {
             'iptopt' => '--tcp-flags',
@@ -197,7 +186,7 @@ my %snort_opts = (
             'iptopt' => '-p',
             'regex'  => '[\s;]ip_proto:\s*(.*?)\s*;'
         },
-        'dsize' => {
+        'dsize' => {  ### requires CONFIG_IP_NF_MATCH_LENGTH
             'iptopt' => '-m length --length',
             'regex'  => '[\s;]dsize:\s*(.*?)\s*;'
         },
@@ -1257,6 +1246,16 @@ sub ipt_build_opts() {
             $rule .= " $snort_opts{'filter'}{'content'}{'iptopt'} " .
                 "--string \"$content\"";
         }
+
+        if (defined $hdr_href->{'replace'}) {
+            my $replace_str = $hdr_href->{'replace'};
+            $replace_str =~ s/`/\\`/g;
+            if ($replace_str =~ /\|.+\|/) {  ### there is hex data in the content
+                $rule .= " --replace-hex-string \"$replace_str\"";
+            } else {
+                $rule .= " --replace-string \"$replace_str\"";
+            }
+        }
     }
 
     my $log_target = '';
@@ -1983,14 +1982,14 @@ sub usage() {
 fwsnort v$version
 [+] By Michael Rash <mbr\@cipherdyne.org>, http://www.cipherdyne.org/
 
-Usage: fwsnort [-t <rule type>] [-l <logfile>] [-v] [-V] [-h]
-       [-u] [-c <config file>] [--snort-sid=<sid>] [--ipt-apply]
-       [--Home-net <net>] [--External-net <net>] [--ipt-drop]
-       [--ipt-script=<script>] [--no-ipt-sync] [--no-ipt-log]
-       [--no-ipt-test] [--no-ipt-jumps] [--Dump-conf] [--debug]
-       [--strict] [--snort-conf <file>] [--restrict-intf <intf>]
-       [--add-deleted] [--no-ipt-INPUT] [--no-ipt-OUTPUT]
-       [--no-ipt-FORWARD]
+Usage: fwsnort [-l <logfile>] [-v] [-V] [-h] [-u] [-c <config file>]
+       [--snort-sid=<sid>] [--ipt-apply] [--Home-net <net>]
+       [--External-net <net>] [--ipt-drop] [--include-types <types>]
+       [--exclude-types <types>] [--ipt-script=<script>]
+       [--no-ipt-sync] [--no-ipt-log] [--no-ipt-test] [--no-ipt-jumps]
+       [--Dump-conf] [--debug] [--strict] [--snort-conf <file>]
+       [--restrict-intf <intf>] [--add-deleted] [--no-ipt-INPUT]
+       [--no-ipt-OUTPUT] [--no-ipt-FORWARD]
 
 Options:
     --strict                  - Make snort parser very strict about
