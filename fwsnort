@@ -277,6 +277,9 @@ my $ip_re = '(?:\d{1,3}\.){3}\d{1,3}';
 my %config = ();
 my %cmds   = ();
 
+my %include_types = ();
+my %exclude_types = ();
+
 ### establish some default behavior
 my $home_net   = '';  ### normally comes from fwsnort.conf
 my $ext_net    = '';  ### normally comes from fwsnort.conf
@@ -306,7 +309,8 @@ my $no_ipt_input   = 0;
 my $no_ipt_output  = 0;
 my $no_ipt_forward = 0;
 my $add_deleted    = 0;
-my $rules_type     = '';
+my $rules_types    = '';
+my $exclude_types  = '';
 my $snort_type     = '';
 my $ulog_nlgroup   = 1;
 my $ulog_mode      = 0;
@@ -331,8 +335,9 @@ Getopt::Long::Configure('no_ignore_case');
     'snort-sid=i'    => \$snort_sid,    # Parse only this particular snort rule.
     'snort-conf=s'   => \$snort_conf_file, # Get HOME_NET, etc. vars from
                                         # existing Snort config file.
-    'type=s'         => \$rules_type,   # Process this type of snort rule
+    'include-type=s' => \$rules_types,  # Process this type of snort rule
                                         # (e.g. "ddos")
+    'exclude-type=s' => \$exclude_types,# Exclude specified types (e.g. "ddos").
     'snort-rdir=s'   => \$rules_dir,    # Manually specify the snort rules
                                         # directory.
     'no-ipt-sync'    => \$no_ipt_sync,  # Do not sync with the iptables policy.
@@ -409,7 +414,7 @@ Getopt::Long::Configure('no_ignore_case');
 
 ### make sure <type>.rules file exists if --type was
 ### specified on the command line
-&check_type() if $rules_type;
+&check_type() if $rules_types;
 
 &logr("[+] Begin parsing cycle.");
 
@@ -465,10 +470,18 @@ sub parse_snort_rules() {
     my $tot_ipt_apply = 0;
     my $tot_unsup_ctr = 0;
     FILE: for my $rfile (sort @rfiles) {
-        next FILE unless $rfile =~ /\.rules$/;
+        my $type = '';
+        if ($rfile =~ /(\S+)\.rules/) {
+            $type = $1;
+        } else {
+            next FILE;
+        }
         $ipt_print_type = 0;
-        if ($rules_type) {
-            next FILE unless $rfile =~ /^${rules_type}\.rules$/;
+        if ($rules_types) {
+            next FILE unless defined $include_types{$type};
+        }
+        if ($exclude_types) {
+            next FILE if defined $exclude_types{$type};
         }
         if ($rfile eq 'deleted.rules') {
             next FILE unless $add_deleted;
@@ -477,7 +490,7 @@ sub parse_snort_rules() {
         printf("%-30s", "[+] $rfile");
         &logr("[+] Parsing $rfile");
         open R, "< ${rules_dir}/${rfile}" or die "[*] Could not ",
-            "open: ${rules_type}/${rfile}";
+            "open: ${rules_dir}/${rfile}";
         my @lines = <R>;
         close R;
         my $line_num   = 0;
@@ -1498,20 +1511,39 @@ sub ipt_type() {
 }
 
 sub check_type() {
-    unless (-e "${rules_dir}/${rules_type}.rules") {
-        print "[-] \"$rules_type\" is not a valid type.\n",
-            "    Choose from the following available signature types:\n";
-        opendir D, $rules_dir or die "[*] Could not open $rules_dir";
-        my @rfiles = readdir D;
-        closedir D;
-        shift @rfiles; shift @rfiles;
-        for my $file (sort @rfiles) {
-            if ($file =~ /^(\S+)\.rules/) {
-                print "        $1\n";
+    for my $type (keys %include_types) {
+        unless (-e "${rules_dir}/${type}.rules") {
+            print "[-] \"$type\" is not a valid include type.\n",
+                "    Choose from the following available signature types:\n";
+            opendir D, $rules_dir or die "[*] Could not open $rules_dir";
+            my @rfiles = readdir D;
+            closedir D;
+            shift @rfiles; shift @rfiles;
+            for my $file (sort @rfiles) {
+                if ($file =~ /^(\S+)\.rules/) {
+                    print "        $1\n";
+                }
             }
+            print "[-] Exiting.\n";
+            exit 1;
         }
-        print "[-] Exiting.\n";
-        exit 1;
+    }
+    for my $type (keys %exclude_types) {
+        unless (-e "${rules_dir}/${type}.rules") {
+            print "[-] \"$type\" is not a valid exclude type.\n",
+                "    Choose from the following available signature types:\n";
+            opendir D, $rules_dir or die "[*] Could not open $rules_dir";
+            my @rfiles = readdir D;
+            closedir D;
+            shift @rfiles; shift @rfiles;
+            for my $file (sort @rfiles) {
+                if ($file =~ /^(\S+)\.rules/) {
+                    print "        $1\n";
+                }
+            }
+            print "[-] Exiting.\n";
+            exit 1;
+        }
     }
     return;
 }
@@ -1614,6 +1646,19 @@ sub handle_cmd_line() {
 
     ### import HOME_NET, etc. from existing Snort config file.
     &import_snort_conf() if $snort_conf_file;
+
+    if ($rules_types) {
+        my @types = split /\,/, $rules_types;
+        for my $type (@types) {
+            $include_types{$type} = '';
+        }
+    }
+    if ($exclude_types) {
+        my @types = split /\,/, $exclude_types;
+        for my $type (@types) {
+            $exclude_types{$type} = '';
+        }
+    }
 
     return;
 }
@@ -1985,8 +2030,12 @@ Options:
                                 (CIDR or standard notation).
     --update-rules            - Download latest Bleeding-Snort rules
                                 from http://$bleeding_snort_website/
-    -t   --type=<type>        - Only process snort rules of type <type>
-                                (e.g. "ddos" or "backdoor")
+    --include-types=<type>    - Only process snort rules of type <type>
+                                (e.g. "ddos" or "backdoor"). <type> can
+                                be a comma separated list.
+    --exclude-types=<type>    - Exclude processing of Snort rules of
+                                type <type> (e.g. "ddos" or "backdoor").
+                                <type> can be a comma separated list.
     -c   --config=<config>    - Use <config> instead of the normal
                                 config file located at
                                 $fwsnort_conf
