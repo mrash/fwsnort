@@ -35,7 +35,7 @@
 #     traffic through in the first place).
 #   - Implement code for the various SERVER variables.
 #   - fwsnort.sh generation timestamp.
-#   - Two new options: --ipt-tos and --ipt-mark.
+#   - New option: --ipt-mark.
 #
 # Snort Rule Options:
 #
@@ -170,11 +170,11 @@ my %snort_opts = (
             'regex'  => '[\s;]flags:\s*(.*?)\s*;'
         },
         'itype' => {
-            'iptopt' => 'NONE',  ### --icmp-type type/code
+            'iptopt' => '--icmp-type',  ### --icmp-type type/code
             'regex'  => '[\s;]itype:\s*(.*?)\s*;'
         },
         'icode' => {
-            'iptopt' => '--icmp-type',
+            'iptopt' => 'NONE',
             'regex'  => '[\s;]icode:\s*(.*?)\s*;'
         },
         'ttl' => {
@@ -182,7 +182,7 @@ my %snort_opts = (
             'regex'  => '[\s;]ttl:\s*(.*?)\s*;'
         },
         'tos' => {
-            'iptopt' => '--tos', ### requires CONFIG_IP_NF_MATCH_TOS
+            'iptopt' => '-m tos --tos', ### requires CONFIG_IP_NF_MATCH_TOS
             'regex'  => '[\s;]tos:\s*(\d+)\s*;'
         },
         'ipopts' => {
@@ -196,6 +196,10 @@ my %snort_opts = (
         'ip_proto' => {
             'iptopt' => '-p',
             'regex'  => '[\s;]ip_proto:\s*(.*?)\s*;'
+        },
+        'dsize' => {
+            'iptopt' => '-m length --length',
+            'regex'  => '[\s;]dsize:\s*(.*?)\s*;'
         },
         'resp' => {
             'iptopt' => '-j REJECT',
@@ -219,24 +223,24 @@ my %snort_opts = (
     'unsupported' => {
         'pcre'         => '[\s;]pcre:\s*.*?\s*;',
         'content-list' => '[\s;]content-list:\s*.*?\s*;',
-        'dsize'        => '[\s;]dsize:\s*\S+\s*;',
-        'ack'          => '[\s;]ack:\s*\d+\s*;',
-        'fragbits'     => '[\s;]fragbits:\s*\S+\s*;',
+        'ack'          => '[\s;]ack:\s*.*?\s*;',
+        'fragbits'     => '[\s;]fragbits:\s*.*?\s*;',
         'content-list' => '[\s;]content\-list:\s*\".*?\"\s*;',
-        'rpc'          => '[\s;]rpc:\s*\S+\s*;',
+        'rpc'          => '[\s;]rpc:\s*.*?\s*;',
         'byte_test'    => '[\s;]byte_test\s*.*?\s*;',
         'byte_jump'    => '[\s;]byte_jump\s*.*?\s*;',
         'distance'     => '[\s;]distance:\s*(\d+)\s*;',
         'within'       => '[\s;]within:\s*(\d+)\s*;',
+        'window'       => '[\s;]window:\s*(.*?)\s*;',
         'flowbits'     => '[\s;]flowbits:\s*\S+\s*;',
 #        'offset'       => '[\s;]offset:\s*\d+\s*;',
 #        'depth'        => '[\s;]depth:\s*\d+\s*;',
-#        'ipopts'  => '[\s;]ipopts:\s*(\w+)\s*;',
 
         ### the following fields get logged by iptables but
-        ### we cannot filter them directly (yet).  Functionality
-        ### is being built into psad to generate alerts based
-        ### on these Snort options.
+        ### we cannot filter them directly except with, the
+        ### Netfilter u32 module.  Functionality is being built
+        ### into psad to generate alerts based on these Snort
+        ### options.
         'id'       => '[\s;]id:\s*(\d+)\s*;',
         'seq'      => '[\s;]seq:\s*(\d+)\s*;',  ### --log-tcp-sequence
         'icmp_seq' => '[\s;]icmp_seq:\s*(\d+)\s*;',
@@ -722,7 +726,9 @@ sub parse_rule_hdr() {
         ### is defined in fwsnort.conf)
         for my $var qw(src sport dst dport) {
             my $val = $hsh{$var};
-            while ($val =~ /^\s*\$(\w+)/) {
+            my $negate_flag = 0;
+            $negate_flag = 1 if $val =~ m|!|;
+            while ($val =~ /\$(\w+)/) {
                 $val = $1;
                 if (defined $config{$val}) {
                     $val = $config{$val};
@@ -732,7 +738,11 @@ sub parse_rule_hdr() {
                     return '';
                 }
             }
-            $hsh{$var} = $val;
+            if ($negate_flag and $val !~ m|!|) {
+                $hsh{$var} = "!$val";
+            } else {
+                $hsh{$var} = $val;
+            }
         }
         return \%hsh;
     } else {
@@ -851,6 +861,8 @@ sub ipt_build() {
             push @ipt_forward_rules, '';
         } else {
             my $addr_aref = &expand_addresses($snort_hdr_href->{'src'});
+            my $negate = '';
+            $negate = '! ' if $snort_hdr_href->{'src'} =~ m|!|;
             unless ($addr_aref) {
                 &logr("[-] No valid source IPs/networks in Snort " .
                     "rule header.");
@@ -858,11 +870,14 @@ sub ipt_build() {
             }
             for my $src (@$addr_aref) {
                 if (&is_local($src)) {
-                    push @ipt_output_rules, "$ipt_hdr_opts{'src'} $src";
+                    push @ipt_output_rules,
+                        "$ipt_hdr_opts{'src'} $negate" . $src;
                 } else {
-                    push @ipt_input_rules, "$ipt_hdr_opts{'src'} $src";
+                    push @ipt_input_rules,
+                        "$ipt_hdr_opts{'src'} $negate" . $src;
                 }
-                push @ipt_forward_rules, "$ipt_hdr_opts{'src'} $src";
+                push @ipt_forward_rules,
+                    "$ipt_hdr_opts{'src'} $negate" . $src;
             }
         }
     } else {
@@ -873,16 +888,25 @@ sub ipt_build() {
             return 0;
         }
         if ($snort_hdr_href->{'src'} =~ /any/i) {
+            my $negate = 0;
+            $negate = '! ' if $snort_hdr_href->{'dst'} =~ m|!|;
             for my $dst (@$dst_addr_aref) {
                 if (&is_local($dst)) {
-                    push @ipt_input_rules, "$ipt_hdr_opts{'dst'} $dst";
+                    push @ipt_input_rules,
+                        "$ipt_hdr_opts{'dst'} $negate" . $dst;
                 } else {
-                    push @ipt_output_rules, "$ipt_hdr_opts{'dst'} $dst";
+                    push @ipt_output_rules,
+                        "$ipt_hdr_opts{'dst'} $negate" . $dst;
                 }
-                push @ipt_forward_rules, "$ipt_hdr_opts{'dst'} $dst";
+                push @ipt_forward_rules,
+                    "$ipt_hdr_opts{'dst'} $negate" . $dst;
             }
         } else {
             my $src_addr_aref = &expand_addresses($snort_hdr_href->{'src'});
+            my $negate_src = 0;
+            $negate_src = '! ' if $snort_hdr_href->{'src'} =~ m|!|;
+            my $negate_dst = 0;
+            $negate_dst = '! ' if $snort_hdr_href->{'dst'} =~ m|!|;
             unless ($src_addr_aref) {
                 &logr("[-] No valid source IPs/networks in Snort rule " .
                     "header.");
@@ -891,14 +915,17 @@ sub ipt_build() {
             for my $src (@$src_addr_aref) {
                 for my $dst (@$dst_addr_aref) {
                     if (&is_local($dst)) {
-                        push @ipt_input_rules, "$ipt_hdr_opts{'src'} $src " .
-                            "$ipt_hdr_opts{'dst'} $dst";
+                        push @ipt_input_rules,
+                            "$ipt_hdr_opts{'src'} $negate_src" . $src .
+                            "$ipt_hdr_opts{'dst'} $negate_dst" . $dst;
                     } else {
-                        push @ipt_output_rules, "$ipt_hdr_opts{'src'} $src " .
-                            "$ipt_hdr_opts{'dst'} $dst";
+                        push @ipt_output_rules,
+                            "$ipt_hdr_opts{'src'} $negate_src" . $src .
+                            "$ipt_hdr_opts{'dst'} $negate_dst" . $dst;
                     }
-                    push @ipt_forward_rules, "$ipt_hdr_opts{'src'} $src " .
-                        "$ipt_hdr_opts{'dst'} $dst";
+                    push @ipt_forward_rules,
+                        "$ipt_hdr_opts{'src'} $negate_src" . $src .
+                        "$ipt_hdr_opts{'dst'} $negate_dst" . $dst;
                 }
             }
         }
@@ -1050,19 +1077,13 @@ sub ipt_build_rule() {
     }
 
     ### append the source port
-    if (defined $config{$hdr_href->{'sport'}}) {
-        $config{$hdr_href->{'sport'}} =~ s/\!(\d)/! $1/;
-        $rule .= " $ipt_hdr_opts{'sport'} $config{$hdr_href->{'sport'}}";
-    } elsif ($hdr_href->{'sport'} ne 'any') {
+    if (defined $hdr_href->{'sport'} and $hdr_href->{'sport'} !~ /any/i) {
         $hdr_href->{'sport'} =~ s/\!(\d)/! $1/;
         $rule .= " $ipt_hdr_opts{'sport'} $hdr_href->{'sport'}";
     }
 
     ### append the destination port
-    if (defined $config{$hdr_href->{'dport'}}) {
-        $config{$hdr_href->{'dport'}} =~ s/\!(\d)/! $1/;
-        $rule .= " $ipt_hdr_opts{'dport'} $config{$hdr_href->{'dport'}}";
-    } elsif ($hdr_href->{'dport'} ne 'any') {
+    if (defined $hdr_href->{'dport'} and $hdr_href->{'dport'} !~ /any/i) {
         $hdr_href->{'dport'} =~ s/\!(\d)/! $1/;
         $rule .= " $ipt_hdr_opts{'dport'} $hdr_href->{'dport'}";
     }
@@ -1147,6 +1168,51 @@ sub ipt_build_opts() {
     if (defined $opts_href->{'ipopts'}) {
         $rule .= " $snort_opts{'filter'}{'ipopts'}{'iptopt'} " .
             "--$opts_href->{'ipopts'}"
+    }
+
+    ### append dsize option (requires CONFIG_IP_NF_MATCH_LENGTH)
+    if (defined $opts_href->{'dsize'}) {
+        ### get the average packet header size based on the protocol
+        ### (the Netfilter length match applies to the network header
+        ### and up).
+        my $avg_hdr_len = $config{'AVG_IP_HEADER_LEN'};
+        if (defined $hdr_href->{'proto'}) {
+            if ($hdr_href->{'proto'} =~ /tcp/i) {
+                $avg_hdr_len += $config{'AVG_TCP_HEADER_LEN'};
+            } elsif ($hdr_href->{'proto'} =~ /udp/i) {
+                $avg_hdr_len += 8;  ### udp header is 8 bytes
+            } elsif ($hdr_href->{'proto'} =~ /icmp/i) {
+                $avg_hdr_len += 4;  ### icmp header is 4 bytes
+            } elsif ($hdr_href->{'proto'} =~ /ip/i) {
+                ### default to TCP
+                $avg_hdr_len += $config{'AVG_TCP_HEADER_LEN'};
+            } else {
+                ### default to TCP
+                $avg_hdr_len += $config{'AVG_TCP_HEADER_LEN'};
+            }
+        } else {
+            ### don't know what the average transport layer (if there
+            ### is one) length will be; add 10 bytes just to be safe
+            $avg_hdr_len += 10;
+        }
+        if ($opts_href->{'dsize'} =~ m|(\d+)\s*<>\s*(\d+)|) {
+            my $netfilter_len1 = $1 + $avg_hdr_len;
+            my $netfilter_len2 = $2 + $avg_hdr_len;
+            $rule .= " $snort_opts{'filter'}{'dsize'}{'iptopt'} " .
+                "$netfilter_len1:$netfilter_len2";
+        } elsif ($opts_href->{'dsize'} =~ m|<\s*(\d+)|) {
+            my $netfilter_len = $1 + $avg_hdr_len;
+            $rule .= " $snort_opts{'filter'}{'dsize'}{'iptopt'} " .
+                "$avg_hdr_len:$netfilter_len";
+        } elsif ($opts_href->{'dsize'} =~ m|>\s*(\d+)|) {
+            my $netfilter_len = $1 + $avg_hdr_len;
+            $rule .= " $snort_opts{'filter'}{'dsize'}{'iptopt'} " .
+                "$netfilter_len:$config{'MAX_FRAME_LEN'}";
+        } elsif ($opts_href->{'dsize'} =~ m|(\d+)|) {
+            my $netfilter_len = $1 + $avg_hdr_len;
+            $rule .= " $snort_opts{'filter'}{'dsize'}{'iptopt'} " .
+                $netfilter_len;
+        }
     }
 
     ### append snort content options
@@ -1636,6 +1702,24 @@ sub ipt_test() {
             delete $snort_opts{'filter'}{'tos'};
         } else {
             $snort_opts{'unsupported'}{'tos'} = '[\s;]tos:\s*(.*?)\s*;';
+        }
+    }
+
+    ### test for the length match.
+    $rv = (system "$cmds{'iptables'} -I INPUT 1 -p icmp -s 127.0.0.2 " .
+        "-m length --length 256 -j LOG 2> /dev/null") >> 8;
+    if ($rv == 0) {
+        system "$cmds{'iptables'} -D INPUT 1";
+    } else {
+        ### put length in the unsupported list
+        &logr("[-] Netfilter length match not available, " .
+            "disabling length translation.");
+        if (defined $snort_opts{'filter'}{'dsize'}) {
+            $snort_opts{'unsupported'}{'dsize'} =
+                $snort_opts{'filter'}{'dsize'}{'regex'};
+            delete $snort_opts{'filter'}{'dsize'};
+        } else {
+            $snort_opts{'unsupported'}{'dsize'} = '[\s;]dsize:\s*(.*?)\s*;';
         }
     }
 
