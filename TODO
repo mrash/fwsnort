@@ -1,6 +1,4 @@
  - Port the string match extension to the 2.6 kernel.
- - Have some level of (optional) integration with the --replace-string
-   patches
  - Allow a list of SIDs to have a manually specified target (such as
    -j REJECT --reject-with tcp-reset).  The list should come from the
    command line with a new option and/or be read from a file.
