@@ -913,15 +913,15 @@ sub ipt_build() {
                     if (&is_local($dst)) {
                         push @ipt_input_rules,
                             "$ipt_hdr_opts{'src'} $negate_src" . $src .
-                            "$ipt_hdr_opts{'dst'} $negate_dst" . $dst;
+                            " $ipt_hdr_opts{'dst'} $negate_dst" . $dst;
                     } else {
                         push @ipt_output_rules,
                             "$ipt_hdr_opts{'src'} $negate_src" . $src .
-                            "$ipt_hdr_opts{'dst'} $negate_dst" . $dst;
+                            " $ipt_hdr_opts{'dst'} $negate_dst" . $dst;
                     }
                     push @ipt_forward_rules,
                         "$ipt_hdr_opts{'src'} $negate_src" . $src .
-                        "$ipt_hdr_opts{'dst'} $negate_dst" . $dst;
+                        " $ipt_hdr_opts{'dst'} $negate_dst" . $dst;
                 }
             }
         }
