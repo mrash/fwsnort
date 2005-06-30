@@ -91,7 +91,7 @@
 use lib '/usr/lib/fwsnort';
 use IO::Socket;
 use IPTables::Parse;
-use Net::IPv4Addr qw(ipv4_network);
+use Net::IPv4Addr qw(ipv4_in_network);
 use File::Copy;
 use File::Path;
 use Sys::Hostname;
@@ -266,6 +266,7 @@ my $ip_re = '(?:\d{1,3}\.){3}\d{1,3}';
 my %config = ();
 my %cmds   = ();
 
+my @local_addrs   = ();
 my %include_types = ();
 my %exclude_types = ();
 
@@ -290,12 +291,14 @@ my $update_rules   = 0;  ### used to download latest snort rules
 my $ipt_print_type = 0;
 my $ipt_rule_ctr   = 1;
 my $ipt_sync       = 1;
+my $ipt_flush      = 0;
 my $no_ipt_sync    = 0;
 my $no_ipt_log     = 0;
 my $no_ipt_test    = 0;
 my $no_ipt_jumps   = 0;
 my $no_ipt_input   = 0;
 my $no_ipt_output  = 0;
+my $no_addr_check  = 0;
 my $no_ipt_forward = 0;
 my $add_deleted    = 0;
 my $rules_types    = '';
@@ -319,6 +322,7 @@ Getopt::Long::Configure('no_ignore_case');
     'ipt-reject'     => \$ipt_reject,   # Add iptables REJECT rules.
     'ipt-script=s'   => \$ipt_script,   # Manually specify the path to the
                                         # generated iptables script.
+    'ipt-flush'      => \$ipt_flush,    # Flush any existing fwsnort chains.
     'Home-net=s'     => \$home_net,     # Manually specify home network.
     'External-net=s' => \$ext_net,      # Manually specify external network.
     'snort-sid=i'    => \$snort_sid,    # Parse only this particular snort rule.
@@ -329,6 +333,7 @@ Getopt::Long::Configure('no_ignore_case');
     'exclude-type=s' => \$exclude_types,# Exclude specified types (e.g. "ddos").
     'snort-rdir=s'   => \$rules_dir,    # Manually specify the snort rules
                                         # directory.
+    'no-addresses'   => \$no_addr_check, # Don't check local ifconfig output.
     'no-ipt-sync'    => \$no_ipt_sync,  # Do not sync with the iptables policy.
     'no-ipt-log'     => \$no_ipt_log,   # Do not generate iptables logging rules.
     'no-ipt-test'    => \$no_ipt_test,  # Don't perform any checks against
@@ -367,6 +372,9 @@ Getopt::Long::Configure('no_ignore_case');
 
 ### import config, initialize various things, etc.
 &fwsnort_init();
+
+### flush all fwsnort chains.
+&ipt_flush() if $ipt_flush;
 
 ### download latest snort rules from snort.org
 &update_rules() if $update_rules;
@@ -755,11 +763,10 @@ sub parse_rule_hdr() {
 sub ipt_allow_traffic() {
     my ($hdr_href, $chain) = @_;
     my $rv = 0;
+
     ### check to see if the header is allowed through the
     ### INPUT chain
-    my $h_proto = $hdr_href->{'proto'};
-
-    if ($h_proto eq 'icmp') {
+    if ($hdr_href->{'proto'} eq 'icmp') {
         if (defined $ipt_policy{$chain}
                 and defined $ipt_policy{$chain}{'icmp'}) {
             return 1;
@@ -767,26 +774,12 @@ sub ipt_allow_traffic() {
         return 0;
     }
 
-    my $h_src = $hdr_href->{'src'};
-    my $h_dst = $hdr_href->{'dst'};
-    my $h_sport;
-    my $h_dport;
-    if (defined $config{$hdr_href->{'sport'}}) {
-        $h_sport = $config{$hdr_href->{'sport'}};
-    } else {
-        $h_sport = $hdr_href->{'sport'};
-    }
-    if (defined $config{$hdr_href->{'dport'}}) {
-        $h_dport = $config{$hdr_href->{'dport'}};
-    } else {
-        $h_dport = $hdr_href->{'dport'};
-    }
     for my $proto (keys %{$ipt_policy{$chain}}) {
-        next unless $h_proto eq $proto;
+        next unless $hdr_href->{'proto'} eq $proto;
         for my $sport (keys %{$ipt_policy{$chain}{$proto}}) {
-            if (&match_port($sport, $h_sport)) {
+            if (&match_port($sport, $hdr_href->{'sport'})) {
                 for my $dport (keys %{$ipt_policy{$chain}{$proto}{$sport}}) {
-                    if (&match_port($dport, $h_dport)) {
+                    if (&match_port($dport, $hdr_href->{'dport'})) {
                         return 1;
                     }
                 }
@@ -801,6 +794,7 @@ sub match_port() {
     return 1 if $ipt_port eq '0:0';
     return 1 if $ipt_port eq $h_port;
     return 1 if $h_port eq 0; ### bad traffic (port 0)
+    return 1 if $h_port =~ /any/i;
     if ($ipt_port =~ /(\d+):(\d+)/) {
         my $s = $1;
         my $e = $2;
@@ -1051,7 +1045,51 @@ sub ipt_build() {
 
 sub is_local() {
     my $addr = shift;
-    return 1;
+
+    return 1 if $no_addr_check;
+
+    my $ip   = '';
+    my $mask = '32';
+    if ($addr =~ m|($ip_re)/($ip_re)|) {
+        $ip   = $1;
+        $mask = $2;
+    } elsif ($addr =~ m|($ip_re)/(\d+)|) {
+        $ip   = $1;
+        $mask = $2;
+    } elsif ($addr =~ m|($ip_re)|) {
+        $ip = $1;
+    }
+
+    for my $local_aref (@local_addrs) {
+        my $local_ip   = $local_aref->[0];
+        my $local_mask = $local_aref->[0];
+
+        return 1 if ipv4_in_network(
+            $local_ip, $local_mask,
+            $ip, $mask);
+    }
+    return 0;
+}
+
+sub get_local_addrs() {
+    open IFC, "$cmds{'ifconfig'} -a |" or die "[*] Could not run ",
+        "$cmds{'ifconfig'}: $!";
+    my @lines = <IFC>;
+    close IFC;
+
+    my $intf_name = '';
+    for my $line (@lines) {
+        if ($line =~ /^(\w+)\s+Link/) {
+            $intf_name = $1;
+            next;
+        }
+        next if $intf_name eq 'lo';
+        next if $intf_name =~ /dummy/i;
+        if ($line =~ /^\s+inet.*?:($ip_re).*:($ip_re)/i) {
+            push @local_addrs, [$1, $2];
+        }
+    }
+    return;
 }
 
 sub ipt_build_rule() {
@@ -1573,6 +1611,10 @@ sub readconf() {
     return;
 }
 
+sub ipt_flush() {
+    return;
+}
+
 sub fwsnort_init() {
 
     ### set umask to -rw-------
@@ -1598,6 +1640,8 @@ sub fwsnort_init() {
     ### may have been specified on the command line
     $home_net = $config{'HOME_NET'} unless $home_net;
     $ext_net  = $config{'EXTERNAL_NET'} unless $ext_net;
+
+    &get_local_addrs() unless $no_addr_check;
 
     return;
 }
@@ -1684,7 +1728,8 @@ sub required_vars() {
     my @required_vars = qw(
         HOME_NET EXTERNAL_NET HTTP_SERVERS SMTP_SERVERS DNS_SERVERS
         SQL_SERVERS TELNET_SERVERS AIM_SERVERS HTTP_PORTS SHELLCODE_PORTS
-        ORACLE_PORTS IGNORE_ADDR
+        ORACLE_PORTS IGNORE_ADDR AVG_IP_HEADER_LEN AVG_TCP_HEADER_LEN
+        MAX_FRAME_LEN
     );
     for my $var (@required_vars) {
         die "[*] Variable $var not defined in $fwsnort_conf. Exiting.\n"
