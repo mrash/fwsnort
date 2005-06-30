@@ -333,6 +333,9 @@ sub preserve_config() {
     close CO;
 
     print "[+] Preserving existing config: ${fwsnort_dir}/$file\n";
+    print
+"    NOTE: Interfaces are no longer used as of the 0.8.0 release, and will\n",
+"    be removed.\n";
     ### write to a tmp file and then move.
     open CONF, "> ${fwsnort_dir}/${file}.new" or die "[*] Could not open ",
         "${fwsnort_dir}/${file}.new: $!";
@@ -343,7 +346,9 @@ sub preserve_config() {
             my $var = $1;
             my $found = 0;
             for my $orig_line (@orig_lines) {
-                if ($orig_line =~ /^\s*$var\s/) {
+                if ($orig_line =~ /^\s*$var\s/
+                        and $orig_line !~ /INTF/) {
+                    ### interfaces are no longer used!
                     print CONF $orig_line;
                     $found = 1;
                     last;
