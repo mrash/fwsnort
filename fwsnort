@@ -562,8 +562,10 @@ sub parse_snort_rules() {
         for (my $i = $added_rules_index; $i <= $#ipt_script_lines; $i++) {
             $added_rules_ctr++ if $ipt_script_lines[$i] =~ /\$IPTABLES/;
         }
-        push @ipt_script_lines,
-            qq|\$ECHO "    Rules added: $added_rules_ctr"|;
+        if ($added_rules_ctr) {
+            push @ipt_script_lines,
+                qq|\$ECHO "    Rules added: $added_rules_ctr"|
+        }
         $added_rules_index = $#ipt_script_lines;
 
         if ($ipt_sync) {
@@ -1113,8 +1115,8 @@ sub ipt_build_rule() {
             "$opts_href->{'ip_proto'}";
     } else {
         return 0 unless $hdr_href->{'proto'} =~ /^\w+$/;
-        if ((($hdr_href->{'sport'} =~ /any/i and $hdr_href->{'sport'} ne '')
-                or ($hdr_href->{'dport'} =~ /any/i
+        if ((($hdr_href->{'sport'} !~ /any/i and $hdr_href->{'sport'} ne '')
+                or ($hdr_href->{'dport'} !~ /any/i
                 and $hdr_href->{'dport'} ne ''))
                 and $hdr_href->{'proto'} !~ /tcp/i
                 and $hdr_href->{'proto'} !~ /udp/i) {
@@ -1186,7 +1188,7 @@ sub ipt_build_opts() {
     }
 
     ### append icmp type
-    if (defined $opts_href->{'itype'}) {
+    if (defined $opts_href->{'itype'} and $hdr_href->{'proto'} =~ /icmp/i) {
         $rule .= " $snort_opts{'filter'}{'itype'}{'iptopt'} " .
             "$opts_href->{'itype'}";
         ### append icmp code (becomes "--icmp-type type/code")
