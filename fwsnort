@@ -114,9 +114,6 @@ my $logfile = "${log_dir}/fwsnort.log";
 
 ### iptables script
 my $ipt_script = "${fwsnort_dir}/fwsnort.sh";
-
-### chain names (these should not really be changed)
-my $fws_forward             = 'FWSNORT_FORWARD';
 #===================== end config =======================
 
 ### version number
@@ -304,6 +301,7 @@ my $ulog_mode      = 0;
 my $no_ipt_conntrack  = 0;
 my $snort_conf_file   = '';
 my $ipt_restrict_intf = '';
+my $no_exclude_loopback = 0;
 
 ### save a copy of the command line args
 my @argv_cp = @ARGV;
@@ -344,6 +342,7 @@ Getopt::Long::Configure('no_ignore_case');
                                          # the OUTPUT chain.
     'no-ipt-FORWARD' => \$no_ipt_forward, # Disable fwsnort rules processed via
                                           # the FORWARD chain.
+    'no-exclude-lo'  => \$no_exclude_loopback, # include loopback interface
     'restrict-intf=s' => \$ipt_restrict_intf, # Restrict Netfilter rules to an
                                         # individual interface.
     'update-rules'   => \$update_rules, # Download latest snort rules.
@@ -1503,12 +1502,14 @@ sub ipt_add_conntrack_jumps() {
 sub ipt_jump_chain() {
     push @ipt_script_lines, "\n###\n############ Jump traffic " .
         "to the fwsnort chains. ############\n###";
-    push @ipt_script_lines, "\$IPTABLES -I INPUT 1 -j " .
-        $config{'FWSNORT_INPUT'} if $ipt_input;
-    push @ipt_script_lines, "\$IPTABLES -I OUTPUT 1 -j " .
-        $config{'FWSNORT_OUTPUT'} if $ipt_output;
-    push @ipt_script_lines, "\$IPTABLES -I FORWARD 1 -j $fws_forward"
-        if $ipt_forward;
+    my $exclude_loopback = ' ! lo ';
+    $exclude_loopback = ' ' if $no_exclude_loopback;
+    push @ipt_script_lines, "\$IPTABLES -I INPUT 1" . $exclude_loopback .
+         "-j $config{'FWSNORT_INPUT'}" if $ipt_input;
+    push @ipt_script_lines, "\$IPTABLES -I OUTPUT 1" . $exclude_loopback .
+        "-j $config{'FWSNORT_OUTPUT'}" if $ipt_output;
+    push @ipt_script_lines, "\$IPTABLES -I FORWARD 1" . $exclude_loopback .
+        "-j $config{'FWSNORT_FORWARD'}" if $ipt_forward;
     return;
 }
 
@@ -2136,6 +2137,8 @@ Options:
     --no-addresses            - Do not look at addresses assigned to
                                 local interfaces (useful for running
                                 fwsnort on a bridge).
+    --no-exclude-lo           - Do not exclude the loopback interface
+                                from fwsnort rules.
     --restrict-intf=<intf>    - Restrict fwsnort rules to a specified
                                 interface (e.g. "eth0").
     --Home-net <net/mask>     - Manually specify the Home network
