@@ -4,7 +4,7 @@
 #
 # File: fwsnort
 #
-# Purpose: To translate snort rules into equivalent iptables rules.
+# Purpose: To translate snort rules into equivalent Netfilter rules.
 #          fwsnort is based on the original snort2iptables shell script
 #          written by William Stearns.
 #
@@ -33,7 +33,6 @@
 #     way we remove them from iptables rulesets in fwsnort (we remove rules
 #     from an iptables ruleset if the iptables policy will not allow such
 #     traffic through in the first place).
-#   - Implement code for the various SERVER variables.
 #   - fwsnort.sh generation timestamp.
 #   - New option: --ipt-mark.
 #
@@ -117,12 +116,7 @@ my $logfile = "${log_dir}/fwsnort.log";
 my $ipt_script = "${fwsnort_dir}/fwsnort.sh";
 
 ### chain names (these should not really be changed)
-my $fws_in                  = 'FWSNORT_INPUT';
-my $fws_in_established      = 'FWSNORT_INPUT_ESTAB';
-my $fws_out                 = 'FWSNORT_OUTPUT';
-my $fws_out_established     = 'FWSNORT_OUTPUT_ESTAB';
 my $fws_forward             = 'FWSNORT_FORWARD';
-my $fws_forward_established = 'FWSNORT_FORWARD_ESTAB';
 #===================== end config =======================
 
 ### version number
@@ -292,6 +286,7 @@ my $ipt_print_type = 0;
 my $ipt_rule_ctr   = 1;
 my $ipt_sync       = 1;
 my $ipt_flush      = 0;
+my $ipt_list       = 0;
 my $no_ipt_sync    = 0;
 my $no_ipt_log     = 0;
 my $no_ipt_test    = 0;
@@ -323,6 +318,7 @@ Getopt::Long::Configure('no_ignore_case');
     'ipt-script=s'   => \$ipt_script,   # Manually specify the path to the
                                         # generated iptables script.
     'ipt-flush'      => \$ipt_flush,    # Flush any existing fwsnort chains.
+    'ipt-list'       => \$ipt_list,     # List any existing fwsnort chains.
     'Home-net=s'     => \$home_net,     # Manually specify home network.
     'External-net=s' => \$ext_net,      # Manually specify external network.
     'snort-sid=i'    => \$snort_sid,    # Parse only this particular snort rule.
@@ -375,6 +371,9 @@ Getopt::Long::Configure('no_ignore_case');
 
 ### flush all fwsnort chains.
 &ipt_flush() if $ipt_flush;
+
+### list all fwsnort chains.
+&ipt_list() if $ipt_list;
 
 ### download latest snort rules from snort.org
 &update_rules() if $update_rules;
@@ -596,7 +595,7 @@ sub parse_snort_rules() {
     }
     if ($ipt_sync) {
         print "[+] Found $tot_ipt_apply applicable snort rules to your " .
-            "current iptables\n    policy.\n";
+            "current Netfilter\n    policy.\n";
     }
     return;
 }
@@ -852,7 +851,7 @@ sub ipt_build() {
     my @ipt_output_rules  = ();
     my @ipt_forward_rules = ();
 
-    ### define iptables source and destination
+    ### define Netfilter source and destination
     if ($snort_hdr_href->{'dst'} =~ /any/i) {
         if ($snort_hdr_href->{'src'} =~ /any/i) {
             push @ipt_input_rules, '';
@@ -941,16 +940,16 @@ sub ipt_build() {
     }
 
     if ($ipt_input and @ipt_input_rules) {
-        ### build iptables INPUT rules
+        ### build Netfilter INPUT rules
         for my $src_dst (@ipt_input_rules) {
             my $rule = "\$IPTABLES -A ";
 
             ### see if we can jump to the ESTABLISHED inspection
             ### chain.
             if ($flow_established) {
-                $rule .= $fws_in_established;
+                $rule .= $config{'FWSNORT_INPUT_ESTAB'};
             } else {
-                $rule .= $fws_in;
+                $rule .= $config{'FWSNORT_INPUT'};
             }
 
             ### append interface restriction if necessary
@@ -976,15 +975,15 @@ sub ipt_build() {
     }
 
     if ($ipt_output and @ipt_output_rules) {
-        ### build iptables INPUT rules
+        ### build Netfilter INPUT rules
         for my $src_dst (@ipt_output_rules) {
             my $rule = "\$IPTABLES -A ";
 
             ### see if we can jump to the ESTABLISHED inspection
             if ($flow_established) {
-                $rule .= $fws_out_established;
+                $rule .= $config{'FWSNORT_OUTPUT_ESTAB'};
             } else {
-                $rule .= $fws_out;
+                $rule .= $config{'FWSNORT_OUTPUT'};
             }
 
             ### append interface restriction if necessary
@@ -1010,15 +1009,15 @@ sub ipt_build() {
     }
 
     if ($ipt_forward and @ipt_forward_rules) {
-        ### build iptables INPUT rules
+        ### build Netfilter INPUT rules
         for my $src_dst (@ipt_forward_rules) {
             my $rule = "\$IPTABLES -A ";
 
             ### see if we can jump to the ESTABLISHED inspection
             if ($flow_established) {
-                $rule .= $fws_forward_established;
+                $rule .= $config{'FWSNORT_FORWARD_ESTAB'};
             } else {
-                $rule .= $fws_forward;
+                $rule .= $config{'FWSNORT_FORWARD'};
             }
 
             ### append interface restriction if necessary
@@ -1426,11 +1425,11 @@ sub ipt_ignore_rules() {
 
     for my $addr (@$ignore_aref) {
         push @ipt_script_lines, "\$IPTABLES -A " .
-            "$fws_in -s $addr -j RETURN" if $ipt_input;
+            "$config{'FWSNORT_INPUT'} -s $addr -j RETURN" if $ipt_input;
         push @ipt_script_lines, "\$IPTABLES -A " .
-            "$fws_out -d $addr -j RETURN" if $ipt_output;
+            "$config{'FWSNORT_OUTPUT'} -d $addr -j RETURN" if $ipt_output;
         push @ipt_script_lines, "\$IPTABLES -A " .
-            "$fws_forward -s $addr -j RETURN" if $ipt_forward;
+            "$config{'FWSNORT_FORWARD'} -s $addr -j RETURN" if $ipt_forward;
     }
     return;
 }
@@ -1439,9 +1438,10 @@ sub ipt_add_chains() {
     push @ipt_script_lines, "\n###\n############ Create " .
         "fwsnort Netfilter chains. ############\n###";
     if ($ipt_input) {
-        for my $chain ($fws_in, $fws_in_established) {
+        for my $chain ($config{'FWSNORT_INPUT'},
+                $config{'FWSNORT_INPUT_ESTAB'}) {
             if ($no_ipt_conntrack) {
-                next if $chain eq $fws_in_established;
+                next if $chain eq $config{'FWSNORT_INPUT_ESTAB'};
             }
             push @ipt_script_lines, "\$IPTABLES -N " .
                 "$chain 2> /dev/null";
@@ -1450,9 +1450,10 @@ sub ipt_add_chains() {
         }
     }
     if ($ipt_output) {
-        for my $chain ($fws_out, $fws_out_established) {
+        for my $chain ($config{'FWSNORT_OUTPUT'},
+                $config{'FWSNORT_OUTPUT_ESTAB'}) {
             if ($no_ipt_conntrack) {
-                next if $chain eq $fws_out_established;
+                next if $chain eq $config{'FWSNORT_OUTPUT_ESTAB'};
             }
             push @ipt_script_lines, "\$IPTABLES -N " .
                 "$chain 2> /dev/null";
@@ -1461,9 +1462,10 @@ sub ipt_add_chains() {
         }
     }
     if ($ipt_forward) {
-        for my $chain ($fws_forward, $fws_forward_established) {
+        for my $chain ($config{'FWSNORT_FORWARD'},
+                $config{'FWSNORT_FORWARD_ESTAB'}) {
             if ($no_ipt_conntrack) {
-                next if $chain eq $fws_forward_established;
+                next if $chain eq $config{'FWSNORT_FORWARD_ESTAB'};
             }
             push @ipt_script_lines, "\$IPTABLES -N " .
                 "$chain 2> /dev/null";
@@ -1481,16 +1483,19 @@ sub ipt_add_conntrack_jumps() {
     push @ipt_script_lines, "\n###\n############ Inspect ESTABLISHED " .
         "tcp connections. ############\n###";
     if ($ipt_input) {
-        push @ipt_script_lines, "\$IPTABLES -A $fws_in -p tcp -m " .
-            "state --state ESTABLISHED -j $fws_in_established";
+        push @ipt_script_lines, "\$IPTABLES -A $config{'FWSNORT_INPUT'} " .
+            "-p tcp -m state --state ESTABLISHED -j " .
+            $config{'FWSNORT_INPUT_ESTAB'};
     }
     if ($ipt_output) {
-        push @ipt_script_lines, "\$IPTABLES -A $fws_out -p tcp -m " .
-            "state --state ESTABLISHED -j $fws_out_established";
+        push @ipt_script_lines, "\$IPTABLES -A $config{'FWSNORT_OUTPUT'} " .
+            "-p tcp -m state --state ESTABLISHED -j " .
+            $config{'FWSNORT_OUTPUT_ESTAB'};
     }
     if ($ipt_forward) {
-        push @ipt_script_lines, "\$IPTABLES -A $fws_forward -p tcp -m " .
-            "state --state ESTABLISHED -j $fws_forward_established";
+        push @ipt_script_lines, "\$IPTABLES -A $config{'FWSNORT_FORWARD'} " .
+            "-p tcp -m state --state ESTABLISHED -j " .
+            $config{'FWSNORT_FORWARD_ESTAB'};
     }
     return;
 }
@@ -1498,10 +1503,10 @@ sub ipt_add_conntrack_jumps() {
 sub ipt_jump_chain() {
     push @ipt_script_lines, "\n###\n############ Jump traffic " .
         "to the fwsnort chains. ############\n###";
-    push @ipt_script_lines, "\$IPTABLES -I INPUT 1 -j $fws_in"
-        if $ipt_input;
-    push @ipt_script_lines, "\$IPTABLES -I OUTPUT 1 -j $fws_out"
-        if $ipt_output;
+    push @ipt_script_lines, "\$IPTABLES -I INPUT 1 -j " .
+        $config{'FWSNORT_INPUT'} if $ipt_input;
+    push @ipt_script_lines, "\$IPTABLES -I OUTPUT 1 -j " .
+        $config{'FWSNORT_OUTPUT'} if $ipt_output;
     push @ipt_script_lines, "\$IPTABLES -I FORWARD 1 -j $fws_forward"
         if $ipt_forward;
     return;
@@ -1613,8 +1618,46 @@ sub readconf() {
     return;
 }
 
+sub ipt_list() {
+    for my $chain (
+        $config{'FWSNORT_INPUT'},
+        $config{'FWSNORT_INPUT_ESTAB'},
+        $config{'FWSNORT_OUTPUT'},
+        $config{'FWSNORT_OUTPUT_ESTAB'},
+        $config{'FWSNORT_FORWARD'},
+        $config{'FWSNORT_FORWARD_ESTAB'}
+    ) {
+        my $exists = (system "$cmds{'iptables'} -n -L " .
+            "$chain > /dev/null 2>&1") >> 8;
+        if ($exists == 0) {
+            print "[+] Listing $chain chain...\n";
+            system "$cmds{'iptables'} -v -n -L $chain";
+        } else {
+            print "[-] Chain $chain does not exist...\n";
+        }
+    }
+    exit 0;
+}
+
 sub ipt_flush() {
-    return;
+    for my $chain (
+        $config{'FWSNORT_INPUT'},
+        $config{'FWSNORT_INPUT_ESTAB'},
+        $config{'FWSNORT_OUTPUT'},
+        $config{'FWSNORT_OUTPUT_ESTAB'},
+        $config{'FWSNORT_FORWARD'},
+        $config{'FWSNORT_FORWARD_ESTAB'}
+    ) {
+        my $exists = (system "$cmds{'iptables'} -n -L " .
+            "$chain > /dev/null 2>&1") >> 8;
+        if ($exists == 0) {
+            print "[+] Flushing $chain chain...\n";
+            system "$cmds{'iptables'} -F $chain";
+        } else {
+            print "[-] Chain $chain does not exist...\n";
+        }
+    }
+    exit 0;
 }
 
 sub fwsnort_init() {
@@ -1731,7 +1774,8 @@ sub required_vars() {
         HOME_NET EXTERNAL_NET HTTP_SERVERS SMTP_SERVERS DNS_SERVERS
         SQL_SERVERS TELNET_SERVERS AIM_SERVERS HTTP_PORTS SHELLCODE_PORTS
         ORACLE_PORTS IGNORE_ADDR AVG_IP_HEADER_LEN AVG_TCP_HEADER_LEN
-        MAX_FRAME_LEN
+        MAX_FRAME_LEN FWSNORT_INPUT FWSNORT_INPUT_ESTAB FWSNORT_OUTPUT
+        FWSNORT_OUTPUT_ESTAB FWSNORT_FORWARD FWSNORT_FORWARD_ESTAB
     );
     for my $var (@required_vars) {
         die "[*] Variable $var not defined in $fwsnort_conf. Exiting.\n"
@@ -2050,16 +2094,16 @@ fwsnort v$version
 Usage: fwsnort [-l <logfile>] [-v] [-V] [-h] [-u] [-c <config file>]
        [--snort-sid=<sid>] [--ipt-apply] [--Home-net <net>]
        [--External-net <net>] [--ipt-drop] [--include-types <types>]
-       [--exclude-types <types>] [--ipt-script=<script>]
+       [--exclude-types <types>] [--ipt-script=<script>] [--ipt-list]
        [--no-ipt-sync] [--no-ipt-log] [--no-ipt-test] [--no-ipt-jumps]
        [--Dump-conf] [--debug] [--strict] [--snort-conf <file>]
        [--restrict-intf <intf>] [--add-deleted] [--no-ipt-INPUT]
-       [--no-ipt-OUTPUT] [--no-ipt-FORWARD]
+       [--no-ipt-OUTPUT] [--no-ipt-FORWARD] [--ipt-flush]
 
 Options:
     --strict                  - Make snort parser very strict about
                                 which options it will translate into
-                                iptables rules.
+                                Netfilter rules.
     --ipt-script=<script>     - Print iptables script to <script>
                                 instead of the normal location at
                                 $ipt_script
@@ -2069,23 +2113,29 @@ Options:
                                 unreachable for udp messages) for
                                 every logging rule.
     --ipt-drop                - Add a DROP rule for every logging rule.
-    --snort-sid=<sid>         - Generate an equivalent iptables rule
+    --ipt-list                - List all rules in fwsnort chains.
+    --ipt-flush               - Flush all rules in fwsnort chains.
+    --snort-sid=<sid>         - Generate an equivalent Netfilter rule
                                 for the specific snort id <sid>.
     --snort-conf=<file>       - Read Snort specific variables out of
                                 existing snort.conf file.
-    --no-ipt-sync             - Add iptables rules for signatures that
-                                are already blocked by iptables.
-    --no-ipt-log              - Do not generate iptables log rules
+    --snort-rdir=<dir>        - Specify path to Snort rules directory.
+    --no-ipt-sync             - Add Netfilter rules for signatures that
+                                are already blocked by Netfilter.
+    --no-ipt-log              - Do not generate Netfilter log rules
                                 (can only be used with --ipt-drop).
     --no-ipt-test             - Do not run any checks for availability
-                                of iptables modules (string, LOG,
+                                of Netfilter modules (string, LOG,
                                 ttl, etc.).
     --no-ipt-jumps            - Do not jump packets from built-in
-                                iptables INPUT or FORWARD chains to
+                                Netfilter INPUT or FORWARD chains to
                                 chains created by fwsnort.
     --no-ipt-INPUT            - Exclude INPUT chain processing.
     --no-ipt-OUTPUT           - Exclude OUTPUT chain processing.
     --no-ipt-FORWARD          - Exclude FORWARD chain processing.
+    --no-addresses            - Do not look at addresses assigned to
+                                local interfaces (useful for running
+                                fwsnort on a bridge).
     --restrict-intf=<intf>    - Restrict fwsnort rules to a specified
                                 interface (e.g. "eth0").
     --Home-net <net/mask>     - Manually specify the Home network
