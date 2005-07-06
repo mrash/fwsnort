@@ -25,6 +25,9 @@ fwsnort-0.8.0 (06//2005):
     - Changed --type argument to --include-types and added list support
       so it accepts things like "chat,ddos".  Also added --exclude-types
       command line argument.
+    - Added support for multiple sid's (as a comma separated list) in
+      --snort-sids argument.  Also added --exclude-sids argument to remove
+      a list of sids from translation.
     - Added support for the replace Snort option (originally from the
       Snort_inline project).  The requires the replace string patch.
 
