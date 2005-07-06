@@ -260,6 +260,8 @@ my %cmds   = ();
 my @local_addrs   = ();
 my %include_types = ();
 my %exclude_types = ();
+my %include_sids  = ();
+my %exclude_sids  = ();
 
 ### establish some default behavior
 my $home_net   = '';  ### normally comes from fwsnort.conf
@@ -271,7 +273,6 @@ my $help       = 0;
 my $stdout     = 0;
 my $debug      = 0;
 my $strict     = 0;
-my $snort_sid  = 0;
 my $dump_conf  = 0;
 my $verbose    = 0;
 my $print_ver  = 0;
@@ -292,6 +293,8 @@ my $no_ipt_input   = 0;
 my $no_ipt_output  = 0;
 my $no_addr_check  = 0;
 my $no_ipt_forward = 0;
+my $include_sids   = '';
+my $exclude_sids   = '';
 my $add_deleted    = 0;
 my $rules_types    = '';
 my $exclude_types  = '';
@@ -319,7 +322,8 @@ Getopt::Long::Configure('no_ignore_case');
     'ipt-list'       => \$ipt_list,     # List any existing fwsnort chains.
     'Home-net=s'     => \$home_net,     # Manually specify home network.
     'External-net=s' => \$ext_net,      # Manually specify external network.
-    'snort-sid=i'    => \$snort_sid,    # Parse only this particular snort rule.
+    'snort-sids=s'   => \$include_sids, # Parse only these particular snort rules.
+    'exclude-sids=s' => \$exclude_sids, # Exclude these particular snort rules.
     'snort-conf=s'   => \$snort_conf_file, # Get HOME_NET, etc. vars from
                                         # existing Snort config file.
     'include-type=s' => \$rules_types,  # Process this type of snort rule
@@ -493,7 +497,7 @@ sub parse_snort_rules() {
         my $parsed_ctr = 0;
         my $unsup_ctr  = 0;
         my $ipt_apply  = 0;
-        my $added_rules_index = $#ipt_script_lines;
+        my $ipt_num_rules = 0;
         RULE: for my $rule (@lines) {
             chomp $rule;
             my $rule_hdr;
@@ -546,25 +550,24 @@ sub parse_snort_rules() {
 
             ### construct the equivalent iptables rule and add it
             ### to $ipt_script
-            my $ipt_rv = &ipt_build($hdr_href, $opts_href, $rule);
+            my ($ipt_rv, $num_rules) =
+                &ipt_build($hdr_href, $opts_href, $rule);
             if ($ipt_rv) {
                 $ipt_apply++;
                 $tot_ipt_apply++;
+                ### may have the rule in several chains
+                $ipt_num_rules += $num_rules;
             }
             $parsed_ctr++;  ### keep track of successfully parsed rules
             $abs_num++;;
         }
 
-        ### write the rules counter out to the fwsnort.sh script
-        my $added_rules_ctr = 0;
-        for (my $i = $added_rules_index; $i <= $#ipt_script_lines; $i++) {
-            $added_rules_ctr++ if $ipt_script_lines[$i] =~ /\$IPTABLES/;
-        }
-        if ($added_rules_ctr) {
+        if ($ipt_num_rules) {
+            $ipt_num_rules *= 2 if $ipt_drop;
+            $ipt_num_rules *= 2 if $ipt_reject;
             push @ipt_script_lines,
-                qq|\$ECHO "    Rules added: $added_rules_ctr"|
+                qq|\$ECHO "    Rules added: $ipt_num_rules"|;
         }
-        $added_rules_index = $#ipt_script_lines;
 
         if ($ipt_sync) {
             printf("%-10s%-10s%-10s%-10s\n", $parsed_ctr, $unsup_ctr,
@@ -605,16 +608,25 @@ sub parse_rule_options() {
     ### tmp hash we will return
     my %opts;
 
-    if ($snort_sid) {
-        if ($rule_options =~ /sid:\s*$snort_sid\s*;/) {
-            &logr("[+] matched sid:$snort_sid: $rule_options");
+    my $sid;
+
+    ### get the sid here for logging purposes
+    if ($rule_options =~ /$snort_opts{'logprefix'}{'sid'}/) {
+        $sid = $1;
+    } else {
+        return '';
+    }
+
+    if (%exclude_sids) {
+        return '' if defined $exclude_sids{$sid};
+    }
+    if (%include_sids) {
+        if (defined $include_sids{$sid}) {
+            &logr("[+] matched sid:$sid: $rule_options");
         } else {
             return '';
         }
     }
-
-    ### get the sid here for logging purposes
-    my ($sid) = ($rule_options =~ /$snort_opts{'logprefix'}{'sid'}/);
 
     for my $opt (keys %{$snort_opts{'unsupported'}}) {
         ### see if we match a regex belonging to an supported option
@@ -844,6 +856,7 @@ sub ipt_build() {
     my ($snort_hdr_href, $snort_opts_href, $orig_snort_rule) = @_;
 
     my $found_rule = 0;
+    my $num_rules  = 0;
 
     ### for Netfilter fwsnort chains
     my @ipt_input_rules   = ();
@@ -862,7 +875,7 @@ sub ipt_build() {
             unless ($addr_aref) {
                 &logr("[-] No valid source IPs/networks in Snort " .
                     "rule header.");
-                return 0;
+                return 0, 0;
             }
             for my $src (@$addr_aref) {
                 if (&is_local($src)) {
@@ -881,7 +894,7 @@ sub ipt_build() {
         unless ($dst_addr_aref) {
             &logr("[-] No valid destination IPs/networks in Snort rule " .
                 "header.");
-            return 0;
+            return 0, 0;
         }
         if ($snort_hdr_href->{'src'} =~ /any/i) {
             my $negate = '';
@@ -906,7 +919,7 @@ sub ipt_build() {
             unless ($src_addr_aref) {
                 &logr("[-] No valid source IPs/networks in Snort rule " .
                     "header.");
-                return 0;
+                return 0, 0;
             }
             for my $src (@$src_addr_aref) {
                 for my $dst (@$dst_addr_aref) {
@@ -969,7 +982,10 @@ sub ipt_build() {
                 $orig_snort_rule,
                 $flow_established
             );
-            $found_rule = 1 if $rv;
+            if ($rv) {
+                $found_rule = 1;
+                $num_rules++;
+            }
         }
     }
 
@@ -1003,7 +1019,10 @@ sub ipt_build() {
                 $orig_snort_rule,
                 $flow_established
             );
-            $found_rule = 1 if $rv;
+            if ($rv) {
+                $found_rule = 1;
+                $num_rules++;
+            }
         }
     }
 
@@ -1037,10 +1056,13 @@ sub ipt_build() {
                 $orig_snort_rule,
                 $flow_established
             );
-            $found_rule = 1 if $rv;
+            if ($rv) {
+                $found_rule = 1;
+                $num_rules++;
+            }
         }
     }
-    return $found_rule;
+    return $found_rule, $num_rules;
 }
 
 sub is_local() {
@@ -1728,7 +1750,7 @@ sub handle_cmd_line() {
         delete $snort_opts{'ignore'}{'threshold'};
     }
 
-    $ipt_sync = 0 if $no_ipt_sync;
+    $ipt_sync    = 0 if $no_ipt_sync;
     $ipt_input   = 0 if $no_ipt_input;
     $ipt_output  = 0 if $no_ipt_output;
     $ipt_forward = 0 if $no_ipt_forward;
@@ -1748,7 +1770,18 @@ sub handle_cmd_line() {
             $exclude_types{$type} = '';
         }
     }
-
+    if ($include_sids) {
+        my @sids = split /\,/, $include_sids;
+        for my $sid (@sids) {
+            $include_sids{$sid} = '';
+        }
+    }
+    if ($exclude_sids) {
+        my @sids = split /\,/, $exclude_sids;
+        for my $sid (@sids) {
+            $exclude_sids{$sid} = '';
+        }
+    }
     return;
 }
 
@@ -2093,13 +2126,14 @@ fwsnort v$version
 [+] By Michael Rash <mbr\@cipherdyne.org>, http://www.cipherdyne.org/
 
 Usage: fwsnort [-l <logfile>] [-v] [-V] [-h] [-u] [-c <config file>]
-       [--snort-sid=<sid>] [--ipt-apply] [--Home-net <net>]
-       [--External-net <net>] [--ipt-drop] [--include-types <types>]
-       [--exclude-types <types>] [--ipt-script=<script>] [--ipt-list]
-       [--no-ipt-sync] [--no-ipt-log] [--no-ipt-test] [--no-ipt-jumps]
-       [--Dump-conf] [--debug] [--strict] [--snort-conf <file>]
-       [--restrict-intf <intf>] [--add-deleted] [--no-ipt-INPUT]
-       [--no-ipt-OUTPUT] [--no-ipt-FORWARD] [--ipt-flush]
+       [--snort-sids=<sid>] [--exclude-sids=<sids>] [--ipt-apply]
+       [--Home-net <net>] [--External-net <net>] [--ipt-drop]
+       [--include-types <types>] [--exclude-types <types>]
+       [--ipt-script=<script>] [--ipt-list] [--no-ipt-sync]
+       [--no-ipt-log] [--no-ipt-test] [--no-ipt-jumps] [--Dump-conf]
+       [--debug] [--strict] [--snort-conf <file>] [--restrict-intf <intf>]
+       [--add-deleted] [--no-ipt-INPUT] [--no-ipt-OUTPUT]
+       [--no-ipt-FORWARD] [--ipt-flush]
 
 Options:
     --strict                  - Make snort parser very strict about
@@ -2116,8 +2150,10 @@ Options:
     --ipt-drop                - Add a DROP rule for every logging rule.
     --ipt-list                - List all rules in fwsnort chains.
     --ipt-flush               - Flush all rules in fwsnort chains.
-    --snort-sid=<sid>         - Generate an equivalent Netfilter rule
-                                for the specific snort id <sid>.
+    --snort-sids=<sid>        - Generate an equivalent Netfilter rule
+                                for the specific snort id <sid> (also
+                                supports a comma separate list of sids.)
+    --exclude-sids=<sid>      - Exclude a list of sids from translation.
     --snort-conf=<file>       - Read Snort specific variables out of
                                 existing snort.conf file.
     --snort-rdir=<dir>        - Specify path to Snort rules directory.
