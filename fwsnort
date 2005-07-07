@@ -418,16 +418,20 @@ Getopt::Long::Configure('no_ignore_case');
 &logr("[+] Begin parsing cycle.");
 
 ### parse snort rules (signatures)
-if ($ipt_sync) {
-    print "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=",
-        "-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=\n",
-        sprintf("%-30s%-10s%-10s%-10s%-10s", '    Snort Rules File',
-            'Success', 'Fail', 'Ipt_apply', 'Total'), "\n\n";
+if ($include_sids) {
+    print "[+] Parsing Snort rules files...\n";
 } else {
-    print "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=",
-        "-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=\n",
-        sprintf("%-30s%-10s%-10s%-10s", '    Snort Rules File',
-            'Success', 'Fail', 'Total'), "\n\n";
+    if ($ipt_sync) {
+        print "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=",
+            "-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=\n",
+            sprintf("%-30s%-10s%-10s%-10s%-10s", '    Snort Rules File',
+                'Success', 'Fail', 'Ipt_apply', 'Total'), "\n\n";
+    } else {
+        print "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=",
+            "-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=\n",
+            sprintf("%-30s%-10s%-10s%-10s", '    Snort Rules File',
+                'Success', 'Fail', 'Total'), "\n\n";
+    }
 }
 
 ### main subroutine to parse snort rules and add them to the
@@ -470,7 +474,7 @@ sub parse_snort_rules() {
     my $tot_unsup_ctr = 0;
     FILE: for my $rfile (sort @rfiles) {
         my $type = '';
-        if ($rfile =~ /(\S+)\.rules/) {
+        if ($rfile =~ /(\S+)\.rules$/) {
             $type = $1;
         } else {
             next FILE;
@@ -486,7 +490,7 @@ sub parse_snort_rules() {
             next FILE unless $add_deleted;
         }
         ($snort_type) = ($rfile =~ /(\S+)\.rules/);
-        printf("%-30s", "[+] $rfile");
+        printf("%-30s", "[+] $rfile") unless $include_sids;
         &logr("[+] Parsing $rfile");
         open R, "< ${rules_dir}/${rfile}" or die "[*] Could not ",
             "open: ${rules_dir}/${rfile}";
@@ -548,6 +552,10 @@ sub parse_snort_rules() {
                 next RULE;
             }
 
+            if ($include_sids) {
+                print "[+] Found sid: $opts_href->{'sid'} in $rfile\n";
+            }
+
             ### construct the equivalent iptables rule and add it
             ### to $ipt_script
             my ($ipt_rv, $num_rules) =
@@ -557,6 +565,13 @@ sub parse_snort_rules() {
                 $tot_ipt_apply++;
                 ### may have the rule in several chains
                 $ipt_num_rules += $num_rules;
+                if ($include_sids) {
+                    print "    Successful translation.\n";
+                }
+            } else {
+                if ($include_sids) {
+                    print "    Unsuccessful translation.\n";
+                }
             }
             $parsed_ctr++;  ### keep track of successfully parsed rules
             $abs_num++;;
@@ -569,35 +584,40 @@ sub parse_snort_rules() {
                 qq|\$ECHO "    Rules added: $ipt_num_rules"|;
         }
 
-        if ($ipt_sync) {
-            printf("%-10s%-10s%-10s%-10s\n", $parsed_ctr, $unsup_ctr,
-                $ipt_apply, $rule_num);
-        } else {
-            printf("%-10s%-10s%-10s\n", $parsed_ctr, $unsup_ctr, $rule_num);
+        unless ($include_sids) {
+            if ($ipt_sync) {
+                printf("%-10s%-10s%-10s%-10s\n", $parsed_ctr, $unsup_ctr,
+                    $ipt_apply, $rule_num);
+            } else {
+                printf("%-10s%-10s%-10s\n", $parsed_ctr, $unsup_ctr,
+                    $rule_num);
+            }
         }
     }
-    if ($ipt_sync) {
-        printf("%30s", ' ');
-        print "=======================================\n";
-        printf("%30s%-10s%-10s%-10s%-10s\n", ' ',
-            $abs_num, $tot_unsup_ctr, $tot_ipt_apply, $sabs_num);
-    } else {
-        printf("%30s", ' ');
-        print "=============================\n";
-        printf("%30s%-10s%-10s%-10s\n", ' ',
-            $abs_num, $tot_unsup_ctr, $sabs_num);
-    }
-    print "\n";
-    if ($abs_num) {  ### we parsed at least one rule
-        print "[+] Generated iptables rules for $abs_num out of ",
-            "$sabs_num signatures: ",
-            sprintf("%.2f", $abs_num/$sabs_num*100), "%\n";
-    } else {
-        print "[+] No rules parsed.\n";
-    }
-    if ($ipt_sync) {
-        print "[+] Found $tot_ipt_apply applicable snort rules to your " .
-            "current Netfilter\n    policy.\n";
+    unless ($include_sids) {
+        if ($ipt_sync) {
+            printf("%30s", ' ');
+            print "=======================================\n";
+            printf("%30s%-10s%-10s%-10s%-10s\n", ' ',
+                $abs_num, $tot_unsup_ctr, $tot_ipt_apply, $sabs_num);
+        } else {
+            printf("%30s", ' ');
+            print "=============================\n";
+            printf("%30s%-10s%-10s%-10s\n", ' ',
+                $abs_num, $tot_unsup_ctr, $sabs_num);
+        }
+        print "\n";
+        if ($abs_num) {  ### we parsed at least one rule
+            print "[+] Generated iptables rules for $abs_num out of ",
+                "$sabs_num signatures: ",
+                sprintf("%.2f", $abs_num/$sabs_num*100), "%\n";
+        } else {
+            print "[+] No rules parsed.\n";
+        }
+        if ($ipt_sync) {
+            print "[+] Found $tot_ipt_apply applicable snort rules to your " .
+                "current Netfilter\n    policy.\n";
+        }
     }
     return;
 }
