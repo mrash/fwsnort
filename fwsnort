@@ -262,6 +262,7 @@ my %include_types = ();
 my %exclude_types = ();
 my %include_sids  = ();
 my %exclude_sids  = ();
+my %restrict_interfaces = ();
 
 ### establish some default behavior
 my $home_net   = '';  ### normally comes from fwsnort.conf
@@ -348,7 +349,8 @@ Getopt::Long::Configure('no_ignore_case');
                                           # the FORWARD chain.
     'no-exclude-lo'  => \$no_exclude_loopback, # include loopback interface
     'restrict-intf=s' => \$ipt_restrict_intf, # Restrict Netfilter rules to an
-                                        # individual interface.
+                                        # individual interface (supports a
+                                        # comma separate list).
     'update-rules'   => \$update_rules, # Download latest snort rules.
     'add-deleted'    => \$add_deleted,  # Add deleted rules.
     'strict'         => \$strict,       # Strict mode.
@@ -985,9 +987,7 @@ sub ipt_build() {
             }
 
             ### append interface restriction if necessary
-            if ($ipt_restrict_intf) {
-                $rule .= " -i $ipt_restrict_intf";
-            } elsif ($src_dst =~ m|127\.0\.0\.\d/|) {
+            if ($src_dst =~ m|127\.0\.0\.\d/|) {
                 $rule .= " -i ! lo";
             }
 
@@ -1022,9 +1022,7 @@ sub ipt_build() {
             }
 
             ### append interface restriction if necessary
-            if ($ipt_restrict_intf) {
-                $rule .= " -o $ipt_restrict_intf";
-            } elsif ($src_dst =~ m|127\.0\.0\.\d/|) {
+            if ($src_dst =~ m|127\.0\.0\.\d/|) {
                 $rule .= " -o ! lo";
             }
 
@@ -1059,9 +1057,7 @@ sub ipt_build() {
             }
 
             ### append interface restriction if necessary
-            if ($ipt_restrict_intf) {
-                $rule .= " -i $ipt_restrict_intf";
-            } elsif ($src_dst =~ m|127\.0\.0\.\d/|) {
+            if ($src_dst =~ m|127\.0\.0\.\d/|) {
                 $rule .= " -i ! lo";
             }
 
@@ -1544,20 +1540,31 @@ sub ipt_add_conntrack_jumps() {
 sub ipt_jump_chain() {
     push @ipt_script_lines, "\n###\n############ Jump traffic " .
         "to the fwsnort chains. ############\n###";
-    if ($no_exclude_loopback) {
-        push @ipt_script_lines, "\$IPTABLES -I INPUT 1 " .
-             "-j $config{'FWSNORT_INPUT'}" if $ipt_input;
-        push @ipt_script_lines, "\$IPTABLES -I OUTPUT 1 " .
-            "-j $config{'FWSNORT_OUTPUT'}" if $ipt_output;
-        push @ipt_script_lines, "\$IPTABLES -I FORWARD 1 " .
-            "-j $config{'FWSNORT_FORWARD'}" if $ipt_forward;
+    if (%restrict_interfaces) {
+        for my $intf (keys %restrict_interfaces) {
+            push @ipt_script_lines, "\$IPTABLES -I INPUT 1 -i $intf " .
+                 "-j $config{'FWSNORT_INPUT'}" if $ipt_input;
+            push @ipt_script_lines, "\$IPTABLES -I OUTPUT 1 -o $intf " .
+                "-j $config{'FWSNORT_OUTPUT'}" if $ipt_output;
+            push @ipt_script_lines, "\$IPTABLES -I FORWARD 1 -i $intf " .
+                "-j $config{'FWSNORT_FORWARD'}" if $ipt_forward;
+        }
     } else {
-        push @ipt_script_lines, "\$IPTABLES -I INPUT 1 -i ! lo " .
-             "-j $config{'FWSNORT_INPUT'}" if $ipt_input;
-        push @ipt_script_lines, "\$IPTABLES -I OUTPUT 1 -o ! lo " .
-            "-j $config{'FWSNORT_OUTPUT'}" if $ipt_output;
-        push @ipt_script_lines, "\$IPTABLES -I FORWARD 1 -i ! lo " .
-            "-j $config{'FWSNORT_FORWARD'}" if $ipt_forward;
+        if ($no_exclude_loopback) {
+            push @ipt_script_lines, "\$IPTABLES -I INPUT 1 " .
+                 "-j $config{'FWSNORT_INPUT'}" if $ipt_input;
+            push @ipt_script_lines, "\$IPTABLES -I OUTPUT 1 " .
+                "-j $config{'FWSNORT_OUTPUT'}" if $ipt_output;
+            push @ipt_script_lines, "\$IPTABLES -I FORWARD 1 " .
+                "-j $config{'FWSNORT_FORWARD'}" if $ipt_forward;
+        } else {
+            push @ipt_script_lines, "\$IPTABLES -I INPUT 1 -i ! lo " .
+                 "-j $config{'FWSNORT_INPUT'}" if $ipt_input;
+            push @ipt_script_lines, "\$IPTABLES -I OUTPUT 1 -o ! lo " .
+                "-j $config{'FWSNORT_OUTPUT'}" if $ipt_output;
+            push @ipt_script_lines, "\$IPTABLES -I FORWARD 1 -i ! lo " .
+                "-j $config{'FWSNORT_FORWARD'}" if $ipt_forward;
+        }
     }
     return;
 }
@@ -1798,6 +1805,10 @@ sub handle_cmd_line() {
         }
     }
     if ($include_sids) {
+        ### disable Netfilter policy parsing if we are translating a
+        ### specific set of Snort sids.
+        $ipt_sync = 0;
+
         my @sids = split /\,/, $include_sids;
         for my $sid (@sids) {
             $include_sids{$sid} = '';
@@ -1807,6 +1818,12 @@ sub handle_cmd_line() {
         my @sids = split /\,/, $exclude_sids;
         for my $sid (@sids) {
             $exclude_sids{$sid} = '';
+        }
+    }
+    if ($ipt_restrict_intf) {
+        my @interfaces = split /\,/, $ipt_restrict_intf;
+        for my $intf (@interfaces) {
+            $restrict_interfaces{$intf} = '';
         }
     }
     return;
