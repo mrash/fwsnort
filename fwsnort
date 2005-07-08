@@ -1544,14 +1544,21 @@ sub ipt_add_conntrack_jumps() {
 sub ipt_jump_chain() {
     push @ipt_script_lines, "\n###\n############ Jump traffic " .
         "to the fwsnort chains. ############\n###";
-    my $exclude_loopback = ' ! lo ';
-    $exclude_loopback = ' ' if $no_exclude_loopback;
-    push @ipt_script_lines, "\$IPTABLES -I INPUT 1" . $exclude_loopback .
-         "-j $config{'FWSNORT_INPUT'}" if $ipt_input;
-    push @ipt_script_lines, "\$IPTABLES -I OUTPUT 1" . $exclude_loopback .
-        "-j $config{'FWSNORT_OUTPUT'}" if $ipt_output;
-    push @ipt_script_lines, "\$IPTABLES -I FORWARD 1" . $exclude_loopback .
-        "-j $config{'FWSNORT_FORWARD'}" if $ipt_forward;
+    if ($no_exclude_loopback) {
+        push @ipt_script_lines, "\$IPTABLES -I INPUT 1 " .
+             "-j $config{'FWSNORT_INPUT'}" if $ipt_input;
+        push @ipt_script_lines, "\$IPTABLES -I OUTPUT 1 " .
+            "-j $config{'FWSNORT_OUTPUT'}" if $ipt_output;
+        push @ipt_script_lines, "\$IPTABLES -I FORWARD 1 " .
+            "-j $config{'FWSNORT_FORWARD'}" if $ipt_forward;
+    } else {
+        push @ipt_script_lines, "\$IPTABLES -I INPUT 1 -i ! lo " .
+             "-j $config{'FWSNORT_INPUT'}" if $ipt_input;
+        push @ipt_script_lines, "\$IPTABLES -I OUTPUT 1 -o ! lo " .
+            "-j $config{'FWSNORT_OUTPUT'}" if $ipt_output;
+        push @ipt_script_lines, "\$IPTABLES -I FORWARD 1 -i ! lo " .
+            "-j $config{'FWSNORT_FORWARD'}" if $ipt_forward;
+    }
     return;
 }
 
