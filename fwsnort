@@ -451,14 +451,9 @@ push @ipt_script_lines, "\n### EOF ###";
 
 chmod 0500, $ipt_script;
 
-print "\n[+] Logfile:         $logfile\n";
-print "[+] Iptables script: $ipt_script\n";
-
-if ($ipt_apply) {
-    print "[+] Executing $ipt_script\n";
-    system $ipt_script;
-}
-print "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=",
+print "\n[+] Logfile:         $logfile\n",
+    "[+] Iptables script: $ipt_script\n",
+    "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=",
     "-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=\n";
 
 exit 0;
@@ -1809,6 +1804,16 @@ sub handle_cmd_line() {
         $snort_opts{'unsupported'}{'threshold'}
             = $snort_opts{'ignore'}{'threshold'};
         delete $snort_opts{'ignore'}{'threshold'};
+    }
+
+    if ($ipt_apply) {
+        if (-e $ipt_script) {
+            print "[+] Executing $ipt_script\n";
+            system $ipt_script;
+            exit 0;
+        } else {
+            die "[*] $ipt_script does not exist.";
+        }
     }
 
     $ipt_sync    = 0 if $no_ipt_sync;

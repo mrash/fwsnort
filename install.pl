@@ -103,7 +103,7 @@ sub install() {
     }
 
     ### install Net::IPv4Addr
-    print "[+] Installing the Net::IPv4Addr perl module in $lib_dir/.\n";
+    print "[+] Installing the Net::IPv4Addr perl module in $lib_dir/\n";
     chdir 'Net-IPv4Addr' or die "[*] Could not chdir to ",
         "Net-IPv4Addr: $!";
     unless (-e 'Makefile.PL' && -e 'IPv4Addr.pm') {
