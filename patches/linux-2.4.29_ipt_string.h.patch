@@ -1,0 +1,11 @@
+--- linux/include/linux/netfilter_ipv4/ipt_string.h.orig	2005-07-08 15:37:07.000000000 -0400
++++ linux/include/linux/netfilter_ipv4/ipt_string.h	2005-07-08 15:37:21.000000000 -0400
+@@ -8,7 +8,7 @@
+ #define IPT_STRING_NEEDLE_THRESH	20
+ 
+ #define BM_MAX_NLEN 256
+-#define BM_MAX_HLEN 1024
++#define BM_MAX_HLEN 2048
+ 
+ typedef char *(*proc_ipt_search) (char *, char *, int, int);
+ 
