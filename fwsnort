@@ -202,7 +202,6 @@ my %snort_opts = (
     ### within iptables filter statements (yet :)
     'unsupported' => {
         'pcre'         => '[\s;]pcre:\s*.*?\s*;',
-        'content-list' => '[\s;]content-list:\s*.*?\s*;',
         'ack'          => '[\s;]ack:\s*.*?\s*;',
         'fragbits'     => '[\s;]fragbits:\s*.*?\s*;',
         'content-list' => '[\s;]content\-list:\s*\".*?\"\s*;',
