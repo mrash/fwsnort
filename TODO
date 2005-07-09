@@ -3,3 +3,5 @@
    -j REJECT --reject-with tcp-reset).  The list should come from the
    command line with a new option and/or be read from a file.
  - Make use of the u32 module for complex match criteria.
+ - Make use of the L7 packet classifier for 2.6 match criteria in the
+   absence of a simple string match.
