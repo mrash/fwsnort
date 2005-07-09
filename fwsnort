@@ -1339,10 +1339,10 @@ sub ipt_build_opts() {
         if (defined $opts_href->{'sid'}) {
             if ($ipt_drop) {
                 $log_target = " -j ULOG --ulog-nlgroup $ulog_nlgroup " .
-                    "--ulog-prefix \"DROP SID$opts_href->{'sid'} \"";
+                    "--ulog-prefix \"DRP SID$opts_href->{'sid'} \"";
             } elsif ($ipt_reject) {
                 $log_target = " -j ULOG --ulog-nlgroup $ulog_nlgroup " .
-                    "--ulog-prefix \"REJECT SID$opts_href->{'sid'} \"";
+                    "--ulog-prefix \"REJ SID$opts_href->{'sid'} \"";
             } else {
                 $log_target = " -j ULOG --ulog-nlgroup $ulog_nlgroup " .
                     "--ulog-prefix \"SID$opts_href->{'sid'} \"";
@@ -1353,10 +1353,10 @@ sub ipt_build_opts() {
         if ($flow_logging_prefix) {
             if (defined $opts_href->{'sid'}) {
                 if ($ipt_drop) {
-                    $log_target = " -j LOG --log-prefix \"DROP " .
+                    $log_target = " -j LOG --log-prefix \"DRP " .
                         "SID$opts_href->{'sid'} $flow_logging_prefix \"";
                 } elsif ($ipt_reject) {
-                    $log_target = " -j LOG --log-prefix \"REJECT " .
+                    $log_target = " -j LOG --log-prefix \"REJ " .
                         "SID$opts_href->{'sid'} $flow_logging_prefix \"";
                 } else {
                     $log_target = " -j LOG --log-prefix " .
@@ -1366,10 +1366,10 @@ sub ipt_build_opts() {
         } else {
             if (defined $opts_href->{'sid'}) {
                 if ($ipt_drop) {
-                    $log_target = " -j LOG --log-prefix \"DROP " .
+                    $log_target = " -j LOG --log-prefix \"DRP " .
                         "SID$opts_href->{'sid'} \"";
                 } elsif ($ipt_reject) {
-                    $log_target = " -j LOG --log-prefix \"REJECT " .
+                    $log_target = " -j LOG --log-prefix \"REJ " .
                         "SID$opts_href->{'sid'} \"";
                 } else {
                     $log_target = " -j LOG --log-prefix " .

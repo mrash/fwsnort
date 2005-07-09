@@ -1,4 +1,4 @@
-fwsnort-0.8.0 (06//2005):
+fwsnort-0.8.0 (07/09/2005):
     - Completely re-structured fwsnort w.r.t. how it creates Netfilter
       chains.  There are no longer any per-interface chains (this
       greatly simplifies the Netfilter chains).
@@ -32,6 +32,11 @@ fwsnort-0.8.0 (06//2005):
       Snort_inline project).  The requires the replace string patch.
     - Added support for restricting jump rules to a list of interfaces
       via the --restrict-intf argument.
+    - Added kernel patch to extend the maximum packet length that the
+      string match extension will attempt to search from 1024 bytes to
+      2048 bytes (requires a kernel re-compile of course).
+    - Added DRP and REJ strings to logging prefix if --ipt-drop or
+      --ipt-reject is specified.
 
 
 fwsnort-0.7.0 (06/05/2005):
