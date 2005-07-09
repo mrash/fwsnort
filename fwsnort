@@ -1336,19 +1336,46 @@ sub ipt_build_opts() {
 
     my $log_target = '';
     if ($hdr_href->{'action'} eq 'log' or $ulog_mode) {
-        $log_target = " -j ULOG --ulog-nlgroup $ulog_nlgroup " .
-            "--ulog-prefix \"SID$opts_href->{'sid'} \""
-            if defined $opts_href->{'sid'};
+        if (defined $opts_href->{'sid'}) {
+            if ($ipt_drop) {
+                $log_target = " -j ULOG --ulog-nlgroup $ulog_nlgroup " .
+                    "--ulog-prefix \"DROP SID$opts_href->{'sid'} \"";
+            } elsif ($ipt_reject) {
+                $log_target = " -j ULOG --ulog-nlgroup $ulog_nlgroup " .
+                    "--ulog-prefix \"REJECT SID$opts_href->{'sid'} \"";
+            } else {
+                $log_target = " -j ULOG --ulog-nlgroup $ulog_nlgroup " .
+                    "--ulog-prefix \"SID$opts_href->{'sid'} \"";
+            }
+        }
     } else {
-        ### construct the log-prefix (should only contain the sid
-        ### to conserve kernel memory).
+        ### construct the log-prefix
         if ($flow_logging_prefix) {
-            $log_target = " -j LOG --log-prefix \"SID$opts_href->{'sid'} " .
-                "$flow_logging_prefix \""
-                if defined $opts_href->{'sid'};
+            if (defined $opts_href->{'sid'}) {
+                if ($ipt_drop) {
+                    $log_target = " -j LOG --log-prefix \"DROP " .
+                        "SID$opts_href->{'sid'} $flow_logging_prefix \"";
+                } elsif ($ipt_reject) {
+                    $log_target = " -j LOG --log-prefix \"REJECT " .
+                        "SID$opts_href->{'sid'} $flow_logging_prefix \"";
+                } else {
+                    $log_target = " -j LOG --log-prefix " .
+                        "\"SID$opts_href->{'sid'} $flow_logging_prefix \"";
+                }
+            }
         } else {
-            $log_target = " -j LOG --log-prefix \"SID$opts_href->{'sid'} \""
-                if defined $opts_href->{'sid'};
+            if (defined $opts_href->{'sid'}) {
+                if ($ipt_drop) {
+                    $log_target = " -j LOG --log-prefix \"DROP " .
+                        "SID$opts_href->{'sid'} \"";
+                } elsif ($ipt_reject) {
+                    $log_target = " -j LOG --log-prefix \"REJECT " .
+                        "SID$opts_href->{'sid'} \"";
+                } else {
+                    $log_target = " -j LOG --log-prefix " .
+                        "\"SID$opts_href->{'sid'} \"";
+                }
+            }
         }
     }
 
