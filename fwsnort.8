@@ -10,9 +10,9 @@
 .I logfile
 .B ] [-v] [-V] [-h] [-t] [-U] [-c
 .I config-file
-.B ] [--snort-sids
+.B ] [--snort-sid
 .I sid
-.B ] [--exclude-sids
+.B ] [--exclude-sid
 .I sid
 .B ] [--include-type
 .I type
@@ -312,7 +312,7 @@ Generate Netfilter rules for ddos and backdoor Snort rules only:
 
 Generate Netfilter rules for Snort ID's 1834 and 2001842 (from bleeding-all.rules):
 
-.B fwsnort --snort-sids 1834,2001842
+.B fwsnort --snort-sid 1834,2001842
 
 Instruct
 .B fwsnort to only inspect traffic that traverses the eth0 and eth1 interfaces:
