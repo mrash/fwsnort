@@ -1255,7 +1255,7 @@ sub ipt_build_opts() {
             } elsif ($hdr_href->{'proto'} =~ /udp/i) {
                 $avg_hdr_len += 8;  ### udp header is 8 bytes
             } elsif ($hdr_href->{'proto'} =~ /icmp/i) {
-                $avg_hdr_len += 4;  ### icmp header is 4 bytes
+                $avg_hdr_len += 8;  ### icmp header is 8 bytes
             } elsif ($hdr_href->{'proto'} =~ /ip/i) {
                 ### default to TCP
                 $avg_hdr_len += $config{'AVG_TCP_HEADER_LEN'};
