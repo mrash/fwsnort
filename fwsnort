@@ -322,8 +322,8 @@ Getopt::Long::Configure('no_ignore_case');
     'ipt-list'       => \$ipt_list,     # List any existing fwsnort chains.
     'Home-net=s'     => \$home_net,     # Manually specify home network.
     'External-net=s' => \$ext_net,      # Manually specify external network.
-    'snort-sids=s'   => \$include_sids, # Parse only these particular snort rules.
-    'exclude-sids=s' => \$exclude_sids, # Exclude these particular snort rules.
+    'snort-sid=s'    => \$include_sids, # Parse only these particular snort rules.
+    'exclude-sid=s'  => \$exclude_sids, # Exclude these particular snort rules.
     'snort-conf=s'   => \$snort_conf_file, # Get HOME_NET, etc. vars from
                                         # existing Snort config file.
     'include-type=s' => \$rules_types,  # Process this type of snort rule
@@ -372,15 +372,6 @@ Getopt::Long::Configure('no_ignore_case');
 
 ### import config, initialize various things, etc.
 &fwsnort_init();
-
-### flush all fwsnort chains.
-&ipt_flush() if $ipt_flush;
-
-### list all fwsnort chains.
-&ipt_list() if $ipt_list;
-
-### download latest snort rules from snort.org
-&update_rules() if $update_rules;
 
 ### if we are running with $chk_ipt_policy, then cache
 ### the current iptables policy
@@ -1757,6 +1748,15 @@ sub fwsnort_init() {
     ### in the config file
     &required_vars();
 
+    ### flush all fwsnort chains.
+    &ipt_flush() if $ipt_flush;
+
+    ### list all fwsnort chains.
+    &ipt_list() if $ipt_list;
+
+    ### download latest snort rules from snort.org
+    &update_rules() if $update_rules;
+
     ### make sure some directories exist, etc.
     &setup();
 
@@ -2201,7 +2201,7 @@ fwsnort v$version
 [+] By Michael Rash <mbr\@cipherdyne.org>, http://www.cipherdyne.org/
 
 Usage: fwsnort [-l <logfile>] [-v] [-V] [-h] [-u] [-c <config file>]
-       [--snort-sids=<sid>] [--exclude-sids=<sids>] [--ipt-apply]
+       [--snort-sids=<sid>] [--exclude-sid=<sids>] [--ipt-apply]
        [--Home-net <net>] [--External-net <net>] [--ipt-drop]
        [--include-types <types>] [--exclude-types <types>]
        [--ipt-script=<script>] [--ipt-list] [--no-ipt-sync]
@@ -2225,10 +2225,10 @@ Options:
     --ipt-drop                - Add a DROP rule for every logging rule.
     --ipt-list                - List all rules in fwsnort chains.
     --ipt-flush               - Flush all rules in fwsnort chains.
-    --snort-sids=<sid>        - Generate an equivalent Netfilter rule
+    --snort-sid=<sid>         - Generate an equivalent Netfilter rule
                                 for the specific snort id <sid> (also
                                 supports a comma separate list of sids.)
-    --exclude-sids=<sid>      - Exclude a list of sids from translation.
+    --exclude-sid=<sid>       - Exclude a list of sids from translation.
     --snort-conf=<file>       - Read Snort specific variables out of
                                 existing snort.conf file.
     --snort-rdir=<dir>        - Specify path to Snort rules directory.
