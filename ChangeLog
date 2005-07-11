@@ -1,4 +1,4 @@
-fwsnort-0.8.0 (07/09/2005):
+fwsnort-0.8.0 (07/11/2005):
     - Completely re-structured fwsnort w.r.t. how it creates Netfilter
       chains.  There are no longer any per-interface chains (this
       greatly simplifies the Netfilter chains).
@@ -37,7 +37,8 @@ fwsnort-0.8.0 (07/09/2005):
       2048 bytes (requires a kernel re-compile of course).
     - Added DRP and REJ strings to logging prefix if --ipt-drop or
       --ipt-reject is specified.
-
+    - Added snortspoof.pl, which is a simple perl script that emulates
+      the Stick and Snot tools.
 
 fwsnort-0.7.0 (06/05/2005):
     - Added support for the Snort pass action by using the ACCEPT target.
