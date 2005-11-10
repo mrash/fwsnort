@@ -103,9 +103,6 @@ my $rules_dir   = "${fwsnort_dir}/snort_rules";
 my $archive_dir = "${fwsnort_dir}/archive";
 my $log_dir     = '/var/log';
 
-### Snort.org no longer allows auto downloads of signatures
-my $bleeding_snort_website = 'www.bleedingsnort.com';
-
 ### config file
 my $fwsnort_conf = "${fwsnort_dir}/fwsnort.conf";
 
@@ -133,13 +130,21 @@ my %snort_opts = (
     ### from the snort "header" which include protocol,
     ### source, destination, etc.)
     'filter' => {
-        'uricontent' => {
+        'uricontent' => {  ### use --strict to not translate this
             'iptopt' => '-m string',
             'regex'  => '[\s;]uricontent:\s*\"(.*?)\"\s*;'
         },
         'content' => {
             'iptopt' => '-m string',
             'regex'  => '[\s;]content:\s*\"(.*?)\"\s*;'
+        },
+        'offset'  => {
+            'iptopt' => 'NONE',
+            'regex'  => '[\s;]offset:\s*(\d+)\s*;'
+        },
+        'depth' =>  {
+            'iptopt' => 'NONE',
+            'regex' => '[\s;]depth:\s*(\d+)\s*;'
         },
         'replace' => {  ### for Snort running in inline mode
             'iptopt' => '--replace-string',
@@ -208,10 +213,11 @@ my %snort_opts = (
         'rpc'          => '[\s;]rpc:\s*.*?\s*;',
         'byte_test'    => '[\s;]byte_test\s*.*?\s*;',
         'byte_jump'    => '[\s;]byte_jump\s*.*?\s*;',
-        'distance'     => '[\s;]distance:\s*(\d+)\s*;',
-        'within'       => '[\s;]within:\s*(\d+)\s*;',
-        'window'       => '[\s;]window:\s*(.*?)\s*;',
+        'distance'     => '[\s;]distance:\s*\d+\s*;',
+        'within'       => '[\s;]within:\s*\d+\s*;',
+        'window'       => '[\s;]window:\s*.*?\s*;',
         'flowbits'     => '[\s;]flowbits:\s*\S+\s*;',
+        'rawbytes'     => '[\s;]rawbytes:\s*\S+\s*;',
 #        'offset'       => '[\s;]offset:\s*\d+\s*;',
 #        'depth'        => '[\s;]depth:\s*\d+\s*;',
 
@@ -231,8 +237,6 @@ my %snort_opts = (
 
     ### snort options that fwsnort will ignore
     'ignore' => {
-        'offset'    => '[\s;]offset:\s*\d+\s*;',
-        'depth'     => '[\s;]depth:\s*\d+\s*;',
         'nocase'    => '[\s;]nocase\s*;',
         'logto'     => '[\s;]logto:\s*\S+\s*;',
         'session'   => '[\s;]session\s*;',
@@ -274,6 +278,7 @@ my $stdout     = 0;
 my $debug      = 0;
 my $strict     = 0;
 my $dump_conf  = 0;
+my $kernel_ver = '2.4';  ### default
 my $verbose    = 0;
 my $print_ver  = 0;
 my $ipt_input   = 1;
@@ -669,8 +674,8 @@ sub parse_rule_options() {
 
     while ($rule_options =~ /(\w+):\s*.*?;/g) {
         my $option = $1;
-        if (! defined $opts{$option}
-            && ! defined $snort_opts{'ignore'}{$option}) {
+        if (not defined $opts{$option}
+                and not defined $snort_opts{'ignore'}{$option}) {
             &logr("[-] SID: $sid bad option: \"$option\" at line: $line_num " .
                 "-- $rule_options");
             return '';
@@ -1302,19 +1307,28 @@ sub ipt_build_opts() {
         $content =~ s/`/\\`/g;
         if ($content =~ /\|.+\|/) {  ### there is hex data in the content
             $rule .= " $snort_opts{'filter'}{'content'}{'iptopt'} " .
-                "--hex-string \"$content\"";
+                qq{--hex-string "$content"};
         } else {
             $rule .= " $snort_opts{'filter'}{'content'}{'iptopt'} " .
-                "--string \"$content\"";
+                qq{--string "$content"};
         }
 
-        if (defined $hdr_href->{'replace'}) {
-            my $replace_str = $hdr_href->{'replace'};
+        if (defined $opts_href->{'replace'}) {
+            my $replace_str = $opts_href->{'replace'};
             $replace_str =~ s/`/\\`/g;
             if ($replace_str =~ /\|.+\|/) {  ### there is hex data in the content
-                $rule .= " --replace-hex-string \"$replace_str\"";
+                $rule .= qq{ --replace-hex-string "$replace_str"};
             } else {
-                $rule .= " --replace-string \"$replace_str\"";
+                $rule .= qq{ --replace-string "$replace_str"};
+            }
+        }
+        if ($kernel_ver ne '2.4') {
+            $rule .= ' --algo bm';
+            if (defined $opts_href->{'offset'}) {
+                $rule .= " --from $opts_href->{'offset'}";
+            }
+            if (defined $opts_href->{'depth'}) {
+                $rule .= " --to $opts_href->{'depth'}";
             }
         }
     }
@@ -1760,12 +1774,54 @@ sub fwsnort_init() {
     ### make sure some directories exist, etc.
     &setup();
 
+    ### get kernel version (this is mainly used to know whether
+    ### the "--algo bm" argument is required for the string match
+    ### extension in the 2.6.14 (and later) kernels.  Also, the
+    ### string match extension as of 2.6.14 supports the Snort
+    ### offset and depth keywords via --from and --to
+    &get_kernel_ver();
+
     ### may have been specified on the command line
     $home_net = $config{'HOME_NET'} unless $home_net;
     $ext_net  = $config{'EXTERNAL_NET'} unless $ext_net;
 
     &get_local_addrs() unless $no_addr_check;
 
+    if ($strict) {
+        ### make the snort options parser very strict
+        $snort_opts{'unsupported'}{'uricontent'}
+            = $snort_opts{'filter'}{'uricontent'};
+        delete $snort_opts{'filter'}{'uricontent'};
+        if ($kernel_ver eq '2.4') {
+            $snort_opts{'unsupported'}{'offset'}
+                = $snort_opts{'ignore'}{'offset'};
+            delete $snort_opts{'ignore'}{'offset'};
+            $snort_opts{'unsupported'}{'depth'}
+                = $snort_opts{'ignore'}{'depth'};
+            delete $snort_opts{'ignore'}{'depth'};
+        }
+        $snort_opts{'unsupported'}{'nocase'}
+            = $snort_opts{'ignore'}{'nocase'};
+        delete $snort_opts{'ignore'}{'nocase'};
+        $snort_opts{'unsupported'}{'threshold'}
+            = $snort_opts{'ignore'}{'threshold'};
+        delete $snort_opts{'ignore'}{'threshold'};
+    }
+    return;
+}
+
+sub get_kernel_ver() {
+    die "[*] uname command: $cmds{'uname'} is not executable."
+        unless -x $cmds{'uname'};
+    open U, "$cmds{'uname'} -a |" or die "[*] Could not run ",
+        "$cmds{'uname'} -a";
+    my $out = <U>;
+    close U;
+    ### Linux orthanc 2.6.12.5 #2 Tue Sep 27 22:43:02 EDT 2005 i686 \
+    ### Pentium III (Coppermine) GenuineIntel GNU/Linux
+    if ($out =~ /\s2\.6/) {
+        $kernel_ver = '2.6';
+    }
     return;
 }
 
@@ -1784,25 +1840,6 @@ sub handle_cmd_line() {
 
     if ($ipt_drop and $ipt_reject) {
         die "[*] Cannot specify both --ipt-drop and --ipt-reject";
-    }
-
-    if ($strict) {
-        ### make the snort options parser very strict
-        $snort_opts{'unsupported'}{'uricontent'}
-            = $snort_opts{'filter'}{'uricontent'};
-        delete $snort_opts{'filter'}{'uricontent'};
-        $snort_opts{'unsupported'}{'offset'}
-            = $snort_opts{'ignore'}{'offset'};
-        delete $snort_opts{'ignore'}{'offset'};
-        $snort_opts{'unsupported'}{'depth'}
-            = $snort_opts{'ignore'}{'depth'};
-        delete $snort_opts{'ignore'}{'depth'};
-        $snort_opts{'unsupported'}{'nocase'}
-            = $snort_opts{'ignore'}{'nocase'};
-        delete $snort_opts{'ignore'}{'nocase'};
-        $snort_opts{'unsupported'}{'threshold'}
-            = $snort_opts{'ignore'}{'threshold'};
-        delete $snort_opts{'ignore'}{'threshold'};
     }
 
     if ($ipt_apply) {
@@ -1981,16 +2018,28 @@ sub ipt_test() {
     }
 
     ### test for string match support.
-    $rv = (system "$cmds{'iptables'} -I INPUT 1 -s " .
-        qq|127.0.0.2 -m string --string "test" -j LOG 2> /dev/null|) >> 8;
+    if ($kernel_ver ne '2.4') {
+        ### default to include "--algo bm"
+        $rv = (system "$cmds{'iptables'} -I INPUT 1 -s " .
+            qq|127.0.0.2 -m string --string "test" --algo bm -j LOG 2> /dev/null|) >> 8;
+    } else {
+        $rv = (system "$cmds{'iptables'} -I INPUT 1 -s " .
+            qq|127.0.0.2 -m string --string "test" -j LOG 2> /dev/null|) >> 8;
+    }
     if ($rv == 0) {
         system "$cmds{'iptables'} -D INPUT 1";
 
         ### test for --replace-string support (this will only be available
         ### if the replace-string patch has been applied).
-        $rv = (system "$cmds{'iptables'} -I INPUT 1 -s " .
-            qq|127.0.0.2 -m string --string "test" --replace-string "repl"| .
-            " -j LOG 2> /dev/null") >> 8;
+        if ($kernel_ver ne '2.4') {
+            $rv = (system "$cmds{'iptables'} -I INPUT 1 -s " .
+                qq|127.0.0.2 -m string --string "test" --replace-string "repl"| .
+                " --algo bm -j LOG 2> /dev/null") >> 8;
+        } else {
+            $rv = (system "$cmds{'iptables'} -I INPUT 1 -s " .
+                qq|127.0.0.2 -m string --string "test" --replace-string "repl"| .
+                " -j LOG 2> /dev/null") >> 8;
+        }
         if ($rv == 0) {
             system "$cmds{'iptables'} -D INPUT 1";
         } else {
@@ -2012,8 +2061,13 @@ sub ipt_test() {
     }
 
     ### test for --hex-string
-    $rv = (system "$cmds{'iptables'} -I INPUT 1 -s 127.0.0.2 " .
-        "-m string --hex-string \"|0a 5d|\" -j LOG 2> /dev/null") >> 8;
+    if ($kernel_ver ne '2.4') {
+        $rv = (system "$cmds{'iptables'} -I INPUT 1 -s 127.0.0.2 " .
+            qq{-m string --hex-string "|0a 5d|" --algo bm -j LOG 2> /dev/null}) >> 8;
+    } else {
+        $rv = (system "$cmds{'iptables'} -I INPUT 1 -s 127.0.0.2 " .
+            qq{-m string --hex-string \"|0a 5d|\" -j LOG 2> /dev/null}) >> 8;
+    }
     if ($rv == 0) {
         system "$cmds{'iptables'} -D INPUT 1";
     } else {
@@ -2094,14 +2148,14 @@ sub setup() {
 sub update_rules() {
     ### make sure we can actually reach snort.org.
     print "[+] Downloading latest rules:\n",
-        "    http://$bleeding_snort_website/bleeding-all.rules\n";
+        "    http://www.bleedingsnort.com/bleeding-all.rules\n";
     chdir $rules_dir or die "[*] Could not chdir $rules_dir: $!";
     if (-e 'bleeding-all.rules') {
         move 'bleeding-all.rules', 'bleeding-all.rules.tmp'
             or die "[*] Could not move bleeding-all.rules -> ",
             "bleeding-all.rules.tmp";
     }
-    system "$cmds{'wget'} http://$bleeding_snort_website/bleeding-all.rules";
+    system "$cmds{'wget'} http://www.bleedingsnort.com/bleeding-all.rules";
     if (-e 'bleeding-all.rules') {  ### successful download
         unlink 'bleeding-all.rules.tmp';
     } else {
@@ -2257,7 +2311,7 @@ Options:
     --External-net <net/mask> - Manually specify the external network
                                 (CIDR or standard notation).
     --update-rules            - Download latest Bleeding-Snort rules
-                                from http://$bleeding_snort_website/
+                                from http://www.bleedingsnort.com/
     --include-types=<type>    - Only process snort rules of type <type>
                                 (e.g. "ddos" or "backdoor"). <type> can
                                 be a comma separated list.
