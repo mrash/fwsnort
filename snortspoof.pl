@@ -76,7 +76,7 @@ SIG: for my $line (@lines) {
 
     my $len = length($conv_content);
 
-#    hping --spoof 68.142.226.32 -c 1 --udp -E /etc/hosts -d 100 -p 60000 rivendell.cipherdyne.org
+#    hping --spoof 68.142.226.32 -c 1 --udp -E /etc/hosts -d 100 -p 60000 <host>
 
     my $hpingCmd = "/usr/sbin/hping -c 1 --udp -E /tmp/sspoof " .
         "-d $len -s $spt -p $dpt --spoof $spoof_addr $dst_addr";

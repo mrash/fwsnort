@@ -155,7 +155,7 @@ with the --no-ipt-log option, but --ipt-drop must also be specified.
 
 .BR \-\^\-no-ipt-sync
 Do not consult the iptables policy currently running on the machine
-for applicable snort rules.  Unless limited with the --type or --snort-sid
+for applicable snort rules.  Unless limited with the --include-type or --snort-sid
 options this can result in a fwsnort.sh script that contains several
 thousand iptables rules.
 .TP
@@ -308,7 +308,7 @@ having to specify any command line arguments:
 
 Generate Netfilter rules for ddos and backdoor Snort rules only:
 
-.B # fwsnort --type ddos,backdoor
+.B # fwsnort --include-type ddos,backdoor
 
 Generate Netfilter rules for Snort ID's 1834 and 2001842 (from bleeding-all.rules):
 
