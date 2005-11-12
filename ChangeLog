@@ -4,6 +4,7 @@ fwsnort-0.8.1 (11//2005):
     - Updated to handle the Snort "offset" and "depth" keywords via the
       --from and --to options to the string match extension in the 2.6.14
       kernel.
+    - Created RPM package of fwsnort.
     - Minor man page updates.
 
 fwsnort-0.8.0 (07/11/2005):
