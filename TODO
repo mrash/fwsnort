@@ -1,7 +1,4 @@
- - Port the string match extension to the 2.6 kernel.
  - Allow a list of SIDs to have a manually specified target (such as
    -j REJECT --reject-with tcp-reset).  The list should come from the
    command line with a new option and/or be read from a file.
  - Make use of the u32 module for complex match criteria.
- - Make use of the L7 packet classifier for 2.6 match criteria in the
-   absence of a simple string match.

@@ -1609,6 +1609,7 @@ sub ipt_hdr() {
     push @ipt_script_lines, "#           available at " .
         "http://www.cipherdyne.org/fwsnort/";
     push @ipt_script_lines, "#\n# Generated with: fwsnort @argv_cp";
+    push @ipt_script_lines, "#\n# Generated on host: " . hostname();
     push @ipt_script_lines, "#\n# Author:  Michael Rash <mbr\@cipherdyne.org>";
     push @ipt_script_lines, "#\n# Version: $version";
     push @ipt_script_lines, "#";
@@ -2173,9 +2174,9 @@ sub update_rules() {
 
 sub chk_commands() {
     for my $cmd (keys %cmds) {
-        die "[*] $cmd is not located at $cmds{$cmd}: $!"
+        die "[*] $cmd is not located at $cmds{$cmd}: $!, edit $fwsnort_conf."
             unless -e $cmds{$cmd};
-        die "[*] $cmd is not executable at $cmds{$cmd}: $!"
+        die "[*] $cmd is not executable at $cmds{$cmd}: $!, edit $fwsnort_conf."
             unless -x $cmds{$cmd};
     }
     return;
