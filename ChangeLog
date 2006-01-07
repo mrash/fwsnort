@@ -1,4 +1,4 @@
-fwsnort-0.8.1 (11//2005):
+fwsnort-0.8.1 (11/11/2005):
     - Updated to use the string match extension "--algo bm" argument if
       fwsnort is being run on a 2.6.14 (or greater) kernel.
     - Updated to handle the Snort "offset" and "depth" keywords via the
