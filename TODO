@@ -2,3 +2,4 @@
    -j REJECT --reject-with tcp-reset).  The list should come from the
    command line with a new option and/or be read from a file.
  - Make use of the u32 module for complex match criteria.
+ - Error checking in fwsnort.sh (at least for things like chain creation).

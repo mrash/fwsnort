@@ -1493,6 +1493,8 @@ sub ipt_ignore_rules() {
             "$config{'FWSNORT_OUTPUT'} -d $addr -j RETURN" if $ipt_output;
         push @ipt_script_lines, "\$IPTABLES -A " .
             "$config{'FWSNORT_FORWARD'} -s $addr -j RETURN" if $ipt_forward;
+        push @ipt_script_lines, "\$IPTABLES -A " .
+            "$config{'FWSNORT_FORWARD'} -d $addr -j RETURN" if $ipt_forward;
     }
     return;
 }
