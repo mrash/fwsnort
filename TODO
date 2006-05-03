@@ -3,3 +3,4 @@
    command line with a new option and/or be read from a file.
  - Make use of the u32 module for complex match criteria.
  - Error checking in fwsnort.sh (at least for things like chain creation).
+ - Print more stats information such as shortest/longest pattern length, etc.
