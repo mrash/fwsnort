@@ -1,6 +1,0 @@
-Revision history for Perl extension IPTables::Parse.
-
-0.01  Mon Mar 17 10:59:02 2003
-	- original version; created by h2xs 1.21 with options
-		-XAn IPTables::Parse
-
