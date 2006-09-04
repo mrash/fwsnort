@@ -28,6 +28,7 @@
 # $Id$
 #
 
+use Cwd;
 use IO::Socket;
 use File::Copy;
 use File::Path;
@@ -51,9 +52,25 @@ my $gzipCmd = '/bin/gzip';
 my $tarCmd  = '/bin/tar';
 #======================= end config ======================
 
+### map perl modules to versions
+my %required_perl_modules = (
+    'Net::IPv4Addr' => {
+        'force-install' => 0,
+        'mod-dir' => 'Net-IPv4Addr'
+    },
+    'IPTables::Parse' => {
+        'force-install' => 0,
+        'mod-dir' => 'IPTables-Parse'
+    }
+);
+
 ### establish some defaults
 my $uninstall = 0;
-my $help      = 0;
+my $cmdline_force_install = 0;
+my $force_install_re = '';
+my $help = 0;
+
+my $src_dir = getcwd() or die "[*] Could not get current working directory.";
 
 my %cmds = (
     'perl' => $perlCmd,
@@ -63,7 +80,12 @@ my %cmds = (
     'tar'  => $tarCmd
 );
 
+### make Getopts case sensitive
+Getopt::Long::Configure('no_ignore_case');
+
 &usage(1) unless (GetOptions(
+    'force-mod-install' => \$cmdline_force_install,  ### force install of all modules
+    'Force-mod-regex=s' => \$force_install_re, ### force specific mod install with regex
     'uninstall' => \$uninstall, ### uninstall fwsnort
     'help'      => \$help
 ));
@@ -97,39 +119,11 @@ sub install() {
         print "[+] mkdir $rules_dir\n";
         mkdir $rules_dir, 0500;
     }
-    unless (-d $lib_dir) {
-        print "[+] mkdir $lib_dir\n";
-        mkdir $lib_dir, 0755;
-    }
 
-    ### install Net::IPv4Addr
-    print "[+] Installing the Net::IPv4Addr perl module in $lib_dir/\n";
-    chdir 'Net-IPv4Addr' or die "[*] Could not chdir to ",
-        "Net-IPv4Addr: $!";
-    unless (-e 'Makefile.PL' && -e 'IPv4Addr.pm') {
-        die "[*] Your Net::IPv4Addr sources are incomplete!";
+    ### install perl modules
+    for my $module (keys %required_perl_modules) {
+        &install_perl_module($module);
     }
-    system "$perlCmd Makefile.PL PREFIX=$lib_dir LIB=$lib_dir";
-    system $makeCmd;
-#    system "$makeCmd test";
-    system "$makeCmd install";
-    chdir '..';
-
-    ### installing IPTables::Parse
-    print "[+] Installing the IPTables::Parse perl module in $lib_dir/\n";
-    chdir 'IPTables/Parse' or die "[*] Could not chdir to ",
-        "IPTables/Parse: $!";
-    unless (-e 'Makefile.PL') {
-        die "[*] Your source directory appears to be incomplete!  " .
-            "IPTables::Parse is missing.\n    Download the latest sources " .
-            "from http://www.cipherdyne.org\n";
-    }
-    system "$perlCmd Makefile.PL PREFIX=$lib_dir LIB=$lib_dir";
-    system $makeCmd;
-#    system "$Cmds{'make'} test";
-    system "$makeCmd install";
-    chdir '../..';
-    print "\n\n";
 
     my $local_rules_dir = 'snort_rules';
     if (&query_get_bleeding_snort()) {
@@ -196,6 +190,88 @@ sub install() {
         "\n[+] fwsnort has been successfully installed!\n\n";
 
     return;
+}
+
+sub install_perl_module() {
+    my $mod_name = shift;
+
+    die '[*] Missing force-install key in required_perl_modules hash.'
+        unless defined $required_perl_modules{$mod_name}{'force-install'};
+    die '[*] Missing mod-dir key in required_perl_modules hash.'
+        unless defined $required_perl_modules{$mod_name}{'mod-dir'};
+
+    my $version = '(NA)';
+
+    my $mod_dir = $required_perl_modules{$mod_name}{'mod-dir'};
+
+    if (-e "$mod_dir/VERSION") {
+        open F, "< $mod_dir/VERSION" or
+            die "[*] Could not open $mod_dir/VERSION: $!";
+        $version = <F>;
+        close F;
+        chomp $version;
+    } else {
+        print "[-] Warning: VERSION file does not exist in $mod_dir\n";
+    }
+
+    my $install_module = 0;
+
+    if ($required_perl_modules{$mod_name}{'force-install'}
+            or $cmdline_force_install) {
+        ### install regardless of whether the module may already be
+        ### installed
+        $install_module = 1;
+    } elsif ($force_install_re and $force_install_re =~ /$mod_name/) {
+        print "[+] Forcing installation of $mod_name module.\n";
+        $install_module = 1;
+    } else {
+        if (has_perl_module($mod_name)) {
+            print "[+] Module $mod_name is already installed in the ",
+                "system perl tree, skipping.\n";
+        } else {
+            ### install the module in the /usr/lib/fwknop directory because
+            ### it is not already installed.
+            $install_module = 1;
+        }
+    }
+
+    if ($install_module) {
+        unless (-d $lib_dir) {
+            print "[+] Creating $lib_dir\n";
+            mkdir $lib_dir, 0755 or die "[*] Could not mkdir $lib_dir: $!";
+        }
+        print "[+] Installing the $mod_name $version perl " .
+            "module in $lib_dir/\n";
+        my $mod_dir = $required_perl_modules{$mod_name}{'mod-dir'};
+        chdir $mod_dir or die "[*] Could not chdir to ",
+            "$mod_dir: $!";
+        unless (-e 'Makefile.PL') {
+            die "[*] Your $mod_name source directory appears to be incomplete!\n",
+                "    Download the latest sources from ",
+                "http://www.cipherdyne.org/\n";
+        }
+        system "$cmds{'make'} clean" if -e 'Makefile';
+        system "$cmds{'perl'} Makefile.PL PREFIX=$lib_dir LIB=$lib_dir";
+        system $cmds{'make'};
+#        system "$cmds{'make'} test";
+        system "$cmds{'make'} install";
+        chdir $src_dir or die "[*] Could not chdir $src_dir: $!";
+
+        print "\n\n";
+    }
+    return;
+}
+
+sub has_perl_module() {
+    my $module = shift;
+
+    # 5.8.0 has a bug with require Foo::Bar alone in an eval, so an
+    # extra statement is a workaround.
+    my $file = "$module.pm";
+    $file =~ s{::}{/}g;
+    eval { require $file };
+
+    return $@ ? 0 : 1;
 }
 
 sub uninstall() {
@@ -333,10 +409,8 @@ sub preserve_config() {
     close CO;
 
     print "[+] Preserving existing config: ${fwsnort_dir}/$file\n";
-    print
-"    NOTE: Interfaces are no longer used as of the 0.8.0 release, and will\n",
-"    be removed.\n";
     ### write to a tmp file and then move.
+    my $printed_intf_warning = 0;
     open CONF, "> ${fwsnort_dir}/${file}.new" or die "[*] Could not open ",
         "${fwsnort_dir}/${file}.new: $!";
     for my $new_line (@new_lines) {
@@ -346,9 +420,16 @@ sub preserve_config() {
             my $var = $1;
             my $found = 0;
             for my $orig_line (@orig_lines) {
+                if ($orig_line =~ /^\s*\S+INTF\s/) {
+                    ### interfaces are no longer used!
+                    unless ($printed_intf_warning) {
+                        print "    NOTE: Interfaces are no longer used as of the ",
+                        "0.8.0 release;\n    removing $var\n";
+                        $printed_intf_warning = 1;
+                    }
+                }
                 if ($orig_line =~ /^\s*$var\s/
                         and $orig_line !~ /INTF/) {
-                    ### interfaces are no longer used!
                     print CONF $orig_line;
                     $found = 1;
                     last;
@@ -369,10 +450,14 @@ sub preserve_config() {
 sub usage() {
     my $exit = shift;
     print <<_HELP_;
-install.pl:
-    -i --install     - install fwsnort
-    -u --uninstall   - uninstall fwsnort
-    -h --help        - print help and exit
+install.pl: [-F] [-f] [-u] [-h]
+    -f, --force-mod-install        - Install all perl modules regardless
+                                     of whether they already installed on
+                                     the system.
+    -F, --Force-mod-regex <regex>  - Install perl module that matches a
+                                     specific regular expression.
+    -u, --uninstall   - uninstall fwsnort
+    -h, --help        - print help and exit
 _HELP_
     exit $exit;
 }
