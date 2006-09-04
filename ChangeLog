@@ -1,3 +1,12 @@
+fwsnort-0.8.2 (//2006):
+    - Updated to newer IPTables::Parse module that uses the array of hash
+      references method of returning Netfilter policy data.
+    - Added patches/bm_goodshift_fix.patch patch file that fixes an
+      initialization bug in the Boyer-Moore text search implementation in the
+      kernel (linux-2.6.x/lib/ts_bm.c) which caused slightly repetitive
+      patterns to only match at specific offsets with the string match
+      extension.
+
 fwsnort-0.8.1 (11/11/2005):
     - Updated to use the string match extension "--algo bm" argument if
       fwsnort is being run on a 2.6.14 (or greater) kernel.
