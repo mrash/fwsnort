@@ -1,5 +1,5 @@
 %define name fwsnort
-%define version 0.8.1
+%define version 0.8.2
 %define release 1
 %define fwsnortlibdir /usr/lib/fwsnort
 %define fwsnortlogdir /var/log/fwsnort
@@ -17,7 +17,6 @@ Group: System/Servers
 Url: http://www.cipherdyne.org/projects/fwsnort/
 Source: %name-%version.tar.gz
 BuildRoot: %_tmppath/%{name}-buildroot
-Requires: smtpdaemon
 Requires: iptables
 #Prereq: rpm-helper
 
@@ -53,14 +52,14 @@ to: http://www.cipherdyne.org/projects/fwsnort/.
 
 %setup -q
 
-cd IPTables/Parse && perl Makefile.PL PREFIX=%fwsnortlibdir LIB=%fwsnortlibdir
+cd IPTables-Parse && perl Makefile.PL PREFIX=%fwsnortlibdir LIB=%fwsnortlibdir
 cd ../..
 cd Net-IPv4Addr && perl Makefile.PL PREFIX=%fwsnortlibdir LIB=%fwsnortlibdir
 cd ..
 
 %build
 ### build perl modules used by fwsnort
-make OPTS="$RPM_OPT_FLAGS" -C IPTables/Parse
+make OPTS="$RPM_OPT_FLAGS" -C IPTables-Parse
 make OPTS="$RPM_OPT_FLAGS" -C Net-IPv4Addr
 
 %install
@@ -88,7 +87,7 @@ install -m 644 fwsnort.8 $RPM_BUILD_ROOT%{_mandir}/man8/
 ### install perl modules used by fwsnort
 install -m 444 Net-IPv4Addr/blib/lib/auto/Net/IPv4Addr/autosplit.ix $RPM_BUILD_ROOT%fwsnortlibdir/auto/Net/IPv4Addr/autosplit.ix
 install -m 444 Net-IPv4Addr/blib/lib/Net/IPv4Addr.pm $RPM_BUILD_ROOT%fwsnortlibdir/Net/IPv4Addr.pm
-install -m 444 IPTables/Parse/blib/lib/IPTables/Parse.pm $RPM_BUILD_ROOT%fwsnortlibdir/IPTables/Parse.pm
+install -m 444 IPTables-Parse/blib/lib/IPTables/Parse.pm $RPM_BUILD_ROOT%fwsnortlibdir/IPTables/Parse.pm
 
 ### install snort rules files
 cp -r snort_rules $RPM_BUILD_ROOT%_sysconfdir/%name
@@ -120,5 +119,10 @@ cp -r snort_rules $RPM_BUILD_ROOT%_sysconfdir/%name
 %_libdir/%name
 
 %changelog
+* Mon Sep 04 2006 Michael Rash <mbr@cipherydne.org>
+- Updated to install new IPTables::Parse module out of the IPTables-Parse
+  directory.
+- Removed smtpdaemon requirement since fwsnort does not deal with email.
+
 * Fri Nov 11 2005 Michael Rash <mbr@cipherydne.org>
 - Initial RPM release
