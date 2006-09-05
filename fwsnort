@@ -88,6 +88,7 @@
 #
 
 use lib '/usr/lib/fwsnort';
+use Data::Dumper;
 use IO::Socket;
 use IPTables::Parse;
 use Net::IPv4Addr qw(ipv4_in_network);
@@ -130,6 +131,8 @@ my %snort_opts = (
     ### from the snort "header" which include protocol,
     ### source, destination, etc.)
     'filter' => {
+
+        ### application layer
         'uricontent' => {  ### use --strict to not translate this
             'iptopt' => '-m string',
             'regex'  => '[\s;]uricontent:\s*\"(.*?)\"\s*;'
@@ -139,21 +142,33 @@ my %snort_opts = (
             'regex'  => '[\s;]content:\s*\"(.*?)\"\s*;'
         },
         'offset'  => {
-            'iptopt' => 'NONE',
+            'iptopt' => '--from',
             'regex'  => '[\s;]offset:\s*(\d+)\s*;'
         },
         'depth' =>  {
-            'iptopt' => 'NONE',
+            'iptopt' => '--to',
             'regex' => '[\s;]depth:\s*(\d+)\s*;'
         },
         'replace' => {  ### for Snort running in inline mode
             'iptopt' => '--replace-string',
             'regex'  => '[\s;]replace:\s*\"(.*?)\"\s*;'
         },
+        'resp' => {
+            'iptopt' => '-j REJECT',
+            'regex'  => '[\s;]resp:\s*(.*?)\s*;'
+        },
+
+        ### transport layer
         'flags' => {
             'iptopt' => '--tcp-flags',
             'regex'  => '[\s;]flags:\s*(.*?)\s*;'
         },
+        'flow' => {
+            'iptopt' => '--tcp-flags',
+            'regex'  => '[\s;]flow:\s*(.*?)\s*;'
+        },
+
+        ### network layer
         'itype' => {
             'iptopt' => '--icmp-type',  ### --icmp-type type/code
             'regex'  => '[\s;]itype:\s*(.*?)\s*;'
@@ -174,10 +189,6 @@ my %snort_opts = (
             'iptopt' => '-m ipv4options',  ### requires ipv4options extension
             'regex'  => '[\s;]ipopts:\s*(\w+)\s*;'
         },
-        'flow' => {
-            'iptopt' => '--tcp-flags',
-            'regex'  => '[\s;]flow:\s*(.*?)\s*;'
-        },
         'ip_proto' => {
             'iptopt' => '-p',
             'regex'  => '[\s;]ip_proto:\s*(.*?)\s*;'
@@ -186,10 +197,6 @@ my %snort_opts = (
             'iptopt' => '-m length --length',
             'regex'  => '[\s;]dsize:\s*(.*?)\s*;'
         },
-        'resp' => {
-            'iptopt' => '-j REJECT',
-            'regex'  => '[\s;]resp:\s*(.*?)\s*;'
-        }
     },
 
     ### snort options that can be put into iptables
@@ -207,7 +214,6 @@ my %snort_opts = (
     ### within iptables filter statements (yet :)
     'unsupported' => {
         'pcre'         => '[\s;]pcre:\s*.*?\s*;',
-        'ack'          => '[\s;]ack:\s*.*?\s*;',
         'fragbits'     => '[\s;]fragbits:\s*.*?\s*;',
         'content-list' => '[\s;]content\-list:\s*\".*?\"\s*;',
         'rpc'          => '[\s;]rpc:\s*.*?\s*;',
@@ -228,6 +234,7 @@ my %snort_opts = (
         ### options.
         'id'       => '[\s;]id:\s*(\d+)\s*;',
         'seq'      => '[\s;]seq:\s*(\d+)\s*;',  ### --log-tcp-sequence
+        'ack'      => '[\s;]ack:\s*.*?\s*;',    ### --log-tcp-sequence
         'icmp_seq' => '[\s;]icmp_seq:\s*(\d+)\s*;',
         'icmp_id'  => '[\s;]icmp_id:\s*(\d+)\s*;',
         'sameip'   => '[\s;]sameip\s*;',
@@ -252,6 +259,7 @@ my @ipt_script_lines = ();
 
 ### contains a cache of the iptables policy
 my %ipt_policy;
+my %ipt_chain_policy_setting = ();
 
 ### regex to match ip addresses
 my $ip_re = '(?:\d{1,3}\.){3}\d{1,3}';
@@ -276,9 +284,10 @@ my $ipt_reject = 0;
 my $help       = 0;
 my $stdout     = 0;
 my $debug      = 0;
+my $dumper     = 0;
 my $strict     = 0;
 my $dump_conf  = 0;
-my $kernel_ver = '2.4';  ### default
+my $kernel_ver = '2.6';  ### default
 my $verbose    = 0;
 my $print_ver  = 0;
 my $ipt_input   = 1;
@@ -359,6 +368,7 @@ Getopt::Long::Configure('no_ignore_case');
     'add-deleted'    => \$add_deleted,  # Add deleted rules.
     'strict'         => \$strict,       # Strict mode.
     'debug'          => \$debug,        # Debug mode.
+    'dumper'         => \$dumper,       # Dumper mode.
     'Dump-conf'      => \$dump_conf,    # Display config variables
     'config=s'       => \$fwsnort_conf, # Manually specify the config file
     'Ulog'           => \$ulog_mode,    # Force ULOG mode.
@@ -785,82 +795,203 @@ sub parse_rule_hdr() {
 }
 
 sub ipt_allow_traffic() {
-    my ($hdr_href, $chain) = @_;
+    my ($hdr_hr, $opts_hr, $chain) = @_;
     my $rv = 0;
 
-    ### check to see if the header is allowed through the
-    ### INPUT chain
-    if ($hdr_href->{'proto'} eq 'icmp') {
-        if (defined $ipt_policy{$chain}
-                and defined $ipt_policy{$chain}{'icmp'}) {
-            return 1;
-        }
-        return 0;
-    }
+    ### check to see if the header is allowed through the chain,
+    ### and if not we don't really care about matching traffic
+    ### because Netfilter doesn't allow it anyway
+    RULE: for my $rule_hr (@{$ipt_policy{$chain}}) {
 
-    for my $proto (keys %{$ipt_policy{$chain}}) {
-        next unless $hdr_href->{'proto'} eq $proto;
-        for my $sport (keys %{$ipt_policy{$chain}{$proto}}) {
-            if (&match_port($sport, $hdr_href->{'sport'})) {
-                for my $dport (keys %{$ipt_policy{$chain}{$proto}{$sport}}) {
-                    if (&match_port($dport, $hdr_href->{'dport'})) {
-                        return 1;
-                    }
-                }
+        ### don't match on rules that build state
+        next RULE if $rule_hr->{'extended'} =~ /state/;
+
+        ### match protocol
+        next RULE unless ($hdr_hr->{'proto'} eq $rule_hr->{'proto'}
+                or $rule_hr->{'proto'} eq 'all');
+
+        ### match src/dst IP/network
+        next RULE unless &match_addr($hdr_hr->{'src'}, $rule_hr->{'src'});
+        next RULE unless &match_addr($hdr_hr->{'dst'}, $rule_hr->{'dst'});
+
+        ### match src/dst ports
+        if ($hdr_hr->{'proto'} ne 'icmp') {
+            next RULE unless &match_port($hdr_hr->{'sport'},
+                $rule_hr->{'sport'});
+            next RULE unless &match_port($hdr_hr->{'dport'},
+                $rule_hr->{'dport'});
+        }
+
+        if (defined $opts_hr->{'flow'} and $rule_hr->{'state'}) {
+            if ($opts_hr->{'flow'} eq 'established') {
+                next RULE unless $rule_hr->{'state'} =~ /ESTABLISHED/;
             }
         }
+
+        ### if we make it here, then this rule matches the signature
+        ### (from a header perspective)
+        if ($rule_hr->{'target'} eq 'DROP'
+                or $rule_hr->{'target'} eq 'REJECT') {
+
+            if ($dumper) {
+                print "\n[-] RULE $chain DROP:\n",
+                    Dumper($hdr_hr),
+                    Dumper($opts_hr),
+                    Dumper($rule_hr),
+                    "\n";
+            }
+            return 0;
+        } elsif ($rule_hr->{'target'} eq 'ACCEPT') {
+            if ($dumper) {
+                print "\n[+] RULE $chain ACCEPT:\n",
+                    Dumper($hdr_hr),
+                    Dumper($opts_hr),
+                    Dumper($rule_hr),
+                    "\n";
+            }
+            return 1;
+        }  ### we don't support other targets besides DROP, REJECT,
+           ### or ACCEPT for now.
+    }
+
+    ### if we make it here, then no specific rule matched the header,
+    ### so return false if the chain policy is set to DROP, else there is
+    ### no rule that would block the traffic.
+    if (defined $ipt_chain_policy_setting{$chain}) {
+        if ($ipt_chain_policy_setting{$chain} eq 'ACCEPT') {
+            if ($dumper) {
+                print "\nACCEPT $chain, no Netfilter matching rule\n";
+                    Dumper($hdr_hr),
+                    Dumper($opts_hr),
+                    "\n";
+            }
+            return 1;
+        }
+    }
+    if ($dumper) {
+        print "\nDROP $chain, no Netfilter matching rule\n",
+            Dumper($hdr_hr),
+            Dumper($opts_hr),
+            "\n";
+    }
+
+    ### maybe a "strict" option should be added here?
+    return 0;
+}
+
+sub match_addr() {
+    my ($hdr_src, $rule_src) = @_;
+    return 1 if $rule_src eq '0.0.0.0/0' and $hdr_src =~ /any/i;
+
+    my $ipt_ip   = '';
+    my $ipt_mask = '32';
+    if ($rule_src =~ m|($ip_re)/($ip_re)|) {
+        $ipt_ip   = $1;
+        $ipt_mask = $2;
+    } elsif ($rule_src =~ m|($ip_re)/(\d+)|) {
+        $ipt_ip   = $1;
+        $ipt_mask = $2;
+    } elsif ($rule_src =~ m|($ip_re)|) {
+        $ipt_ip = $1;
+    }
+
+    for my $addr (@{&expand_addresses($hdr_src)}) {
+        my $src_ip   = '';
+        my $src_mask = '32';
+        if ($addr =~ m|($ip_re)/($ip_re)|) {
+            $src_ip   = $1;
+            $src_mask = $2;
+        } elsif ($addr =~ m|($ip_re)/(\d+)|) {
+            $src_ip   = $1;
+            $src_mask = $2;
+        } elsif ($addr =~ m|($ip_re)|) {
+            $src_ip = $1;
+        }
+        return 1 if ipv4_in_network(
+            $ipt_ip, $ipt_mask,
+            $src_ip, $src_mask);
     }
     return 0;
 }
 
 sub match_port() {
-    my ($ipt_port, $h_port) = @_;
-    return 1 if $ipt_port eq '0:0';
+    my ($h_port, $ipt_port) = @_;
+    return 1 if $ipt_port eq '0:0' and $h_port =~ /any/i;
     return 1 if $ipt_port eq $h_port;
-    return 1 if $h_port eq 0; ### bad traffic (port 0)
-    return 1 if $h_port =~ /any/i;
-    if ($ipt_port =~ /(\d+):(\d+)/) {
-        my $s = $1;
-        my $e = $2;
-        if ($ipt_port !~ /!/) {
-            return 1 if $h_port > $s && $h_port < $e;
-        } else {
-            return 1 if $h_port < $s || $h_port > $e;
+    my $ipt_start = 0;
+    my $ipt_end   = 65535;
+    my $h_start   = 0;
+    my $h_end     = 65535;
+
+    if ($ipt_port =~ /:/) {
+        if ($ipt_port =~ /(\d+):/) {
+            $ipt_start = $1;
         }
-    } elsif ($ipt_port =~ /(\d+):/) {
-        my $s = $1;
-        my $e = 65535;
-        if ($ipt_port !~ /!/) {
-            return 1 if $h_port > $s && $h_port < $e;
-        } else {
-            return 1 if $h_port < $s || $h_port > $e;
+        if ($ipt_port =~ /:(\d+)/) {
+            $ipt_end = $1;
         }
-    } elsif ($ipt_port =~ /:(\d+)/) {
-        my $s = 65535;
-        my $e = $1;
-        if ($ipt_port !~ /!/) {
-            return 1 if $h_port > $s && $h_port < $e;
-        } else {
-            return 1 if $h_port < $s || $h_port > $e;
+    } elsif ($ipt_port =~ /(\d+)/) {
+        $ipt_start = $ipt_end = $1;
+    }
+
+    if ($h_port =~ /:/) {
+        if ($h_port =~ /(\d+):/) {
+            $h_start = $1;
         }
-    } elsif ($ipt_port =~ /!(\d+)/) {
-        return 1 if $h_port ne $1;
+        if ($h_port =~ /:(\d+)/) {
+            $h_end = $1;
+        }
+    } elsif ($h_port =~ /(\d+)/) {
+        $h_start = $h_end = $1;
+    }
+
+    if ($ipt_port =~ /!/) {
+        if ($h_port =~ /!/) {
+            return 0;
+        } else {
+            return 1 if (($h_start < $ipt_start and $h_end < $ipt_start)
+                    or ($h_start > $ipt_end and $h_end > $ipt_end));
+        }
+    } else {
+        if ($h_port =~ /!/) {
+            return 1 if (($ipt_start < $h_start and $ipt_end < $h_start)
+                    or ($ipt_start > $h_end and $ipt_end > $h_end));
+        } else {
+            return 1 if $h_start >= $ipt_start and $h_end <= $ipt_end;
+        }
     }
     return 0;
 }
 
 sub cache_ipt_policy() {
-    my $ipt = new IPTables::Parse;
+    my $ipt = new IPTables::Parse
+        or die "[*] Could not acquire IPTables::Parse object";
 
     if ($ipt_input) {
-        $ipt_policy{'INPUT'} = $ipt->chain_action_rules('filter',
-            'INPUT', 'ACCEPT');
+        $ipt_policy{'INPUT'} = $ipt->chain_rules('filter', 'INPUT');
+
+        $ipt_chain_policy_setting{'INPUT'}
+            = $ipt->chain_policy('filter', 'INPUT');
+    }
+
+    if ($ipt_output) {
+        ### note that we don't normally expect attacks to come _from_ the
+        ### firewall, but it could happen if an attacker is not careful
+        ### to disable the Netfilter policy after successfully exploiting
+        ### a vulnerability and proceeds to attack another system
+        $ipt_policy{'OUTPUT'} = $ipt->chain_rules('filter', 'OUTPUT');
+
+        $ipt_chain_policy_setting{'OUTPUT'}
+            = $ipt->chain_policy('filter', 'OUTPUT');
     }
 
     if ($ipt_forward) {
-        $ipt_policy{'FORWARD'} = $ipt->chain_action_rules('filter',
-            'FORWARD', 'ACCEPT');
+        $ipt_policy{'FORWARD'} = $ipt->chain_rules('filter', 'FORWARD');
+
+        $ipt_chain_policy_setting{'FORWARD'}
+            = $ipt->chain_policy('filter', 'FORWARD');
     }
+
     return;
 }
 
@@ -952,7 +1083,7 @@ sub ipt_build() {
         }
     }
 
-    ### determine which chain (stateful/stateless)
+    ### determine which chain (e.g. stateful/stateless)
     my $flow_established = '';
     unless ($no_ipt_conntrack) {
         if (defined $snort_hdr_href->{'proto'}
@@ -968,8 +1099,7 @@ sub ipt_build() {
         for my $src_dst (@ipt_input_rules) {
             my $rule = "\$IPTABLES -A ";
 
-            ### see if we can jump to the ESTABLISHED inspection
-            ### chain.
+            ### see if we can jump to the ESTABLISHED inspection chain.
             if ($flow_established) {
                 $rule .= $config{'FWSNORT_INPUT_ESTAB'};
             } else {
@@ -1090,7 +1220,7 @@ sub is_local() {
 
     for my $local_aref (@local_addrs) {
         my $local_ip   = $local_aref->[0];
-        my $local_mask = $local_aref->[0];
+        my $local_mask = $local_aref->[1];
 
         return 1 if ipv4_in_network(
             $local_ip, $local_mask,
@@ -1124,14 +1254,11 @@ sub ipt_build_rule() {
     my ($chain, $rule, $hdr_href, $opts_href,
         $orig_snort_rule, $flow_logging_prefix) = @_;
 
-    ### $chain is either INPUT or FORWARD, and is used only to
-    ### see whether or not we need to add the rule to the iptables
-    ### script based on whether the built-in chain will pass the
-    ### traffic in the first place.
+    ### $chain is used only to see whether or not we need to add the
+    ### rule to the iptables script based on whether the built-in chain
+    ### will pass the traffic in the first place.
     if ($ipt_sync) {
-        if (! &ipt_allow_traffic($hdr_href, $chain)) {
-            return 0;
-        }
+        return 0 unless &ipt_allow_traffic($hdr_href, $opts_href, $chain);
     }
 
     ### append the protocol to the rule
@@ -1325,10 +1452,12 @@ sub ipt_build_opts() {
         if ($kernel_ver ne '2.4') {
             $rule .= ' --algo bm';
             if (defined $opts_href->{'offset'}) {
-                $rule .= " --from $opts_href->{'offset'}";
+                $rule .= " $snort_opts{'filter'}{'offset'}{'iptopt'} " .
+                    "$opts_href->{'offset'}";
             }
             if (defined $opts_href->{'depth'}) {
-                $rule .= " --to $opts_href->{'depth'}";
+                $rule .= " $snort_opts{'filter'}{'depth'}{'iptopt'} " .
+                    "$opts_href->{'depth'}";
             }
         }
     }
