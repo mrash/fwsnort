@@ -12,7 +12,7 @@
 #
 # Credits: (see the CREDITS file)
 #
-# Version: 0.8.1
+# Version: 0.8.2
 #
 # Copyright (C) 2003-2005 Michael Rash (mbr@cipherdyne.org)
 #
@@ -115,7 +115,7 @@ my $ipt_script = "${fwsnort_dir}/fwsnort.sh";
 #===================== end config =======================
 
 ### version number
-my $version = '0.8.1';
+my $version = '0.8.2';
 
 my %ipt_hdr_opts = (
     'src'      => '-s',
