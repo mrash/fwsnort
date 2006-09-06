@@ -860,7 +860,7 @@ sub ipt_allow_traffic() {
     if (defined $ipt_chain_policy_setting{$chain}) {
         if ($ipt_chain_policy_setting{$chain} eq 'ACCEPT') {
             if ($dumper) {
-                print "\nACCEPT $chain, no Netfilter matching rule\n";
+                print "\nACCEPT $chain, no Netfilter matching rule\n",
                     Dumper($hdr_hr),
                     Dumper($opts_hr),
                     "\n";
