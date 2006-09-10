@@ -1,15 +1,18 @@
-Thomas Bullinger        Contributed patches for the --no-jumps option, and
-                        wrote the makefwsnort.sh script to download the
-                        latest stable snort rules.  Bugfix for correct ip
-                        protocol number.  Bugfix for missed --ipt-script
-                        option.  Suggested the ability to specify multiple
-                        sid's with the --snort-sids option.
+Thomas Bullinger
+    - Contributed patches for the --no-jumps option
+    - Wrote the makefwsnort.sh script to download the latest stable snort
+      rules.
+    - Bugfix for correct IP protocol number.
+    - Bugfix for missed --ipt-script option.
+    - Suggested the ability to specify multiple sid's with the --snort-sids
+      option.
 
-Paul O'Neil             Discovered missed DMZ interface code bug.
+Paul O'Neil
+    - Discovered missed DMZ interface code bug.
 
-Ahmad Almulhem          Suggested --ipt-tos and --ipt-mark options, suggested
-                        ability to manually specify interface networks
-                        instead of automatically parsing the output of
-                        ifconfig.  This allows fwsnort to be run on a system
-                        where no ip is assigned to an interface such as a
-                        linux box that is acting as a bridge.
+Ahmad Almulhem
+    - Suggested --ipt-tos and --ipt-mark options
+    - Suggested ability to manually specify interface networks instead of
+      automatically parsing the output of ifconfig.  This allows fwsnort to be
+      run on a system where no IP is assigned to an interface such as a linux
+      box that is acting as a bridge.
