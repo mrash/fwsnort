@@ -1,90 +1,93 @@
 #!/usr/bin/perl -w
+#
+# snortspoof.pl, by Michael Rash <mbr@cipherdyne.org>
+# This software is released under the terms of the GPL, and
+# is distributed with the fwsnort project.
+#
 
+use Net::RawIP;
 use strict;
 
 my $file       = $ARGV[0] || '';
 my $spoof_addr = $ARGV[1] || '';
 my $dst_addr   = $ARGV[2] || '';
 
-die "$0 <spoof IP> <dst IP>" unless $spoof_addr and $dst_addr;
-
-open F, "< $file" or die $!;
-my @lines = <F>;
-close F;
+die "$0 <rules file> <spoof IP> <dst IP>"
+    unless $file and $spoof_addr and $dst_addr;
 
 # alert udp $EXTERNAL_NET 60000 -> $HOME_NET 2140 \
 # (msg:"BACKDOOR DeepThroat 3.1 Keylogger on Server ON"; \
 # content:"KeyLogger Is Enabled On port"; reference:arachnids,106; \
 # classtype:misc-activity; sid:165; rev:5;)
-
-my $ctr = 0;
-SIG: for my $line (@lines) {
+my $sig_sent = 0;
+open F, "< $file" or die "[*] Could not open $file: $!";
+SIG: while (<F>) {
     my $msg = '';
     my $content = '';
+    my $conv_content = '';
+    my $hex_mode = 0;
+    my $proto = '';
     my $spt = 10000;
     my $dpt = 10000;
 
-    next SIG if $line =~ /^\s*#/;
-
     ### make sure it is an inbound sig
-    if ($line =~ /^\s*alert\s+udp\s+\S+\s+(\S+)\s*\S+
-            \s*(\$HOME_NET|any)\s+(\S+)/x) {
-        my $tmp_spt = $1;
-        my $tmp_dpt = $3;
-        $spt = $1 if $tmp_spt =~ /(\d+)/;
-        $dpt = $1 if $tmp_dpt =~ /(\d+)/;
-    } else {
-        next SIG;
-    }
+    if (/^\s*alert\s+(tcp|udp)\s+\S+\s+(\S+)\s+\S+
+            \s+(\$HOME_NET|any)\s+(\S+)\s/x) {
+        $proto = $1;
+        my $spt_tmp = $2;
+        my $dpt_tmp = $4;
 
-    ### can't handle multiple content fields yet
-    next SIG if $line =~ /content\:.*\s*content\:/;
+        ### can't handle multiple content fields yet
+        next SIG if /content:.*\s*content\:/;
 
-    $msg = $1 if $line =~ /\s*msg\:\"(.*?)\"\;/;
-    $content = $1 if $line =~ /\s*content\:\"(.*)\"\;/;
+        $msg     = $1 if /\s*msg\:\"(.*?)\"\;/;
+        $content = $1 if /\s*content\:\"(.*?)\"\;/;
+        next SIG unless $msg and $content;
 
-    next SIG unless $msg and $content;
-#    next SIG if $content =~ /\|.+\|/;
-
-    open F, "> /tmp/sspoof" or die $!;
-    print F $content, "\n";
-    close F;
-
-    my $conv_content = '';
-    my $hex_mode = 0;
-    my @chars = split //, $content;
-    for (my $i=0; $i<=$#chars; $i++) {
-        if ($chars[$i] eq '|') {
-            if ($hex_mode) {
-                $hex_mode = 0;
-            } else {
-                $hex_mode = 1;
-            }
-            next;
+        if ($spt_tmp =~ /(\d+)/) {
+            $spt = $1;
+        } elsif ($spt_tmp ne 'any') {
+            next SIG;
         }
-        if ($hex_mode) {
-            if ($chars[$i] eq ' ') {
+        if ($dpt_tmp =~ /(\d+)/) {
+            $dpt = $1;
+        } elsif ($dpt_tmp ne 'any') {
+            next SIG;
+        }
+
+        my @chars = split //, $content;
+        for (my $i=0; $i<=$#chars; $i++) {
+            if ($chars[$i] eq '|') {
+                $hex_mode == 0 ? ($hex_mode = 1) : ($hex_mode = 0);
                 next;
             }
-            my $tmp_chars = $chars[$i] . $chars[$i+1];
-            $i++;
-            $conv_content .= sprintf("%c", hex($tmp_chars));
-        } else {
-            $conv_content .= $chars[$i];
+            if ($hex_mode) {
+                next if $chars[$i] eq ' ';
+                $conv_content .= sprintf("%c",
+                        hex($chars[$i] . $chars[$i+1]));
+                $i++;
+            } else {
+                $conv_content .= $chars[$i];
+            }
         }
+        my $rawpkt = '';
+        if ($proto eq 'tcp') {
+            $rawpkt = new Net::RawIP({'ip' => {
+                saddr => $spoof_addr, daddr => $dst_addr},
+                'tcp' => { source => $spt, dest => $dpt, 'ack' => 1,
+                data => $conv_content}})
+                    or die "[*] Could not get Net::RawIP object: $!";
+        } else {
+            $rawpkt = new Net::RawIP({'ip' => {
+                saddr => $spoof_addr, daddr => $dst_addr},
+                'udp' => { source => $spt, dest => $dpt,
+                data => $conv_content}})
+                    or die "[*] Could not get Net::RawIP object: $!";
+        }
+        $rawpkt->send();
+        $sig_sent++;
     }
-
-    my $len = length($conv_content);
-
-#    hping --spoof 68.142.226.32 -c 1 --udp -E /etc/hosts -d 100 -p 60000 <host>
-
-    my $hpingCmd = "/usr/sbin/hping -c 1 --udp -E /tmp/sspoof " .
-        "-d $len -s $spt -p $dpt --spoof $spoof_addr $dst_addr";
-
-    print "[+] Spoofing: $msg $spoof_addr $dst_addr:$dpt\n";
-    print "HPING: $hpingCmd\n";
-    print "CONTENT: $content\n";
-    open HPING, "$hpingCmd |" or die $!;
-    close HPING;
 }
+print "[+] $file, $sig_sent attacks sent.\n";
+close F;
 exit 0;
