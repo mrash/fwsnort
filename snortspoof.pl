@@ -15,10 +15,10 @@ my $dst_addr   = $ARGV[2] || '';
 die "$0 <rules file> <spoof IP> <dst IP>"
     unless $file and $spoof_addr and $dst_addr;
 
-# alert udp $EXTERNAL_NET 60000 -> $HOME_NET 2140 \
-# (msg:"BACKDOOR DeepThroat 3.1 Keylogger on Server ON"; \
-# content:"KeyLogger Is Enabled On port"; reference:arachnids,106; \
-# classtype:misc-activity; sid:165; rev:5;)
+# alert udp $EXTERNAL_NET any -> $HOME_NET 635 (msg:"EXPLOIT x86 Linux mountd
+# overflow"; content:"^|B0 02 89 06 FE C8 89|F|04 B0 06 89|F";
+# reference:bugtraq,121; reference:cve,1999-0002; classtype:attempted-admin;
+# sid:315; rev:6;)
 my $sig_sent = 0;
 open F, "< $file" or die "[*] Could not open $file: $!";
 SIG: while (<F>) {
