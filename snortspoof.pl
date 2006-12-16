@@ -5,7 +5,7 @@
 # is distributed with the fwsnort project.
 #
 
-use Net::RawIP;
+require Net::RawIP;
 use strict;
 
 my $file       = $ARGV[0] || '';
@@ -22,7 +22,6 @@ die "$0 <rules file> <spoof IP> <dst IP>"
 my $sig_sent = 0;
 open F, "< $file" or die "[*] Could not open $file: $!";
 SIG: while (<F>) {
-    my $msg = '';
     my $content = '';
     my $conv_content = '';
     my $hex_mode = 0;
@@ -40,9 +39,8 @@ SIG: while (<F>) {
         ### can't handle multiple content fields yet
         next SIG if /content:.*\s*content\:/;
 
-        $msg     = $1 if /\s*msg\:\"(.*?)\"\;/;
         $content = $1 if /\s*content\:\"(.*?)\"\;/;
-        next SIG unless $msg and $content;
+        next SIG unless $content;
 
         if ($spt_tmp =~ /(\d+)/) {
             $spt = $1;
