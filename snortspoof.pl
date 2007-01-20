@@ -1,8 +1,34 @@
 #!/usr/bin/perl -w
 #
-# snortspoof.pl, by Michael Rash <mbr@cipherdyne.org>
-# This software is released under the terms of the GPL, and
-# is distributed with the fwsnort project.
+###############################################################################
+#
+# File: snortspoof.pl
+#
+# Purpose: To parse rules from the Snort rule set and spoof them at a target
+#          IP from arbitrary source addresses.  This is similar to the
+#          technique employed by the Stick and Snot projects.  Snortspoof.pl
+#          is distributed with the fwsnort project
+#          (http://www.cipherdyne.org/fwsnort/).
+#
+# Author: Michael Rash <mbr@cipherdyne.org>
+#
+# Copyright (C) 2003-2005 Michael Rash (mbr@cipherdyne.org)
+#
+# License (GNU Public License):
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program; if not, write to the Free Software
+#    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307
+#    USA
+#
+###############################################################################
+#
+# $Id$
 #
 
 require Net::RawIP;
