@@ -65,7 +65,6 @@ my $total_rules = 0;
 opendir D, $dir or die " ** Could not open $dir: $!";
 my @rfiles = readdir D;
 closedir D;
-shift @rfiles; shift @rfiles;
 
 print " .. Calculating snort rule keyword percentages:\n";
 for my $rfile (@rfiles) {
