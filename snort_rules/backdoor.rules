@@ -52,7 +52,7 @@ alert tcp $HOME_NET 666 -> $EXTERNAL_NET any (msg:"BACKDOOR BackConstruction 2.1
 alert tcp $EXTERNAL_NET any -> $HOME_NET 5032 (msg:"BACKDOOR NetMetro File List"; flow:to_server,established; content:"--"; reference:arachnids,79; classtype:misc-activity; sid:159; rev:6;)
 # alert tcp $EXTERNAL_NET 5031 -> $HOME_NET !53:80 (msg:"BACKDOOR NetMetro Incoming Traffic"; flow:stateless; flags:A+; reference:arachnids,79; classtype:misc-activity; sid:160; rev:6;)
 alert udp $EXTERNAL_NET 3344 -> $HOME_NET 3345 (msg:"BACKDOOR Matrix 2.0 Client connect"; content:"activate"; reference:arachnids,83; classtype:misc-activity; sid:161; rev:4;)
-alert udp $EXTERNAL_NET 3345 -> $HOME_NET 3344 (msg:"BACKDOOR Matrix 2.0 Server access"; content:"logged in"; reference:arachnids,83; classtype:misc-activity; sid:162; rev:4;)
+alert udp $EXTERNAL_NET 3345 -> $HOME_NET 3344 (msg:"BACKDOOR Matrix 2.0 Server access"; content:"|0b ab ab ab 00 00 00 |logged in"; reference:arachnids,83; classtype:misc-activity; sid:162; rev:4;)
 alert tcp $HOME_NET 5714 -> $EXTERNAL_NET any (msg:"BACKDOOR WinCrash 1.0 Server Active"; flow:stateless; flags:SA,12; content:"|B4 B4|"; reference:arachnids,36; classtype:misc-activity; sid:163; rev:9;)
 alert icmp 255.255.255.0/24 any -> $HOME_NET any (msg:"BACKDOOR SIGNATURE - Q ICMP"; dsize:>1; itype:0; reference:arachnids,202; classtype:misc-activity; sid:183; rev:4;)
 alert tcp 255.255.255.0/24 any -> $HOME_NET any (msg:"BACKDOOR Q access"; flow:stateless; dsize:>1; flags:A+; reference:arachnids,203; classtype:misc-activity; sid:184; rev:7;)
