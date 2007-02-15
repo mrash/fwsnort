@@ -152,7 +152,7 @@ sub install() {
         "the $local_rules_dir directory: $!";
     my @rfiles = readdir D;
     closedir D;
-    shift @rfiles; shift @rfiles;
+
     print "[+] Copying all rules files to $rules_dir\n";
     for my $rfile (@rfiles) {
         next unless $rfile =~ /\.rules$/;
