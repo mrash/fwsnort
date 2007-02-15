@@ -4,11 +4,6 @@ to install fwsnort.  After fwsnort has been installed, you will
 need to edit /etc/fwsnort/fwsnort.conf by hand the first time
 you run fwsnort.
 
-** IMPORTANT **:
-
-NOTE: The Netfilter string match extension has not yet been ported to the
-2.6 Linux kernel, and so fwsnort is yet not compatible with the 2.6 kernel.
-
 fwsnort requires the iptables string match module in order to be able to
 detect application layer attacks.  In addition, fwsnort extends iptables by
 adding a "--hex-string" option with a patch against
