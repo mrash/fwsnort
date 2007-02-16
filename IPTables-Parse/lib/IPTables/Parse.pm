@@ -7,11 +7,11 @@
 #
 # Author: Michael Rash (mbr@cipherdyne.org)
 #
-# Version: 0.3
+# Version: 0.4
 #
 ##################################################################
 #
-# $Id: Parse.pm 1581 2006-09-03 03:15:44Z mbr $
+# $Id: Parse.pm 1965 2007-02-15 04:42:40Z mbr $
 #
 
 package IPTables::Parse;
@@ -22,7 +22,7 @@ use strict;
 use warnings;
 use vars qw($VERSION);
 
-$VERSION = '0.3';
+$VERSION = '0.4';
 
 sub new() {
     my $class = shift;
@@ -150,7 +150,7 @@ sub chain_rules() {
             'dport'    => '',
             'extended' => '',
             'state'    => '',
-            'raw'      => ''  ### only used if regex doesn't match
+            'raw'      => $line
         );
 
         if ($ipt_verbose) {
@@ -215,8 +215,6 @@ sub chain_rules() {
                         }
                     }
                 }
-            } else {
-                $rule{'raw'} = $line;
             }
         } else {
             ### ACCEPT tcp  -- 164.109.8.0/24  0.0.0.0/0  tcp dpt:22 flags:0x16/0x02
@@ -232,7 +230,9 @@ sub chain_rules() {
 
             if ($line =~ m|^\s*(\S+)\s+(\S+)\s+\-\-\s+(\S+)\s+(\S+)\s*(.*)|) {
                 $rule{'target'}   = $1;
-                $rule{'protocol'} = $rule{'proto'} = $2;
+                my $proto = $2;
+                $proto = 'all' if $proto eq '0';
+                $rule{'protocol'} = $rule{'proto'} = $proto;
                 $rule{'src'}      = $3;
                 $rule{'dst'}      = $4;
                 $rule{'extended'} = $5;
@@ -250,8 +250,6 @@ sub chain_rules() {
                     $rule{'s_port'} = $rule{'sport'} = $s_port;
                     $rule{'d_port'} = $rule{'dport'} = $d_port;
                 }
-            } else {
-                $rule{'raw'} = $line;
             }
         }
         push @chain, \%rule;
@@ -313,6 +311,10 @@ sub default_drop() {
             my $proto  = $1;
             my $p_tmp  = $2;
             my $prefix = 'NONE';
+
+            ### some recent iptables versions return "0" instead of "all"
+            ### for the protocol number
+            $proto = 'all' if $proto eq '0';
             ### LOG flags 0 level 4 prefix `DROP '
             if ($p_tmp && $p_tmp =~ m|LOG.*\s+prefix\s+
                 \`\s*(.+?)\s*\'|x) {
@@ -323,6 +325,8 @@ sub default_drop() {
             $protocols{$proto}{'LOG'}{'rulenum'} = $rule_ctr;
         } elsif ($policy eq 'ACCEPT' and $line =~ m|^DROP\s+(\w+)\s+\-\-\s+.*
             $any_ip_re\s+$any_ip_re\s*$|x) {
+            my $proto = $1;
+            $proto = 'all' if $proto eq '0';
             ### DROP    all  --  0.0.0.0/0     0.0.0.0/0
             $protocols{$1}{'DROP'} = $rule_ctr;
         }
@@ -372,6 +376,7 @@ sub default_log() {
 
     ### first get all logging rules and associated chains
     my $log_chain;
+
     for my $line (@ipt_lines) {
         chomp $line;
 
@@ -386,11 +391,15 @@ sub default_log() {
 
         if ($line =~ m|^\s*U?LOG\s+(\w+)\s+\-\-\s+.*$any_ip_re
                 \s+$any_ip_re\s+.*U?LOG|x) {
+
+            my $proto = $1;
+            $proto = 'all' if $proto eq '0';
+
             ### the above regex allows the limit target to be used
-            $log_chains{$log_chain}{$1} = '';  ### protocol
+            $log_chains{$log_chain}{$proto} = '';  ### protocol
 
             if ($log_chain eq $chain) {
-                $log_rules{$1} = '';
+                $log_rules{$proto} = '';
             }
         }
     }
