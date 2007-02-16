@@ -9,6 +9,9 @@ fwsnort-0.8.2 (//2006):
       kernel (linux-2.6.x/lib/ts_bm.c) which caused slightly repetitive
       patterns to only match at specific offsets with the string match
       extension.
+    - Bugfix to ensure that a depth cannot be less that an offset (these
+      translate to the --to and --from command line arguments to iptables).
+    - Bugfix to escape '$' chars in iptables search strings.
 
 fwsnort-0.8.1 (11/11/2005):
     - Updated to use the string match extension "--algo bm" argument if
