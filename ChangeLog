@@ -1,6 +1,8 @@
 fwsnort-0.8.2 (//2006):
     - Updated to newer IPTables::Parse module that uses the array of hash
       references method of returning iptables policy data.
+    - Added --Dump-ipt and --Dump-snort rules to allow iptables policy and
+      Snort rules to be dumped to STDOUT.
     - Added patches/bm_goodshift_fix.patch patch file that fixes an
       initialization bug in the Boyer-Moore text search implementation in the
       kernel (linux-2.6.x/lib/ts_bm.c) which caused slightly repetitive
