@@ -1,4 +1,4 @@
-fwsnort-0.8.2 (//2006):
+fwsnort-0.8.2 (02/16/2007):
     - Updated to newer IPTables::Parse module that uses the array of hash
       references method of returning iptables policy data.
     - Added --Dump-ipt and --Dump-snort rules to allow iptables policy and
