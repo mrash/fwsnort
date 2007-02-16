@@ -1,37 +1,12 @@
 .\" Process this file with
 .\" groff -man -Tascii foo.1
 .\"
-.TH FWSNORT 8 "March, 2003" Linux
+.TH FWSNORT 8 "Feb, 2007" Linux
 .SH NAME
 .B fwsnort
 \- Firewall Snort
 .SH SYNOPSIS
-.B fwsnort [-l
-.I logfile
-.B ] [-v] [-V] [-h] [-t] [-U] [-c
-.I config-file
-.B ] [--snort-sid
-.I sid
-.B ] [--exclude-sid
-.I sid
-.B ] [--include-type
-.I type
-.B ] [--exclude-type
-.I type
-.B ] [--ipt-script
-.I script
-.B ] [--snort-conf
-.I file
-.B ] [--snort-rdir
-.I dir
-.B ] [--ipt-apply] [--ipt-drop] [--ipt-reject] [--no-ipt-sync] [--no-ipt-log]
-.B [--ipt-flush] [--ipt-list] [--no-ipt-test] [--no-ipt-jumps]
-.B [--no-ipt-conntrack] [--no-ipt-INPUT] [--no-ipt-OUTPUT] [--no-ipt-FORWARD]
-.B [--no-exclude-lo] [--no-addresses]
-.B [--Home-net] [--Dump-conf] [--debug] [--strict]
-.B [--ulog-nlgroup
-.I groupnum
-.B ] [--update-rules]
+.B fwsnort [options]
 .SH DESCRIPTION
 .B fwsnort
 translates Snort rules into equivalent Netfilter rules and generates a
@@ -46,7 +21,7 @@ blocking all inbound http traffic from external addresses, it is probably
 not of much use to try detecting inbound attacks against against tcp/80.
 By default fwsnort generates Netfilter rules that log Snort sid's with
 --log-prefix to klogd where the messages can be analyzed with a log
-watcher such as logwatch or psad (see http://www.cipherdyne.org/psad).
+analyzer such as psad (see http://www.cipherdyne.org/psad/).
 .B fwsnort
 relies on the Netfilter string match module to match Snort content fields
 in the application portion of ip traffic.  Since Snort rules can contain
@@ -59,7 +34,7 @@ IDS into equivalent Netfilter rules.  For more information about the
 translation strategy as well as advantages/disadvantages of the method
 used by fwsnort to obtain intrusion detection data, see the README
 included with the fwsnort sources or browse to:
-http://www.cipherdyne.org/fwsnort/.
+http://www.cipherdyne.org/fwsnort/
 .SH OPTIONS
 .TP
 .BR \-c ", " \-\^\-config\ \<configuration\ file>
@@ -82,7 +57,7 @@ argument to this option.  A comma-separated list of types to exclude can
 be specified.
 .TP
 .BR \-\^\-update-rules
-Download the latest Bleeding Snort rules from http://www.bleedingsnort.com/.
+Download the latest Bleeding Snort rules from http://www.bleedingsnort.com/
 This will overwrite the bleeding-all.rules file in the
 /etc/fwsnort/snort_rules/ directory.  Note that the automatic downloading
 of Snort rules from http://www.snort.org/ as of March, 2005 is only offered
@@ -314,4 +289,4 @@ always welcome as well.
 .B fwsnort
 is distributed under the GNU General Public License (GPL), and the latest
 version may be downloaded from
-.B http://www.cipherdyne.org
+.B http://www.cipherdyne.org/
