@@ -119,6 +119,9 @@ cp -r snort_rules $RPM_BUILD_ROOT%_sysconfdir/%name
 %_libdir/%name
 
 %changelog
+* Fri Feb 16 2007 Michael Rash <mbr@cipherydne.org>
+- fwsnort-0.8.2 release
+
 * Mon Sep 04 2006 Michael Rash <mbr@cipherydne.org>
 - Updated to install new IPTables::Parse module out of the IPTables-Parse
   directory.
