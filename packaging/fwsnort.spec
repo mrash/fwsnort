@@ -1,7 +1,7 @@
 %define name fwsnort
 %define version 0.8.2
 %define release 1
-%define fwsnortlibdir /usr/lib/fwsnort
+%define fwsnortlibdir %_libdir/%name
 %define fwsnortlogdir /var/log/fwsnort
 
 ### get the first @INC directory that includes the string "linux".
@@ -14,7 +14,7 @@ Version: %version
 Release: %release
 License: GPL
 Group: System/Servers
-Url: http://www.cipherdyne.org/projects/fwsnort/
+Url: http://www.cipherdyne.org/fwsnort/
 Source: %name-%version.tar.gz
 BuildRoot: %_tmppath/%{name}-buildroot
 Requires: iptables
@@ -45,15 +45,18 @@ advantages/disadvantages of the method used by fwsnort to obtain intrusion
 detection data, see the README included with the fwsnort sources or browse
 to: http://www.cipherdyne.org/projects/fwsnort/.
 
-
-
 %prep
 [ "$RPM_BUILD_ROOT" != "/" ] && rm -rf $RPM_BUILD_ROOT
 
 %setup -q
 
+for i in $(grep -r "use lib" . | cut -d: -f1); do
+	awk '/use lib/ { sub("/usr/lib/fwsnort", "%_libdir/%name") } { print }' $i > $i.tmp
+	mv $i.tmp $i
+done
+
 cd IPTables-Parse && perl Makefile.PL PREFIX=%fwsnortlibdir LIB=%fwsnortlibdir
-cd ../..
+cd ..
 cd Net-IPv4Addr && perl Makefile.PL PREFIX=%fwsnortlibdir LIB=%fwsnortlibdir
 cd ..
 
@@ -119,7 +122,7 @@ cp -r snort_rules $RPM_BUILD_ROOT%_sysconfdir/%name
 %_libdir/%name
 
 %changelog
-* Fri Feb 16 2007 Michael Rash <mbr@cipherydne.org>
+* Sat Feb 17 2007 Michael Rash <mbr@cipherydne.org>
 - fwsnort-0.8.2 release
 
 * Mon Sep 04 2006 Michael Rash <mbr@cipherydne.org>
