@@ -1,4 +1,4 @@
-fwsnort-0.8.2 (02/16/2007):
+fwsnort-0.8.2 (02/17/2007):
     - Updated to newer IPTables::Parse module that uses the array of hash
       references method of returning iptables policy data.
     - Added --Dump-ipt and --Dump-snort rules to allow iptables policy and
@@ -12,6 +12,12 @@ fwsnort-0.8.2 (02/16/2007):
     - Bugfix to ensure that a depth cannot be less that an offset (these
       translate to the --to and --from command line arguments to iptables).
     - Bugfix to escape '$' chars in iptables search strings.
+    - Added cd_rpmbuilder to make it easy to automatically build RPM files of
+      fwsnort.
+    - Added support for the iptables OUTPUT chain.
+    - Added the ChangeLog.svn file so that all of the changed files and
+      corresponding svn commit messages can be viewed (this file is built from
+      release to release).
 
 fwsnort-0.8.1 (11/11/2005):
     - Updated to use the string match extension "--algo bm" argument if
