@@ -59,7 +59,7 @@ my %required_perl_modules = (
         'mod-dir' => 'Net-IPv4Addr'
     },
     'IPTables::Parse' => {
-        'force-install' => 0,
+        'force-install' => 1,
         'mod-dir' => 'IPTables-Parse'
     }
 );
