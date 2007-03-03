@@ -326,6 +326,8 @@ my $no_ipt_conntrack  = 0;
 my $snort_conf_file   = '';
 my $ipt_restrict_intf = '';
 my $no_exclude_loopback = 0;
+my $no_ipt_comments = 0;
+my $ipt_rule_nums   = 0;
 
 ### default to processing these filter chains
 my %process_chains = (
@@ -333,6 +335,8 @@ my %process_chains = (
     'FORWARD' => 1,
     'OUTPUT'  => 1,
 );
+
+my %chain_ctr = ();
 
 my $tcp_reset_str = '';
 
@@ -351,6 +355,7 @@ Getopt::Long::Configure('no_ignore_case');
     'ipt-flush'      => \$ipt_flush,    # Flush any existing fwsnort chains.
     'ipt-list'       => \$ipt_list,     # List any existing fwsnort chains.
     'ipt-file=s'     => \$ipt_file,     # Read iptables policy from a file.
+    'ipt-rule-nums'  => \$ipt_rule_nums, # Include rule numbers in logging prefixes.
     'Home-net=s'     => \$home_net,     # Manually specify home network.
     'External-net=s' => \$ext_net,      # Manually specify external network.
     'snort-sid=s'    => \$include_sids, # Parse only these particular snort rules.
@@ -377,6 +382,8 @@ Getopt::Long::Configure('no_ignore_case');
                                          # the OUTPUT chain.
     'no-ipt-FORWARD' => \$no_ipt_forward, # Disable fwsnort rules processed via
                                           # the FORWARD chain.
+    'no-ipt-comments' => \$no_ipt_comments, # Don't include msg fields
+                                            # with the comment match
     'no-exclude-lo'  => \$no_exclude_loopback, # include loopback interface
     'restrict-intf=s' => \$ipt_restrict_intf, # Restrict iptables rules to an
                                         # individual interface (supports a
@@ -416,7 +423,8 @@ Getopt::Long::Configure('no_ignore_case');
 ### parsing log?)
 &truncate_logfile();
 
-### check to make sure iptables has --hex-strings, etc.
+### check to make sure iptables has various iptables functionality
+### such as the LOG target, --hex-strings, the comment match, etc.
 &ipt_test() unless $no_ipt_test;
 
 ### print a header at the top of the iptables ruleset
@@ -1305,14 +1313,14 @@ sub ipt_build_rule() {
         $rule .= " $ipt_hdr_opts{'dport'} $hdr_href->{'dport'}";
     }
 
-    &ipt_build_opts($rule, $hdr_href,
-        $opts_href, $orig_snort_rule, $flow_logging_prefix);
+    &ipt_build_opts($rule, $hdr_href, $opts_href,
+            $orig_snort_rule, $flow_logging_prefix, $chain);
     return 1;
 }
 
 sub ipt_build_opts() {
-    my ($rule, $hdr_href, $opts_href,
-        $orig_snort_rule, $flow_logging_prefix) = @_;
+    my ($rule, $hdr_href, $opts_href, $orig_snort_rule,
+            $flow_logging_prefix, $chain) = @_;
 
     ### append tcp flags
     if (defined $opts_href->{'flags'}) {
@@ -1479,64 +1487,63 @@ sub ipt_build_opts() {
         }
     }
 
-    my $log_target = '';
-    if ($hdr_href->{'action'} eq 'log' or $ulog_mode) {
-        if (defined $opts_href->{'sid'}) {
-            if ($ipt_drop) {
-                $log_target = " -j ULOG --ulog-nlgroup $ulog_nlgroup " .
-                    "--ulog-prefix \"DRP SID$opts_href->{'sid'} \"";
-            } elsif ($ipt_reject) {
-                $log_target = " -j ULOG --ulog-nlgroup $ulog_nlgroup " .
-                    "--ulog-prefix \"REJ SID$opts_href->{'sid'} \"";
-            } else {
-                $log_target = " -j ULOG --ulog-nlgroup $ulog_nlgroup " .
-                    "--ulog-prefix \"SID$opts_href->{'sid'} \"";
-            }
-        }
-    } else {
-        ### construct the log-prefix
-        if ($flow_logging_prefix) {
-            if (defined $opts_href->{'sid'}) {
-                if ($ipt_drop) {
-                    $log_target = " -j LOG --log-prefix \"DRP " .
-                        "SID$opts_href->{'sid'} $flow_logging_prefix \"";
-                } elsif ($ipt_reject) {
-                    $log_target = " -j LOG --log-prefix \"REJ " .
-                        "SID$opts_href->{'sid'} $flow_logging_prefix \"";
-                } else {
-                    $log_target = " -j LOG --log-prefix " .
-                        "\"SID$opts_href->{'sid'} $flow_logging_prefix \"";
-                }
-            }
-        } else {
-            if (defined $opts_href->{'sid'}) {
-                if ($ipt_drop) {
-                    $log_target = " -j LOG --log-prefix \"DRP " .
-                        "SID$opts_href->{'sid'} \"";
-                } elsif ($ipt_reject) {
-                    $log_target = " -j LOG --log-prefix \"REJ " .
-                        "SID$opts_href->{'sid'} \"";
-                } else {
-                    $log_target = " -j LOG --log-prefix " .
-                        "\"SID$opts_href->{'sid'} \"";
-                }
-            }
-        }
-    }
 
     ### print the rest of the logprefix snort options in a comment
     ### one line above the rule
-    my $comment = '###';
+    my $comment    = '';
+    my $log_target = '';
     for my $key qw(msg classtype reference priority rev) {
         if (defined $opts_href->{$key}) {
             if ($key eq 'msg') {
-                $comment .= qq| $key: "$opts_href->{$key}";|;
+                $comment .= qq|$key: "$opts_href->{$key}"; |;
             } else {
-                $comment .= qq| $key: $opts_href->{$key};|;
+                $comment .= qq|$key: $opts_href->{$key}; |;
             }
         }
     }
+    $comment =~ s/\s*$//;
     $comment =~ s/,$//;
+
+    ### build up the logging prefix and comment match
+    if (defined $opts_href->{'sid'}) {
+        if ($no_ipt_comments) {
+            $log_target = ' -j ';
+        } else {
+            if (length($comment) < 256) {
+                ### add the Snort msg (and other) fields to the iptables rule
+                ### with the 'comment' match (which can handle up to 256 chars)
+                $comment =~ s|\"||g;
+                $comment =~ s|/\*||g;
+                $comment =~ s|\*/||g;
+                $log_target = qq| -m comment --comment "$comment" -j |;
+            }
+        }
+        if ($hdr_href->{'action'} eq 'log' or $ulog_mode) {
+            $log_target .= qq|ULOG --ulog-nlgroup $ulog_nlgroup --ulog-prefix "|;
+        } else {
+            $log_target .= qq|LOG --log-prefix "|;
+        }
+
+        ### increment chain counter and add in if necessary
+        $chain_ctr{$chain}++;
+
+        if ($ipt_rule_nums) {
+            $log_target .= "[$chain_ctr{$chain}] ";
+        }
+
+        if ($ipt_drop) {
+            $log_target .= 'DRP ';
+        } elsif ($ipt_reject) {
+            $log_target .= 'REJ ';
+        }
+        ### always add the sid
+        $log_target .= qq|SID$opts_href->{'sid'} |;
+        if ($flow_logging_prefix) {
+            $log_target .= 'ESTAB ';
+        }
+        ### ending quote
+        $log_target .= qq|"|;
+    }
 
     ### print the snort rules type header to the fwsnort.sh script
     if (! $ipt_print_type) {
@@ -1546,7 +1553,7 @@ sub ipt_build_opts() {
 
     ### write the rule out to the iptables script
     &ipt_add_rule($hdr_href, $opts_href, $orig_snort_rule,
-        $rule, $log_target, $comment);
+        $rule, $log_target, "### $comment");
     return;
 }
 
@@ -2082,6 +2089,20 @@ sub ipt_test() {
             unless $no_ipt_log;
     }
 
+    ### test for the comment match (where Snort msg fields are placed)
+    $rv = (system "$cmds{'iptables'} -I INPUT 1 -s " .
+        qq|127.0.0.2 -m comment --comment "testing the comment match" | .
+        qq|-j LOG 2> /dev/null|) >> 8;
+    if ($rv == 0) {
+        system "$cmds{'iptables'} -D INPUT 1";
+    } else {
+        unless ($no_ipt_comments) {
+            print"[-] It looks like the iptables 'comment' match is not ",
+                "available, disabling.\n";
+            $no_ipt_comments = 1;
+        }
+    }
+
     ### test for the ipv4options extension.
     $rv = (system "$cmds{'iptables'} -I INPUT 1 -p icmp -m " .
         "ipv4options --rr -s 127.0.0.2 -j LOG 2> /dev/null") >> 8;
@@ -2420,6 +2441,9 @@ Options:
     --ipt-list                - List all rules in fwsnort chains.
     --ipt-flush               - Flush all rules in fwsnort chains.
     --ipt-file=<file>         - Read iptables policy from a file.
+    --ipt-rule-nums           - For each iptables rule, add the rule
+                                number in the fwsnort chain to the
+                                logging prefix.
     --snort-sid=<sid>         - Generate an equivalent iptables rule
                                 for the specific snort id <sid> (also
                                 supports a comma separate list of sids.)
@@ -2427,6 +2451,8 @@ Options:
     --snort-conf=<file>       - Read Snort specific variables out of
                                 existing snort.conf file.
     --snort-rdir=<dir>        - Specify path to Snort rules directory.
+    --no-ipt-comments         - Do not add Snort "msg" fields to iptables
+                                rules with the iptables comment match.
     --no-ipt-sync             - Add iptables rules for signatures that
                                 are already blocked by iptables.
     --no-ipt-log              - Do not generate iptables log rules
