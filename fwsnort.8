@@ -129,6 +129,20 @@ chains.  This options is mostly useful to make it
 easy to manually alter the placement of the jump rules in the iptables
 ruleset.
 .TP
+.BR \-\^\-no-ipt-rule-nums
+By default
+.B fwsnort
+includes the rule number within the logging prefix for each of the rules it
+adds to the fwsnort chains.  E.g. the logging prefix for rule 34 would look
+something like "[34] SID1242 ESTAB".  Use this option to not include the
+rule number.
+.TP
+.BR \-\^\-no-ipt-comments
+If the iptables "comment" match exists, then
+.B fwsnort
+puts the Snort "msg", "classtype", "reference", "priority", and "rev" fields
+within a comment for each iptables rule.  Use this option to disable this.
+.TP
 .BR \-\^\-no-ipt-INPUT
 Do not jump packets from the Netfilter INPUT chain to the
 .B fwsnort

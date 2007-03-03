@@ -2442,9 +2442,6 @@ Options:
     --ipt-list                - List all rules in fwsnort chains.
     --ipt-flush               - Flush all rules in fwsnort chains.
     --ipt-file=<file>         - Read iptables policy from a file.
-    --ipt-rule-nums           - For each iptables rule, add the rule
-                                number in the fwsnort chain to the
-                                logging prefix.
     --snort-sid=<sid>         - Generate an equivalent iptables rule
                                 for the specific snort id <sid> (also
                                 supports a comma separate list of sids.)
@@ -2464,6 +2461,10 @@ Options:
     --no-ipt-jumps            - Do not jump packets from built-in
                                 iptables INPUT or FORWARD chains to
                                 chains created by fwsnort.
+    --no-ipt-rule-nums        - For each iptables rule, add the rule
+                                number in the fwsnort chain to the
+                                logging prefix.  This option disables
+                                this behavior.
     --no-ipt-INPUT            - Exclude INPUT chain processing.
     --no-ipt-OUTPUT           - Exclude OUTPUT chain processing.
     --no-ipt-FORWARD          - Exclude FORWARD chain processing.
