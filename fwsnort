@@ -327,7 +327,7 @@ my $snort_conf_file   = '';
 my $ipt_restrict_intf = '';
 my $no_exclude_loopback = 0;
 my $no_ipt_comments = 0;
-my $ipt_rule_nums   = 0;
+my $no_ipt_rule_nums = 0;
 
 ### default to processing these filter chains
 my %process_chains = (
@@ -355,7 +355,6 @@ Getopt::Long::Configure('no_ignore_case');
     'ipt-flush'      => \$ipt_flush,    # Flush any existing fwsnort chains.
     'ipt-list'       => \$ipt_list,     # List any existing fwsnort chains.
     'ipt-file=s'     => \$ipt_file,     # Read iptables policy from a file.
-    'ipt-rule-nums'  => \$ipt_rule_nums, # Include rule numbers in logging prefixes.
     'Home-net=s'     => \$home_net,     # Manually specify home network.
     'External-net=s' => \$ext_net,      # Manually specify external network.
     'snort-sid=s'    => \$include_sids, # Parse only these particular snort rules.
@@ -384,6 +383,8 @@ Getopt::Long::Configure('no_ignore_case');
                                           # the FORWARD chain.
     'no-ipt-comments' => \$no_ipt_comments, # Don't include msg fields
                                             # with the comment match
+    'no-ipt-rule-nums' => \$no_ipt_rule_nums, # Exclude rule numbers from
+                                              # logging prefixes.
     'no-exclude-lo'  => \$no_exclude_loopback, # include loopback interface
     'restrict-intf=s' => \$ipt_restrict_intf, # Restrict iptables rules to an
                                         # individual interface (supports a
@@ -1527,7 +1528,7 @@ sub ipt_build_opts() {
         ### increment chain counter and add in if necessary
         $chain_ctr{$chain}++;
 
-        if ($ipt_rule_nums) {
+        unless ($no_ipt_rule_nums) {
             $log_target .= "[$chain_ctr{$chain}] ";
         }
 
