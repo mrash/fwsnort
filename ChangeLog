@@ -12,6 +12,15 @@ fwsnort-0.9.0 (03//2007):
       expression supplied on the command line.
     - Updated to include the original Snort rule as a comment within the
       fwsnort.sh script without having to use --verbose.
+    - Bugfix to force install of IPTables::Parse since it had been updated in
+      the fwsnort-0.8.2 release.
+    - Changed the IGNORE_ADDR variable to WHITELIST since this name better
+      describes the actual function of this var.  Updated to allow multiple
+      WHITELIST lines.
+    - Added the BLACKLIST variable to allow a true blacklist to be
+      instantiated with either the DROP or REJECT targets.  The syntax for the
+      BLACKLIST variable is "BLACKLIST  <ip or network>  <target>", where
+      "target" is either "DROP" or "REJECT".
 
 fwsnort-0.8.2 (02/17/2007):
     - Updated to newer IPTables::Parse module that uses the array of hash
