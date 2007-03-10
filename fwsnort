@@ -255,6 +255,12 @@ my %snort_opts = (
     }
 );
 
+### config vars that may span multiple lines
+my %multi_line_vars = (
+    'WHITELIST' => '',
+    'BLACKLIST' => '',
+);
+
 ### array that contains iptables script (will be written
 ### to $ipt_script)
 my @ipt_script_lines = ();
@@ -265,12 +271,12 @@ my %ipt_default_policy_setting = ();
 my %ipt_default_drop = ();
 
 ### regex to match ip addresses
-my $ip_re = '(?:\d{1,3}\.){3}\d{1,3}';
+my $ip_re = qr|(?:[0-2]?\d{1,2}\.){3}[0-2]?\d{1,2}|;
 
 my %snort_dump_cache = ();
 my %ipt_dump_cache = ();
 
-### config and commands hashes (constructed by readconf())
+### config and commands hashes (constructed by import_config())
 my %config = ();
 my %cmds   = ();
 
@@ -441,9 +447,13 @@ Getopt::Long::Configure('no_ignore_case');
 ### chains to the fwsnort shell script
 &ipt_add_chains();
 
-### add any ignore rules to each fwsnort chain by using
-### the RETURN target
-&ipt_ignore_rules();
+### add any WHITELIST rules to the main fwsnort chains
+### with the RETURN target
+&ipt_whitelist();
+
+### add any BLACKLIST rules to the main fwsnort chains
+### with the DROP or REJECT targets
+&ipt_blacklist();
 
 ### add jump rules for established tcp connections to
 ### the fwsnort state tracking chains
@@ -1645,15 +1655,21 @@ sub ipt_add_rule() {
     return;
 }
 
-sub ipt_ignore_rules() {
-    my $ignore_aref = &expand_addresses($config{'IGNORE_ADDR'});
+sub ipt_whitelist() {
+    my @whitelist_addrs = ();
 
-    return unless $#$ignore_aref >= 0;
+    for my $whitelist_line (@{$config{'WHITELIST'}}) {
+        for my $addr (@{&expand_addresses($whitelist_line)}) {
+            push @whitelist_addrs, $addr;
+        }
+    }
+
+    return unless $#whitelist_addrs >= 0;
 
     push @ipt_script_lines, "\n###\n############ Add IP/network " .
-        "ignore rules. ############\n###";
+        "WHITELIST rules. ############\n###";
 
-    for my $addr (@$ignore_aref) {
+    for my $addr (@whitelist_addrs) {
         for my $chain (keys %process_chains) {
             next unless $process_chains{$chain};
 
@@ -1661,13 +1677,77 @@ sub ipt_ignore_rules() {
                 push @ipt_script_lines, "\$IPTABLES -A " .
                     qq|$config{"FWSNORT_$chain"} -s $addr -j RETURN|;
             }
-            if ($chain eq 'OUTPUT') {
+            if ($chain eq 'OUTPUT' or $chain eq 'FORWARD') {
                 push @ipt_script_lines, "\$IPTABLES -A " .
                     qq|$config{"FWSNORT_$chain"} -d $addr -j RETURN|;
             }
-            if ($chain eq 'FORWARD') {
-                push @ipt_script_lines, "\$IPTABLES -A " .
-                    qq|$config{"FWSNORT_$chain"} -d $addr -j RETURN|;
+        }
+    }
+    return;
+}
+
+sub ipt_blacklist() {
+
+    my $printed_intro = 0;
+
+    for my $blacklist_line (@{$config{'BLACKLIST'}}) {
+
+        my @blacklist_addrs = ();
+        my $target = 'DROP';  ### default
+
+        if ($blacklist_line =~ /\s+REJECT/) {
+            $target = 'REJECT';
+        }
+
+        for my $addr (@{&expand_addresses($blacklist_line)}) {
+            push @blacklist_addrs, $addr;
+        }
+
+        return unless $#blacklist_addrs >= 0;
+
+        unless ($printed_intro) {
+            push @ipt_script_lines, "\n###\n############ Add IP/network " .
+                "BLACKLIST rules. ############\n###";
+            $printed_intro = 1;
+        }
+
+        for my $addr (@blacklist_addrs) {
+            for my $chain (keys %process_chains) {
+                next unless $process_chains{$chain};
+
+                if ($target eq 'DROP') {
+                    if ($chain eq 'INPUT' or $chain eq 'FORWARD') {
+                        push @ipt_script_lines, "\$IPTABLES -A " .
+                            qq|$config{"FWSNORT_$chain"} -s $addr -j DROP|;
+                    }
+                    if ($chain eq 'OUTPUT' or $chain eq 'FORWARD') {
+                        push @ipt_script_lines, "\$IPTABLES -A " .
+                            qq|$config{"FWSNORT_$chain"} -d $addr -j DROP|;
+                    }
+                } else {
+                    if ($chain eq 'INPUT' or $chain eq 'FORWARD') {
+                        push @ipt_script_lines, "\$IPTABLES -A " .
+                            qq|$config{"FWSNORT_$chain"} -s $addr -p tcp | .
+                            qq|-j REJECT --reject-with tcp-reset|;
+                        push @ipt_script_lines, "\$IPTABLES -A " .
+                            qq|$config{"FWSNORT_$chain"} -s $addr -p udp | .
+                            qq|-j REJECT --reject-with icmp-port-unreachable|;
+                        push @ipt_script_lines, "\$IPTABLES -A " .
+                            qq|$config{"FWSNORT_$chain"} -s $addr -p icmp | .
+                            qq|-j REJECT --reject-with icmp-host-unreachable|;
+                    }
+                    if ($chain eq 'OUTPUT' or $chain eq 'FORWARD') {
+                        push @ipt_script_lines, "\$IPTABLES -A " .
+                            qq|$config{"FWSNORT_$chain"} -d $addr -p tcp | .
+                            qq|-j REJECT --reject-with tcp-reset|;
+                        push @ipt_script_lines, "\$IPTABLES -A " .
+                            qq|$config{"FWSNORT_$chain"} -d $addr -p udp | .
+                            qq|-j REJECT --reject-with icmp-port-unreachable|;
+                        push @ipt_script_lines, "\$IPTABLES -A " .
+                            qq|$config{"FWSNORT_$chain"} -d $addr -p icmp | .
+                            qq|-j REJECT --reject-with icmp-host-unreachable|;
+                    }
+                }
             }
         }
     }
@@ -1832,7 +1912,7 @@ sub check_type() {
     return;
 }
 
-sub readconf() {
+sub import_config() {
     open C, "< $fwsnort_conf" or die $!;
     my @lines = <C>;
     close C;
@@ -1850,9 +1930,13 @@ sub readconf() {
             die "[*] $fwsnort_conf: Variable \"$var\" is set to\n",
                 "    _CHANGEME_ at line $l_ctr.  Edit $fwsnort_conf.\n"
                 if $val eq '_CHANGEME_';
-            ### may have already been defined in existing snort.conf
-            ### file if --snort-conf was given.
-            $config{$var} = $val unless defined $config{$var};
+            if (defined $multi_line_vars{$var}) {
+                push @{$config{$var}}, $val;
+            } else {
+                ### may have already been defined in existing snort.conf
+                ### file if --snort-conf was given.
+                $config{$var} = $val unless defined $config{$var};
+            }
         }
     }
     return;
@@ -1909,7 +1993,7 @@ sub fwsnort_init() {
     $| = 1;
 
     ### read in configuration info from the config file
-    &readconf();
+    &import_config();
 
     ### make sure the commands are where the
     ### config file says they are
@@ -2082,7 +2166,7 @@ sub required_vars() {
     my @required_vars = qw(
         HOME_NET EXTERNAL_NET HTTP_SERVERS SMTP_SERVERS DNS_SERVERS
         SQL_SERVERS TELNET_SERVERS AIM_SERVERS HTTP_PORTS SHELLCODE_PORTS
-        ORACLE_PORTS IGNORE_ADDR AVG_IP_HEADER_LEN AVG_TCP_HEADER_LEN
+        ORACLE_PORTS WHITELIST BLACKLIST AVG_IP_HEADER_LEN AVG_TCP_HEADER_LEN
         MAX_FRAME_LEN FWSNORT_INPUT FWSNORT_INPUT_ESTAB FWSNORT_OUTPUT
         FWSNORT_OUTPUT_ESTAB FWSNORT_FORWARD FWSNORT_FORWARD_ESTAB
     );
