@@ -33,7 +33,6 @@
 #     way we remove them from iptables rulesets in fwsnort (we remove rules
 #     from an iptables ruleset if the iptables policy will not allow such
 #     traffic through in the first place).
-#   - fwsnort.sh generation timestamp.
 #   - New option: --ipt-mark.
 #
 # Snort Rule Options:
@@ -1764,8 +1763,9 @@ sub ipt_hdr() {
         "page or the documentation";
     push @ipt_script_lines, "#           available at " .
         "http://www.cipherdyne.org/fwsnort/";
-    push @ipt_script_lines, "#\n# Generated with: fwsnort @argv_cp";
-    push @ipt_script_lines, "#\n# Generated on host: " . hostname();
+    push @ipt_script_lines, "#\n# Generated with:     fwsnort @argv_cp";
+    push @ipt_script_lines, "# Generated on host:  " . hostname();
+    push @ipt_script_lines, "# Generated at:       " . localtime();
     push @ipt_script_lines, "#\n# Author:  Michael Rash <mbr\@cipherdyne.org>";
     push @ipt_script_lines, "#\n# Version: $version (file revision: $rev_num)";
     push @ipt_script_lines, "#";
