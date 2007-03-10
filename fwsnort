@@ -231,7 +231,7 @@ my %snort_opts = (
 #        'depth'        => '[\s;]depth:\s*\d+\s*;',
 
         ### the following fields get logged by iptables but
-        ### we cannot filter them directly except with, the
+        ### we cannot filter them directly except with the
         ### Netfilter u32 module.  Functionality is being built
         ### into psad to generate alerts based on these Snort
         ### options.
@@ -328,6 +328,8 @@ my $ipt_restrict_intf = '';
 my $no_exclude_loopback = 0;
 my $no_ipt_comments = 0;
 my $no_ipt_rule_nums = 0;
+my $exclude_re = '';
+my $include_re = '';
 
 ### default to processing these filter chains
 my %process_chains = (
@@ -364,6 +366,10 @@ Getopt::Long::Configure('no_ignore_case');
     'include-type=s' => \$rules_types,  # Process this type of snort rule
                                         # (e.g. "ddos")
     'exclude-type=s' => \$exclude_types,# Exclude specified types (e.g. "ddos").
+    'include-regex=s' => \$include_re,  # Include only those signatures that
+                                        # match the specified regex.
+    'exclude-regex=s' => \$exclude_re,  # Exclude those signatures that
+                                        # match the specified regex.
     'snort-rdir=s'   => \$rules_dir,    # Manually specify the snort rules
                                         # directory.
     'no-addresses'   => \$no_addr_check, # Don't check local ifconfig output.
@@ -543,6 +549,16 @@ sub parse_snort_rules() {
                     or $rule =~ /^\s*log/) {
                 next RULE;
             }
+
+            ### regex filters
+            if ($exclude_re) {
+                next RULE if $rule =~ m|$exclude_re|;
+            }
+
+            if ($include_re) {
+                next RULE unless $rule =~ m|$include_re|;
+            }
+
             $rule_num++;  ### keep track of the abs num of rules
             $sabs_num++;
 
@@ -2039,6 +2055,10 @@ sub handle_cmd_line() {
             $restrict_interfaces{$intf} = '';
         }
     }
+
+    $exclude_re = qr|$exclude_re| if $exclude_re;
+    $include_re = qr|$include_re| if $include_re;
+
     return;
 }
 
@@ -2487,6 +2507,10 @@ Options:
     --exclude-type=<type>     - Exclude processing of Snort rules of
                                 type <type> (e.g. "ddos" or "backdoor").
                                 <type> can be a comma separated list.
+    --include-regex=<regex>   - Include only those signatures that
+                                match the specified regex.
+    --exclude-regex=<regex>   - Exclude all Snort signatures that
+                                match the specified regex.
     -c   --config=<config>    - Use <config> instead of the normal
                                 config file located at
                                 $fwsnort_conf
