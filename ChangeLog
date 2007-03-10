@@ -21,6 +21,8 @@ fwsnort-0.9.0 (03//2007):
       instantiated with either the DROP or REJECT targets.  The syntax for the
       BLACKLIST variable is "BLACKLIST  <ip or network>  <target>", where
       "target" is either "DROP" or "REJECT".
+    - Added -F and -L command line arguments to flush and list iptables rules.
+      This is similar to the iptables command line args of the same names.
 
 fwsnort-0.8.2 (02/17/2007):
     - Updated to newer IPTables::Parse module that uses the array of hash
