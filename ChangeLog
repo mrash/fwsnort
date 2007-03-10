@@ -7,6 +7,11 @@ fwsnort-0.9.0 (03//2007):
       the fwsnort chains.  This is useful to easily know which iptables rule
       is being triggered by network traffic (so it can be disabled if
       necessary).  This can be disabled with --no-ipt-rule-nums.
+    - Added the --include-regex and --exclude-regex command line arguments.
+      These arguments allow rules to be included/excluded based on a regular
+      expression supplied on the command line.
+    - Updated to include the original Snort rule as a comment within the
+      fwsnort.sh script without having to use --verbose.
 
 fwsnort-0.8.2 (02/17/2007):
     - Updated to newer IPTables::Parse module that uses the array of hash
