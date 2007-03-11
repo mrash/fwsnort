@@ -231,8 +231,8 @@ my %snort_opts = (
 
         ### the following fields get logged by iptables but
         ### we cannot filter them directly except with the
-        ### Netfilter u32 module.  Functionality is being built
-        ### into psad to generate alerts based on these Snort
+        ### Netfilter u32 module.  Functionality has been built
+        ### into psad to generate alerts for most of these Snort
         ### options.
         'id'       => '[\s;]id:\s*(\d+)\s*;',
         'seq'      => '[\s;]seq:\s*(\d+)\s*;',  ### --log-tcp-sequence
