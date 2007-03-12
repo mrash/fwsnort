@@ -28,6 +28,13 @@ fwsnort-0.9.0 (03//2007):
       HOME_NET.  After all the HOME_NET variable may contain an internal
       network but omit the IP assigned to an external interface on the
       firewall.
+    - Added "--log-ip-options" and "--log-tcp-options" to fwsnort LOG rules by
+      default (in the generated fwsnort.sh script).  This can be disabled with
+      --no-log-ip-opts and --no-log-tcp-opts arguments on the fwsnort command
+      line.
+    - Added the ability to include --log-tcp-sequence to LOG rules in
+      fwsnort.sh with a new argument --ipt-log-tcp-seq on the fwsnort command
+      line.
 
 fwsnort-0.8.2 (02/17/2007):
     - Updated to newer IPTables::Parse module that uses the array of hash

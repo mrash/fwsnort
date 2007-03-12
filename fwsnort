@@ -327,14 +327,17 @@ my $exclude_types  = '';
 my $snort_type     = '';
 my $ulog_nlgroup   = 1;
 my $ulog_mode      = 0;
+my $exclude_re     = '';
+my $include_re     = '';
 my $no_ipt_conntrack  = 0;
 my $snort_conf_file   = '';
 my $ipt_restrict_intf = '';
-my $no_exclude_loopback = 0;
-my $no_ipt_comments = 0;
+my $no_ipt_comments  = 0;
 my $no_ipt_rule_nums = 0;
-my $exclude_re = '';
-my $include_re = '';
+my $no_exclude_loopback = 0;
+my $no_ipt_log_ip_opts  = 0;
+my $no_ipt_log_tcp_opts = 0;
+my $ipt_log_tcp_seq     = 0;
 
 ### default to processing these filter chains
 my %process_chains = (
@@ -359,6 +362,7 @@ Getopt::Long::Configure('no_ignore_case');
     'ipt-reject'     => \$ipt_reject,   # Add iptables REJECT rules.
     'ipt-script=s'   => \$ipt_script,   # Manually specify the path to the
                                         # generated iptables script.
+    'ipt-log-tcp-seq' => \$ipt_log_tcp_seq, # Log TCP seq/ack values.
     'ipt-flush'      => \$ipt_flush,    # Flush any existing fwsnort chains.
     'Flush'          => \$ipt_flush,    # Synonym for --ipt-flush
     'ipt-list'       => \$ipt_list,     # List any existing fwsnort chains.
@@ -399,6 +403,8 @@ Getopt::Long::Configure('no_ignore_case');
     'no-ipt-rule-nums' => \$no_ipt_rule_nums, # Exclude rule numbers from
                                               # logging prefixes.
     'no-exclude-lo'  => \$no_exclude_loopback, # include loopback interface
+    'no-log-ip-opts' => \$no_ipt_log_ip_opts, # Don't log IP options
+    'no-log-tcp-opts' => \$no_ipt_log_tcp_opts, # Don't log TCP options
     'restrict-intf=s' => \$ipt_restrict_intf, # Restrict iptables rules to an
                                         # individual interface (supports a
                                         # comma separate list).
@@ -1571,7 +1577,13 @@ sub ipt_build_opts() {
         if ($hdr_href->{'action'} eq 'log' or $ulog_mode) {
             $log_target .= qq|ULOG --ulog-nlgroup $ulog_nlgroup --ulog-prefix "|;
         } else {
-            $log_target .= qq|LOG --log-prefix "|;
+            $log_target .= 'LOG ';
+            $log_target .= '--log-ip-options ' unless $no_ipt_log_ip_opts;
+            if ($hdr_href->{'proto'} eq 'tcp') {
+                $log_target .= '--log-tcp-options ' unless $no_ipt_log_tcp_opts;
+                $log_target .= '--log-tcp-sequence ' if $ipt_log_tcp_seq;
+            }
+            $log_target .= qq|--log-prefix "|;
         }
 
         ### increment chain counter and add in if necessary
@@ -2571,6 +2583,8 @@ Options:
     --ipt-flush               - Flush all rules in fwsnort chains.
     --Flush                   - Synonym for --ipt-flush.
     --ipt-file=<file>         - Read iptables policy from a file.
+    --ipt-log-tcp-seq         - Add the --log-tcp-sequence iptables
+                                command line argument to LOG rules.
     --snort-sid=<sid>         - Generate an equivalent iptables rule
                                 for the specific snort id <sid> (also
                                 supports a comma separate list of sids.)
@@ -2597,6 +2611,10 @@ Options:
     --no-ipt-INPUT            - Exclude INPUT chain processing.
     --no-ipt-OUTPUT           - Exclude OUTPUT chain processing.
     --no-ipt-FORWARD          - Exclude FORWARD chain processing.
+    --no-log-ip-opts          - Do not add --log-ip-options to LOG
+                                rules.
+    --no-log-tcp-opts         - Do not add --log-tcp-options to LOG
+                                rules.
     --no-addresses            - Do not look at addresses assigned to
                                 local interfaces (useful for running
                                 fwsnort on a bridge).
