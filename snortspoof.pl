@@ -12,7 +12,7 @@
 #
 # Author: Michael Rash <mbr@cipherdyne.org>
 #
-# Copyright (C) 2003-2005 Michael Rash (mbr@cipherdyne.org)
+# Copyright (C) 2003-2007 Michael Rash (mbr@cipherdyne.org)
 #
 # License (GNU Public License):
 #
