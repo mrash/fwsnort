@@ -1206,11 +1206,14 @@ sub ipt_build() {
         }
     }
 
+    my $add_snort_comment = 1;
     for my $chain (keys %process_chains) {
+
         next unless $process_chains{$chain} and $process_rules{$chain};
 
         ### build iptables INPUT rules
         for my $src_dst (@{$process_rules{$chain}}) {
+
             my $rule = "\$IPTABLES -A ";
 
             ### see if we can jump to the ESTABLISHED inspection chain.
@@ -1223,14 +1226,31 @@ sub ipt_build() {
             ### append interface restriction if necessary
             if ($src_dst =~ m|127\.0\.0\.\d/|) {
                 if ($chain eq 'INPUT' or $chain eq 'FORWARD') {
-                    $rule .= " -i ! lo";
+                    $rule .= ' -i ! lo';
                 } elsif ($chain eq 'OUTPUT') {
-                    $rule .= " -o ! lo";
+                    $rule .= ' -o ! lo';
                 }
             }
 
             ### append source and destination criteria
-            $rule .= " $src_dst" if $src_dst;
+            if ($src_dst) {
+                if ($chain eq 'FORWARD') {
+                    $rule .= " $src_dst";
+                } elsif ($chain eq 'INPUT') {
+                    ### we always treat the INPUT chain as part of the HOME_NET;
+                    ### the system running iptables may have an interface on the
+                    ### external network and hence may not be part of the HOME_NET
+                    ### as defined in the fwsnort.conf file so we don't necessarily
+                    ### append the IP criteria
+                    if ($src_dst ne "$ipt_hdr_opts{'dst'} $config{'HOME_NET'}") {
+                        $rule .= " $src_dst";
+                    }
+                } elsif ($chain eq 'OUTPUT') {
+                    if ($src_dst ne "$ipt_hdr_opts{'src'} $config{'HOME_NET'}") {
+                        $rule .= " $src_dst";
+                    }
+                }
+            }
 
             my $rv = &ipt_build_rule(
                 $chain,
@@ -1238,10 +1258,12 @@ sub ipt_build() {
                 $snort_hdr_href,
                 $snort_opts_href,
                 $orig_snort_rule,
-                $flow_established
+                $flow_established,
+                $add_snort_comment
             );
             if ($rv) {
-                $found_rule = 1;
+                $found_rule        = 1;
+                $add_snort_comment = 0;
                 $num_rules++;
             }
         }
@@ -1300,7 +1322,7 @@ sub get_local_addrs() {
 
 sub ipt_build_rule() {
     my ($chain, $rule, $hdr_href, $opts_href,
-        $orig_snort_rule, $flow_logging_prefix) = @_;
+        $orig_snort_rule, $flow_logging_prefix, $add_snort_comment) = @_;
 
     ### $chain is used only to see whether or not we need to add the
     ### rule to the iptables script based on whether the built-in chain
@@ -1341,14 +1363,14 @@ sub ipt_build_rule() {
         $rule .= " $ipt_hdr_opts{'dport'} $hdr_href->{'dport'}";
     }
 
-    &ipt_build_opts($rule, $hdr_href, $opts_href,
-            $orig_snort_rule, $flow_logging_prefix, $chain);
+    &ipt_build_opts($rule, $hdr_href, $opts_href, $orig_snort_rule,
+        $flow_logging_prefix, $chain, $add_snort_comment);
     return 1;
 }
 
 sub ipt_build_opts() {
     my ($rule, $hdr_href, $opts_href, $orig_snort_rule,
-            $flow_logging_prefix, $chain) = @_;
+            $flow_logging_prefix, $chain, $add_snort_comment) = @_;
 
     ### append tcp flags
     if (defined $opts_href->{'flags'}) {
@@ -1581,13 +1603,13 @@ sub ipt_build_opts() {
 
     ### write the rule out to the iptables script
     &ipt_add_rule($hdr_href, $opts_href, $orig_snort_rule,
-        $rule, $log_target, "### $comment");
+        $rule, $log_target, "### $comment", $add_snort_comment);
     return;
 }
 
 sub ipt_add_rule() {
     my ($hdr_href, $opts_href, $orig_snort_rule, $rule_base,
-        $log_target, $comment) = @_;
+        $log_target, $comment, $add_snort_comment) = @_;
 
     my $action_rule = '';
     if ($hdr_href->{'proto'} eq 'tcp') {
@@ -1646,7 +1668,7 @@ sub ipt_add_rule() {
     if ($verbose) {
         push @ipt_script_lines, qq|\$ECHO "[+] rule $ipt_rule_ctr"|;
     }
-    push @ipt_script_lines, "### $orig_snort_rule";
+    push @ipt_script_lines, "\n### $orig_snort_rule" if $add_snort_comment;
     if ($hdr_href->{'action'} ne 'pass') {
         push @ipt_script_lines, $log_rule unless $no_ipt_log;
     }

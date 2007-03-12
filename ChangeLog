@@ -23,6 +23,11 @@ fwsnort-0.9.0 (03//2007):
       "target" is either "DROP" or "REJECT".
     - Added -F and -L command line arguments to flush and list iptables rules.
       This is similar to the iptables command line args of the same names.
+    - Bugfix to ensure that traffic directed into the INPUT or coming from the
+      OUTPUT chains is treated as going toward or originating from the
+      HOME_NET.  After all the HOME_NET variable may contain an internal
+      network but omit the IP assigned to an external interface on the
+      firewall.
 
 fwsnort-0.8.2 (02/17/2007):
     - Updated to newer IPTables::Parse module that uses the array of hash
