@@ -1837,11 +1837,13 @@ sub ipt_jump_chain() {
                 next unless $process_chains{$chain};
 
                 if ($chain eq 'INPUT' or $chain eq 'FORWARD') {
-                    push @ipt_script_lines, "\$IPTABLES -I $chain 1 -i " .
+                    push @ipt_script_lines, "\$IPTABLES -I $chain " .
+                        qq|$config{"FWSNORT_${chain}_JUMP"} -i | .
                         qq|$intf -j $config{"FWSNORT_$chain"}|;
                 } elsif ($chain eq 'OUTPUT') {
-                    push @ipt_script_lines, "\$IPTABLES -I $chain 1 -o " .
-                        qq|$intf -j $config{"FWSNORT_$chain"}|;
+                    push @ipt_script_lines, "\$IPTABLES -I $chain " .
+                        qq|$config{'FWSNORT_OUTPUT_JUMP'} -o | .
+                        qq|$intf -j $config{'FWSNORT_OUTPUT'}|;
                 }
             }
         }
@@ -1850,15 +1852,18 @@ sub ipt_jump_chain() {
             next unless $process_chains{$chain};
 
             if ($no_exclude_loopback) {
-                push @ipt_script_lines, "\$IPTABLES -I $chain 1 " .
-                     qq|-j $config{"FWSNORT_$chain"}|;
+                push @ipt_script_lines, "\$IPTABLES -I $chain " .
+                    qq|$config{"FWSNORT_${chain}_JUMP"} | .
+                    qq|-j $config{"FWSNORT_$chain"}|;
             } else {
                 if ($chain eq 'INPUT' or $chain eq 'FORWARD') {
-                    push @ipt_script_lines, "\$IPTABLES -I $chain 1 -i ! lo " .
-                         qq|-j $config{"FWSNORT_$chain"}|;
+                    push @ipt_script_lines, "\$IPTABLES -I $chain " .
+                        qq|$config{"FWSNORT_${chain}_JUMP"} -i ! lo | .
+                        qq|-j $config{"FWSNORT_$chain"}|;
                 } elsif ($chain eq 'OUTPUT') {
-                    push @ipt_script_lines, "\$IPTABLES -I $chain 1 -o ! lo " .
-                         qq|-j $config{"FWSNORT_$chain"}|;
+                    push @ipt_script_lines, "\$IPTABLES -I $chain " .
+                        qq|$config{"FWSNORT_${chain}_JUMP"} -o ! lo | .
+                        qq|-j $config{"FWSNORT_$chain"}|;
                 }
             }
         }
@@ -2206,6 +2211,7 @@ sub required_vars() {
         ORACLE_PORTS WHITELIST BLACKLIST AVG_IP_HEADER_LEN AVG_TCP_HEADER_LEN
         MAX_FRAME_LEN FWSNORT_INPUT FWSNORT_INPUT_ESTAB FWSNORT_OUTPUT
         FWSNORT_OUTPUT_ESTAB FWSNORT_FORWARD FWSNORT_FORWARD_ESTAB
+        FWSNORT_INPUT_JUMP FWSNORT_OUTPUT_JUMP FWSNORT_FORWARD_JUMP
     );
     for my $var (@required_vars) {
         die "[*] Variable $var not defined in $fwsnort_conf. Exiting.\n"
@@ -2319,7 +2325,8 @@ sub ipt_test() {
     if ($kernel_ver ne '2.4') {
         ### default to include "--algo bm"
         $rv = (system "$cmds{'iptables'} -I INPUT 1 -s " .
-            qq|127.0.0.2 -m string --string "test" --algo bm -j LOG 2> /dev/null|) >> 8;
+            qq|127.0.0.2 -m string --string "test" | .
+            qq|--algo bm -j LOG 2> /dev/null|) >> 8;
     } else {
         $rv = (system "$cmds{'iptables'} -I INPUT 1 -s " .
             qq|127.0.0.2 -m string --string "test" -j LOG 2> /dev/null|) >> 8;
