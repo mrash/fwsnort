@@ -1565,22 +1565,20 @@ sub ipt_build_opts() {
 
     ### build up the logging prefix and comment match
     if (defined $opts_href->{'sid'}) {
-        if ($no_ipt_comments) {
-            $log_target = ' -j ';
-        } else {
+        unless ($no_ipt_comments) {
             ### add the Snort msg (and other) fields to the iptables rule
             ### with the 'comment' match (which can handle up to 256 chars)
             $comment =~ s|\"||g;
             $comment =~ s|/\*||g;
             $comment =~ s|\*/||g;
             if (length($comment) < 256) {
-                $log_target = qq| -m comment --comment "$comment" -j |;
+                $log_target = qq| -m comment --comment "$comment"|;
             }
         }
         if ($hdr_href->{'action'} eq 'log' or $ulog_mode) {
-            $log_target .= qq|ULOG --ulog-nlgroup $ulog_nlgroup --ulog-prefix "|;
+            $log_target .= qq| -j ULOG --ulog-nlgroup $ulog_nlgroup --ulog-prefix "|;
         } else {
-            $log_target .= 'LOG ';
+            $log_target .= ' -j LOG ';
             $log_target .= '--log-ip-options ' unless $no_ipt_log_ip_opts;
             if ($hdr_href->{'proto'} eq 'tcp') {
                 $log_target .= '--log-tcp-options ' unless $no_ipt_log_tcp_opts;
