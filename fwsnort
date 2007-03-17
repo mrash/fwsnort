@@ -1628,9 +1628,16 @@ sub build_content_matches() {
     my ($opts_href, $content_ar, $offsets_hr) = @_;
 
     my $ipt_content_criteria = '';
-    my $content_match_ctr = 0;
 
-    for my $content_str (@$content_ar) {
+    for (my $i=0; $i <= $#$content_ar; $i++) {
+
+        my $content_str = $content_ar->[$i];
+
+        my $neg_match = 0;
+        if ($content_str =~ /\s*\!\s*"/) {
+            $content_str =~ s/\s*\!\s*"//;
+            $neg_match = 1;
+        }
 
         $content_str =~ s/`/\\`/g;
         $content_str =~ s/\x24/\x5c\x24/g;
@@ -1640,13 +1647,25 @@ sub build_content_matches() {
 
         if ($content_str =~ /\|.+\|/) {
             ### there is hex data in the content
-            $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
-                {'content'}{'iptopt'} . ' ' .
-                qq{--hex-string "$content_str"};
+            if ($neg_match) {
+                $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
+                    {'content'}{'iptopt'} . ' ' .
+                    qq{--hex-string ! "$content_str"};
+            } else {
+                $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
+                    {'content'}{'iptopt'} . ' ' .
+                    qq{--hex-string "$content_str"};
+            }
         } else {
-            $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
-                {'content'}{'iptopt'} . ' ' .
-                qq{--string "$content_str"};
+            if ($neg_match) {
+                $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
+                    {'content'}{'iptopt'} . ' ' .
+                    qq{--string ! "$content_str"};
+            } else {
+                $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
+                    {'content'}{'iptopt'} . ' ' .
+                    qq{--string "$content_str"};
+            }
         }
 
         if (defined $opts_href->{'replace'}) {
@@ -1665,21 +1684,21 @@ sub build_content_matches() {
 
             ### see if we have any offset, depth, distance, or within
             ### criteria
-            if (defined $offsets_hr->{$content_match_ctr}) {
+            if (defined $offsets_hr->{$i}) {
 
                 my $offset   = -1;
                 my $depth    = -1;
                 my $distance = -1;
                 my $within   = -1;
 
-                $offset = $offsets_hr->{$content_match_ctr}->{'offset'}
-                    if defined $offsets_hr->{$content_match_ctr}->{'offset'};
-                $depth = $offsets_hr->{$content_match_ctr}->{'depth'}
-                    if defined $offsets_hr->{$content_match_ctr}->{'depth'};
-                $distance = $offsets_hr->{$content_match_ctr}->{'distance'}
-                    if defined $offsets_hr->{$content_match_ctr}->{'distance'};
-                $within = $offsets_hr->{$content_match_ctr}->{'within'}
-                    if defined $offsets_hr->{$content_match_ctr}->{'within'};
+                $offset = $offsets_hr->{$i}->{'offset'}
+                    if defined $offsets_hr->{$i}->{'offset'};
+                $depth = $offsets_hr->{$i}->{'depth'}
+                    if defined $offsets_hr->{$i}->{'depth'};
+                $distance = $offsets_hr->{$i}->{'distance'}
+                    if defined $offsets_hr->{$i}->{'distance'};
+                $within = $offsets_hr->{$i}->{'within'}
+                    if defined $offsets_hr->{$i}->{'within'};
 
                 if ($offset > -1) {
                     $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
@@ -1696,7 +1715,6 @@ sub build_content_matches() {
                 }
             }
         }
-        $content_match_ctr++;
     }
     return $ipt_content_criteria;
 }
