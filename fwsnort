@@ -523,7 +523,7 @@ push @ipt_script_lines, "\n### EOF ###";
 chmod 0500, $ipt_script;
 
 print "\n[+] Logfile:         $logfile\n",
-    "[+] Iptables script: $ipt_script\n",
+    "[+] iptables script: $ipt_script\n",
     "=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=",
     "-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=\n";
 
@@ -2368,7 +2368,7 @@ sub ipt_test() {
     if ($rv == 0) {
         system "$cmds{'iptables'} -D INPUT 1";
     } else {
-        die "[*] Iptables has not been compiled with logging support.  ",
+        die "[*] iptables has not been compiled with logging support.  ",
             "If you want to\n    have fwsnort generate an iptables script ",
             "    anyway then specify the\n    --no-ipt-test option. ",
             "Exiting.\n"
