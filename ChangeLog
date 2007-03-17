@@ -8,7 +8,8 @@ fwsnort-0.9.0 (03//2007):
     - Added the ability to include the Snort "msg", "classtype", "reference",
       "priority", and "rev" fields in each iptables rule with the comment
       match.  This can be disabled with a new command line argument
-      --no-ipt-comments.
+      --no-ipt-comments.  The fwsnort version is also included within this
+      string.
     - Added the ability to include the iptables rule number for each rule in
       the fwsnort chains.  This is useful to easily know which iptables rule
       is being triggered by network traffic (so it can be disabled if
