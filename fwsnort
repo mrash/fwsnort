@@ -1701,6 +1701,19 @@ sub build_content_matches() {
                 if ($offset > -1) {
                     $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
                         {'offset'}{'iptopt'} . " $offset";
+                } elsif ($distance > -1) {  ### offset always trumps distance
+                    ### see if we need to increase the distance based on the
+                    ### length of the previous pattern match and offset
+                    if ($i > 0) {
+                        my $prev = $i-1;
+                        $distance += &get_content_len($content_ar->[$prev]);
+                        if (defined $offsets_hr->{$prev}
+                                and defined $offsets_hr->{$i}->{'offset'}) {
+                            $distance += $offsets_hr->{$i}->{'offset'};
+                        }
+                    }
+                    $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
+                        {'distance'}{'iptopt'} . " $distance";
                 }
                 if ($depth > -1) {
                     ### make sure there is room for the pattern
@@ -1710,6 +1723,12 @@ sub build_content_matches() {
 
                     $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
                         {'depth'}{'iptopt'} . " $depth";
+                } elsif ($within > -1) {  ### depth trumps within
+                    if ($i > 0) {
+                        $within += &get_content_len($content_ar->[$i-1]);
+                    }
+                    $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
+                        {'within'}{'iptopt'} . " $within";
                 }
             }
         }
