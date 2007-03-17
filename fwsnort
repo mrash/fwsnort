@@ -1796,10 +1796,10 @@ sub ipt_add_rule() {
     }
     my $log_rule = $rule_base . $log_target;
 
+    push @ipt_script_lines, "\n### $orig_snort_rule" if $add_snort_comment;
     if ($verbose) {
         push @ipt_script_lines, qq|\$ECHO "[+] rule $ipt_rule_ctr"|;
     }
-    push @ipt_script_lines, "\n### $orig_snort_rule" if $add_snort_comment;
     if ($hdr_href->{'action'} ne 'pass') {
         push @ipt_script_lines, $log_rule unless $no_ipt_log;
     }
