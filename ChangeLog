@@ -1,4 +1,10 @@
 fwsnort-0.9.0 (03//2007):
+    - Added support for multiple content matches since this is supported by
+      iptables.  This made a 10% increase in the fwsnort translation rate -
+      about 60% of all Snort-2.3.3 rules can be translated now.
+    - Added emulation for distance and within from previous content match
+      based on --from and --to (string match extension) and the length of
+      the previous pattern.
     - Added the ability to include the Snort "msg", "classtype", "reference",
       "priority", and "rev" fields in each iptables rule with the comment
       match.  This can be disabled with a new command line argument
