@@ -149,7 +149,23 @@ my %snort_opts = (
         },
         'depth' =>  {
             'iptopt' => '--to',
-            'regex' => '[\s;]depth:\s*(\d+)\s*;'
+            'regex'  => '[\s;]depth:\s*(\d+)\s*;'
+        },
+
+        ### technically, the "distance" and "within" criteria
+        ### are relative to the end of the previous pattern match,
+        ### so iptables cannot emulate these directly; an approximation
+        ### is made based on the on length of the previous pattern an
+        ### any "depth" or "offset" criteria for the previous pattern.
+        ### To disable signatures with "distance" and "within", just
+        ### use 
+        'distance'  => {
+            'iptopt' => '--from',
+            'regex'  => '[\s;]distance:\s*(\d+)\s*;'
+        },
+        'within' =>  {
+            'iptopt' => '--to',
+            'regex'  => '[\s;]within:\s*(\d+)\s*;'
         },
         'replace' => {  ### for Snort running in inline mode
             'iptopt' => '--replace-string',
@@ -221,8 +237,6 @@ my %snort_opts = (
         'rpc'          => '[\s;]rpc:\s*.*?\s*;',
         'byte_test'    => '[\s;]byte_test\s*.*?\s*;',
         'byte_jump'    => '[\s;]byte_jump\s*.*?\s*;',
-        'distance'     => '[\s;]distance:\s*\d+\s*;',
-        'within'       => '[\s;]within:\s*\d+\s*;',
         'window'       => '[\s;]window:\s*.*?\s*;',
         'flowbits'     => '[\s;]flowbits:\s*.*?\s*;',
         'rawbytes'     => '[\s;]rawbytes:\s*\S+\s*;',
@@ -608,21 +622,23 @@ sub parse_snort_rules() {
             }
 
             ### parse options portion of Snort rule
-            my $opts_href = &parse_rule_options($rule_options, $line_num);
-            unless ($opts_href) {
+            my ($parse_rv, $opts_href, $content_aref, $offsets_href)
+                    = &parse_rule_options($rule_options, $line_num);
+
+            unless ($parse_rv) {
                 $unsup_ctr++;
                 $tot_unsup_ctr++;
                 next RULE;
             }
-
             if ($include_sids) {
                 print "[+] Found sid: $opts_href->{'sid'} in $rfile\n";
             }
 
             ### construct the equivalent iptables rule and add it
             ### to $ipt_script
-            my ($ipt_rv, $num_rules) =
-                &ipt_build($hdr_href, $opts_href, $rule);
+            my ($ipt_rv, $num_rules) = &ipt_build($hdr_href,
+                    $opts_href, $content_aref, $offsets_href, $rule);
+
             if ($ipt_rv) {
                 $ipt_apply++;
                 $tot_ipt_apply++;
@@ -688,26 +704,27 @@ sub parse_snort_rules() {
 sub parse_rule_options() {
     my ($rule_options, $line_num) = @_;
 
-    ### tmp hash we will return
-    my %opts;
-
     my $sid;
+    my %opts    = ();
+    my @content = ();
+    my %offsets = ();
 
     ### get the sid here for logging purposes
     if ($rule_options =~ /$snort_opts{'logprefix'}{'sid'}/) {
         $sid = $1;
     } else {
-        return '';
+        return 0, \%opts, \@content, \%offsets;
     }
 
     if (%exclude_sids) {
-        return '' if defined $exclude_sids{$sid};
+        return 0, \%opts, \@content, \%offsets
+            if defined $exclude_sids{$sid};
     }
     if (%include_sids) {
         if (defined $include_sids{$sid}) {
             &logr("[+] matched sid:$sid: $rule_options");
         } else {
-            return '';
+            return 0, \%opts, \@content, \%offsets;
         }
     }
 
@@ -716,24 +733,42 @@ sub parse_rule_options() {
         if ($rule_options =~ /$snort_opts{'unsupported'}{$opt}/) {
             &logr("[-] SID: $sid  Unsupported option: \"$opt\" at " .
                 "line: $line_num.  Skipping rule.");
-            return '';
+            return 0, \%opts, \@content, \%offsets;
         }
     }
-    if ($rule_options =~ /content\s*:.*content\s*:/) {
-        &logr("[-] SID: $sid  Unsupported multiple content fields at " .
-            "line: $line_num.  Skipping rule.");
-        return '';
-    }
+
     if ($rule_options =~ /ip_proto\s*:.*ip_proto\s*:/) {
         &logr("[-] SID: $sid  Unsupported multiple ip_proto fields at " .
             "line: $line_num.  Skipping rule.");
-        return '';
+        return 0, \%opts, \@content, \%offsets;
     }
 
     for my $opt (keys %{$snort_opts{'filter'}}) {
         ### see if we match the option regex
         if ($rule_options =~ /$snort_opts{'filter'}{$opt}{'regex'}/) {
             $opts{$opt} = $1;
+        }
+    }
+
+    while ($rule_options =~ /(\w+):\s*(.*?)\s*;/g) {
+        my $opt = $1;
+        my $val = $2;
+        if ($opt eq 'content' or $opt eq 'uricontent') {
+            $val =~ s/^"//;
+            $val =~ s/"$//;
+            push @content, $val;
+        }
+        if ($opt eq 'offset') {
+            $offsets{$#content}{'offset'} = $val;
+        }
+        if ($opt eq 'depth') {
+            $offsets{$#content}{'depth'} = $val;
+        }
+        if ($opt eq 'within') {
+            $offsets{$#content}{'within'} = $val;
+        }
+        if ($opt eq 'distance') {
+            $offsets{$#content}{'distance'} = $val;
         }
     }
 
@@ -749,7 +784,7 @@ sub parse_rule_options() {
                 and not defined $snort_opts{'ignore'}{$option}) {
             &logr("[-] SID: $sid bad option: \"$option\" at line: $line_num " .
                 "-- $rule_options");
-            return '';
+            return 0, \%opts, \@content, \%offsets;
         }
     }
 
@@ -761,28 +796,30 @@ sub parse_rule_options() {
             and $opts{'ipopts'} ne 'any') {
         &logr("[-] SID: $sid  Unsupported ipopts field at " .
             "line: $line_num.  Skipping rule.");
-        return '';
+        return 0, \%opts, \@content, \%offsets;
     }
 
     if (defined $opts{'itype'}
             and ($opts{'itype'} =~ m|<| or $opts{'itype'} =~ m|>|)) {
         &logr("[-] SID: $sid  Unsupported range operator in itype field " .
             "line: $line_num.  Skipping rule.");
-        return '';
+        return 0, \%opts, \@content, \%offsets;
     }
     if (defined $opts{'icode'}
             and ($opts{'icode'} =~ m|<| or $opts{'icode'} =~ m|>|)) {
         &logr("[-] SID: $sid  Unsupported range operator in icode field " .
             "line: $line_num.  Skipping rule.");
-        return '';
+        return 0, \%opts, \@content, \%offsets;
     }
     if (defined $opts{'ip_proto'}
             and ($opts{'ip_proto'} =~ m|<| or $opts{'ip_proto'} =~ m|>|)) {
         &logr("[-] SID: $sid  Unsupported range operator in ip_proto field " .
             "line: $line_num.  Skipping rule.");
-        return '';
+        return 0, \%opts, \@content, \%offsets;
     }
-    return \%opts;
+
+    ### success
+    return 1, \%opts, \@content, \%offsets;
 }
 
 sub parse_rule_hdr() {
@@ -1113,7 +1150,8 @@ sub cache_ipt_policy() {
 }
 
 sub ipt_build() {
-    my ($snort_hdr_href, $snort_opts_href, $orig_snort_rule) = @_;
+    my ($snort_hdr_href, $snort_opts_href,
+            $content_aref, $offsets_href, $orig_snort_rule) = @_;
 
     my $found_rule = 0;
     my $num_rules  = 0;
@@ -1263,6 +1301,8 @@ sub ipt_build() {
                 $rule,
                 $snort_hdr_href,
                 $snort_opts_href,
+                $content_aref,
+                $offsets_href,
                 $orig_snort_rule,
                 $flow_established,
                 $add_snort_comment
@@ -1327,8 +1367,9 @@ sub get_local_addrs() {
 }
 
 sub ipt_build_rule() {
-    my ($chain, $rule, $hdr_href, $opts_href,
-        $orig_snort_rule, $flow_logging_prefix, $add_snort_comment) = @_;
+    my ($chain, $rule, $hdr_href, $opts_href, $content_aref,
+            $offsets_href, $orig_snort_rule, $flow_logging_prefix,
+            $add_snort_comment) = @_;
 
     ### $chain is used only to see whether or not we need to add the
     ### rule to the iptables script based on whether the built-in chain
@@ -1369,14 +1410,16 @@ sub ipt_build_rule() {
         $rule .= " $ipt_hdr_opts{'dport'} $hdr_href->{'dport'}";
     }
 
-    &ipt_build_opts($rule, $hdr_href, $opts_href, $orig_snort_rule,
-        $flow_logging_prefix, $chain, $add_snort_comment);
+    &ipt_build_opts($rule, $hdr_href, $opts_href, $content_aref,
+        $offsets_href, $orig_snort_rule, $flow_logging_prefix,
+        $chain, $add_snort_comment);
     return 1;
 }
 
 sub ipt_build_opts() {
-    my ($rule, $hdr_href, $opts_href, $orig_snort_rule,
-            $flow_logging_prefix, $chain, $add_snort_comment) = @_;
+    my ($rule, $hdr_href, $opts_href, $content_aref,
+            $offsets_href, $orig_snort_rule, $flow_logging_prefix,
+            $chain, $add_snort_comment) = @_;
 
     ### append tcp flags
     if (defined $opts_href->{'flags'}) {
@@ -1501,48 +1544,10 @@ sub ipt_build_opts() {
     }
 
     ### append snort content options
-    my $content = '';
-    if (defined $opts_href->{'uricontent'}) {
-        $content = $opts_href->{'uricontent'};
-    } elsif (defined $opts_href->{'content'}) {
-        $content = $opts_href->{'content'};
-    }
-    if ($content) {
-        $content =~ s/`/\\`/g;
-        $content =~ s/\x24/\x5c\x24/g;
-        if ($content =~ /\|.+\|/) {  ### there is hex data in the content
-            $rule .= " $snort_opts{'filter'}{'content'}{'iptopt'} " .
-                qq{--hex-string "$content"};
-        } else {
-            $rule .= " $snort_opts{'filter'}{'content'}{'iptopt'} " .
-                qq{--string "$content"};
-        }
+    my $ipt_content_criteria
+            = &build_content_matches($opts_href, $content_aref, $offsets_href);
 
-        if (defined $opts_href->{'replace'}) {
-            my $replace_str = $opts_href->{'replace'};
-            $replace_str =~ s/`/\\`/g;
-            if ($replace_str =~ /\|.+\|/) {  ### there is hex data in the content
-                $rule .= qq{ --replace-hex-string "$replace_str"};
-            } else {
-                $rule .= qq{ --replace-string "$replace_str"};
-            }
-        }
-        if ($kernel_ver ne '2.4') {
-            $rule .= ' --algo bm';
-            if (defined $opts_href->{'offset'}) {
-                $rule .= " $snort_opts{'filter'}{'offset'}{'iptopt'} " .
-                    "$opts_href->{'offset'}";
-            }
-            if (defined $opts_href->{'depth'}) {
-                my $depth = $opts_href->{'depth'};
-                $depth += $opts_href->{'offset'}
-                    if defined $opts_href->{'offset'};
-                $rule .= " $snort_opts{'filter'}{'depth'}{'iptopt'} " .
-                    $depth;
-            }
-        }
-    }
-
+    $rule .= $ipt_content_criteria if $ipt_content_criteria;
 
     ### print the rest of the logprefix snort options in a comment
     ### one line above the rule
@@ -1617,6 +1622,104 @@ sub ipt_build_opts() {
     &ipt_add_rule($hdr_href, $opts_href, $orig_snort_rule,
         $rule, $log_target, "### $comment", $add_snort_comment);
     return;
+}
+
+sub build_content_matches() {
+    my ($opts_href, $content_ar, $offsets_hr) = @_;
+
+    my $ipt_content_criteria = '';
+    my $content_match_ctr = 0;
+
+    for my $content_str (@$content_ar) {
+
+        $content_str =~ s/`/\\`/g;
+        $content_str =~ s/\x24/\x5c\x24/g;
+
+        ### handles length of hex blocks
+        my $content_len = &get_content_len($content_str);
+
+        if ($content_str =~ /\|.+\|/) {
+            ### there is hex data in the content
+            $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
+                {'content'}{'iptopt'} . ' ' .
+                qq{--hex-string "$content_str"};
+        } else {
+            $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
+                {'content'}{'iptopt'} . ' ' .
+                qq{--string "$content_str"};
+        }
+
+        if (defined $opts_href->{'replace'}) {
+            my $replace_str = $opts_href->{'replace'};
+            $replace_str =~ s/`/\\`/g;
+            if ($replace_str =~ /\|.+\|/) {  ### there is hex data in the content
+                $ipt_content_criteria
+                        .= qq{ --replace-hex-string "$replace_str"};
+            } else {
+                $ipt_content_criteria
+                        .= qq{ --replace-string "$replace_str"};
+            }
+        }
+        if ($kernel_ver ne '2.4') {
+            $ipt_content_criteria .= ' --algo bm';
+
+            ### see if we have any offset, depth, distance, or within
+            ### criteria
+            if (defined $offsets_hr->{$content_match_ctr}) {
+
+                my $offset   = -1;
+                my $depth    = -1;
+                my $distance = -1;
+                my $within   = -1;
+
+                $offset = $offsets_hr->{$content_match_ctr}->{'offset'}
+                    if defined $offsets_hr->{$content_match_ctr}->{'offset'};
+                $depth = $offsets_hr->{$content_match_ctr}->{'depth'}
+                    if defined $offsets_hr->{$content_match_ctr}->{'depth'};
+                $distance = $offsets_hr->{$content_match_ctr}->{'distance'}
+                    if defined $offsets_hr->{$content_match_ctr}->{'distance'};
+                $within = $offsets_hr->{$content_match_ctr}->{'within'}
+                    if defined $offsets_hr->{$content_match_ctr}->{'within'};
+
+                if ($offset > -1) {
+                    $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
+                        {'offset'}{'iptopt'} . " $offset";
+                }
+                if ($depth > -1) {
+                    ### make sure there is room for the pattern
+                    my $min_depth = $content_len;
+                    $min_depth += $offset if $offset > -1;
+                    $depth = $min_depth if $depth < $min_depth;
+
+                    $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
+                        {'depth'}{'iptopt'} . " $depth";
+                }
+            }
+        }
+        $content_match_ctr++;
+    }
+    return $ipt_content_criteria;
+}
+
+sub get_content_len() {
+    my $str = shift;
+    my $len = 0;
+    my $hex_mode = 0;
+    my @chars = split //, $str;
+    for (my $i=0; $i<=$#chars; $i++) {
+        if ($chars[$i] eq '|') {
+            $hex_mode == 0 ? ($hex_mode = 1) : ($hex_mode = 0);
+            next;
+        }
+        if ($hex_mode) {
+            next if $chars[$i] eq ' ';
+            $len++;
+            $i++;
+        } else {
+            $len++;
+        }
+    }
+    return $len;
 }
 
 sub ipt_add_rule() {
@@ -2072,23 +2175,22 @@ sub fwsnort_init() {
 
     if ($strict) {
         ### make the snort options parser very strict
-        $snort_opts{'unsupported'}{'uricontent'}
-            = $snort_opts{'filter'}{'uricontent'};
-        delete $snort_opts{'filter'}{'uricontent'};
-        if ($kernel_ver eq '2.4') {
-            $snort_opts{'unsupported'}{'offset'}
-                = $snort_opts{'ignore'}{'offset'};
-            delete $snort_opts{'ignore'}{'offset'};
-            $snort_opts{'unsupported'}{'depth'}
-                = $snort_opts{'ignore'}{'depth'};
-            delete $snort_opts{'ignore'}{'depth'};
+        for my $opt qw/uricontent distance within/ {
+            $snort_opts{'unsupported'}{$opt}
+                = $snort_opts{'filter'}{$opt};
+            delete $snort_opts{'filter'}{$opt};
         }
-        $snort_opts{'unsupported'}{'nocase'}
-            = $snort_opts{'ignore'}{'nocase'};
-        delete $snort_opts{'ignore'}{'nocase'};
-        $snort_opts{'unsupported'}{'threshold'}
-            = $snort_opts{'ignore'}{'threshold'};
-        delete $snort_opts{'ignore'}{'threshold'};
+        my @ignore = qw/nocase threshold/;
+
+        if ($kernel_ver eq '2.4') {
+            push @ignore, 'offset';
+            push @ignore, 'depth';
+        }
+        for my $opt (@ignore) {
+            $snort_opts{'unsupported'}{$opt}
+                = $snort_opts{'ignore'}{$opt};
+            delete $snort_opts{'ignore'}{$opt};
+        }
     }
     return;
 }
