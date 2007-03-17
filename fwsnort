@@ -750,25 +750,20 @@ sub parse_rule_options() {
         }
     }
 
-    while ($rule_options =~ /(\w+):\s*(.*?)\s*;\s/g) {
+    while ($rule_options =~ /(\w+):\s*(.*?)\s*;/g) {
         my $opt = $1;
         my $val = $2;
         if ($opt eq 'content' or $opt eq 'uricontent') {
+            return 0, \%opts, \@content, \%offsets
+                unless $val =~ /"$/;
             $val =~ s/^"//;
             $val =~ s/"$//;
             push @content, $val;
         }
-        if ($opt eq 'offset') {
-            $offsets{$#content}{'offset'} = $val;
-        }
-        if ($opt eq 'depth') {
-            $offsets{$#content}{'depth'} = $val;
-        }
-        if ($opt eq 'within') {
-            $offsets{$#content}{'within'} = $val;
-        }
-        if ($opt eq 'distance') {
-            $offsets{$#content}{'distance'} = $val;
+        for my $key qw/offset depth within distance/ {
+            if ($opt eq $key) {
+                $offsets{$#content}{$key} = $val;
+            }
         }
     }
 
@@ -1632,6 +1627,9 @@ sub build_content_matches() {
     for (my $i=0; $i <= $#$content_ar; $i++) {
 
         my $content_str = $content_ar->[$i];
+        if ($content_str =~ /\|.+?\|\|.+?\|/) {
+            $content_str =~ s/\|(.+?)\|\|(.+?)\|/|$1 $2|/g;
+        }
 
         my $neg_match = 0;
         if ($content_str =~ /\s*\!\s*"/) {
