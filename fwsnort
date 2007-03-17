@@ -1717,6 +1717,7 @@ sub build_content_matches() {
                     }
                     $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
                         {'distance'}{'iptopt'} . " $distance";
+                    $offset = $distance;
                 }
                 if ($depth > -1) {
                     ### make sure there is room for the pattern
@@ -1727,9 +1728,14 @@ sub build_content_matches() {
                     $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
                         {'depth'}{'iptopt'} . " $depth";
                 } elsif ($within > -1) {  ### depth trumps within
+                    ### the minimum within value must allow room for
+                    ### the current pattern as well as the previous one
+                    my $min_within = $content_len;
                     if ($i > 0) {
-                        $within += &get_content_len($content_ar->[$i-1]);
+                        $min_within += &get_content_len($content_ar->[$i-1]);
                     }
+                    $min_within += $offset if $offset > -1;
+                    $within = $min_within if $within < $min_within;
                     $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
                         {'within'}{'iptopt'} . " $within";
                 }
