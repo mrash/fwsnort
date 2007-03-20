@@ -1526,6 +1526,8 @@ alert tcp $HOME_NET !$HTTP_PORTS -> $EXTERNAL_NET 1639 (msg: "BLEEDING-EDGE WORM
 #  does a massive number of dns queries. This may be an extra way to identify infections
 alert udp !$SMTP_SERVERS any -> $DNS_SERVERS 53 (msg:"BLEEDING-EDGE POLICY Possible Spambot -- Host DNS MX Query High Count"; content: "|01 00|"; offset: 2; depth: 4; content: "|00 0f 00 01|"; distance: 8; threshold:type both, count 30, seconds 10, track by_src; classtype:bad-unknown; sid:2003330; rev:2;)
 
+alert udp $HOME_NET any -> any 53 (msg: "BLEEDING-EDGE Possible DNS Lookup for DNS Poisoning Domain 7sir7.com"; content:"|05|7sir7|03|com"; nocase; reference:url,isc.sans.org/diary.php?date=2005-04-07; classtype: misc-activity; sid:2001842; rev:3;)
+
 #Joel Esler
 #Getting old. disabling by default
 #alert udp $HOME_NET any -> $EXTERNAL_NET 53 (msg: "BLEEDING-EDGE VIRUS Beaconing DREMN Trojan"; content:"Xm"; nocase; offset: 10; pcre:"/(Xm(A|B)...a{21})/i"; reference:url,www.symantec.com/avcenter/venc/data/trojan.dremn.html; classtype: trojan-activity; sid: 2001911; rev:4; )
