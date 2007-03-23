@@ -1,5 +1,5 @@
 %define name fwsnort
-%define version 0.8.2
+%define version 0.9.0
 %define release 1
 %define fwsnortlibdir %_libdir/%name
 %define fwsnortlogdir /var/log/fwsnort
@@ -21,25 +21,25 @@ Requires: iptables
 #Prereq: rpm-helper
 
 %description
-fwsnort translates Snort rules into equivalent Netfilter rules and generates
+fwsnort translates Snort rules into equivalent iptables rules and generates
 a Bourne shell script that implements the resulting iptables commands. This
 ruleset allows network traffic that exhibits Snort signatures to be logged
-and/or dropped by Netfilter directly without putting any interface into
+and/or dropped by iptables directly without putting any interface into
 promiscuous mode or queuing packets from kernel to user space. In addition,
-fwsnort (optionally) uses the IPTables::Parse module to parse the Netfilter
+fwsnort (optionally) uses the IPTables::Parse module to parse the iptables
 ruleset on the machine to determine which Snort rules are applicable to the
-specific Netfilter policy.  After all, if Netfilter is blocking all inbound
+specific iptables policy.  After all, if iptables is blocking all inbound
 http traffic from external addresses, it is probably not of much use to try
 detecting inbound attacks against against tcp/80. By default fwsnort
-generates Netfilter rules that log Snort sid's with --log-prefix to klogd
+generates iptables rules that log Snort sid's with --log-prefix to klogd
 where the messages can be analyzed with a log watcher such as logwatch or
-psad (see http://www.cipherdyne.org/psad). fwsnort relies on the Netfilter
+psad (see http://www.cipherdyne.org/psad). fwsnort relies on the iptables
 string match module to match Snort content fields in the application portion
 of ip traffic. Since Snort rules can contain hex data in content fields,
 fwsnort implements a patch against iptables-1.2.7a which adds a
 "--hex-string" option which will accept content fields such as
-"|0d0a5b52504c5d3030320d0a|". fwsnort is able to translate approximately 54%
-of all rules from the Snort-2.3 IDS into equivalent Netfilter rules. For
+"|0d0a5b52504c5d3030320d0a|". fwsnort is able to translate approximately 60%
+of all rules from the Snort-2.3.3 IDS into equivalent iptables rules. For
 more information about the translation strat- egy as well as
 advantages/disadvantages of the method used by fwsnort to obtain intrusion
 detection data, see the README included with the fwsnort sources or browse
@@ -122,6 +122,9 @@ cp -r snort_rules $RPM_BUILD_ROOT%_sysconfdir/%name
 %_libdir/%name
 
 %changelog
+* Fri Mar 22 2007 Michael Rash <mbr@cipherydne.org>
+- fwsnort-0.9.0 release
+
 * Sat Feb 17 2007 Michael Rash <mbr@cipherydne.org>
 - fwsnort-0.8.2 release
 
