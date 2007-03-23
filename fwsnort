@@ -728,13 +728,18 @@ sub parse_rule_options() {
         }
     }
 
+    my $found_unsupported = '';
     for my $opt (keys %{$snort_opts{'unsupported'}}) {
         ### see if we match a regex belonging to an supported option
         if ($rule_options =~ /$snort_opts{'unsupported'}{$opt}/) {
-            &logr("[-] SID: $sid  Unsupported option: \"$opt\" at " .
-                "line: $line_num.  Skipping rule.");
-            return 0, \%opts, \@content, \%offsets;
+            $found_unsupported .= "$opt, ";
         }
+    }
+    if ($found_unsupported) {
+        $found_unsupported =~ s/,\s+$//;
+        &logr("[-] SID: $sid  Unsupported option(s): $found_unsupported " .
+            "at line: $line_num.  Skipping rule.");
+        return 0, \%opts, \@content, \%offsets;
     }
 
     if ($rule_options =~ /ip_proto\s*:.*ip_proto\s*:/) {
