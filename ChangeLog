@@ -1,4 +1,4 @@
-fwsnort-0.9.0 (03//2007):
+fwsnort-0.9.0 (03/22/2007):
     - Added support for multiple content matches since this is supported by
       iptables.  This made a 10% increase in the fwsnort translation rate -
       about 60% of all Snort-2.3.3 rules can be translated now.
