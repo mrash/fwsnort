@@ -385,6 +385,7 @@ Getopt::Long::Configure('no_ignore_case');
     'Home-net=s'     => \$home_net,     # Manually specify home network.
     'External-net=s' => \$ext_net,      # Manually specify external network.
     'snort-sid=s'    => \$include_sids, # Parse only these particular snort rules.
+    'snort-sids=s'   => \$include_sids, # Synonum for --snort-sid
     'exclude-sid=s'  => \$exclude_sids, # Exclude these particular snort rules.
     'snort-conf=s'   => \$snort_conf_file, # Get HOME_NET, etc. vars from
                                         # existing Snort config file.
@@ -2802,7 +2803,7 @@ Options:
                                 normal location at
                                 $logfile
     -U   --Ulog               - Force ULOG target for all log generation.
-    -ulog-nlgroup=<groupnum>  - Specify a ULOG netlink group (the default
+    --ulog-nlgroup=<groupnum> - Specify a ULOG netlink group (the default
                                 is 1).  This gets used in -U mode, or for
                                 "log" rules since then we need all of the
                                 packet to be logged (via the ULOG pcap

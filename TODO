@@ -6,4 +6,4 @@
  - Print more stats information such as shortest/longest pattern length, etc.
  - Command line argument saving similar to fwknop.
  - fwsnort init scripts?
- - string match application layer offset bugfix.
+ - string match application layer offset bugfix (in the kernel).
