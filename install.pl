@@ -6,7 +6,7 @@
 #
 # Purpose: This is the installation script for fwsnort.
 #
-# Author: Michael Rash <mbr@cipherydne.com>
+# Copyright (C) 2003-2007 Michael Rash (mbr@cipherdyne.org)
 #
 # License (GNU Public License):
 #
