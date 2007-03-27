@@ -323,6 +323,7 @@ my $ipt_print_type = 0;
 my $ipt_rule_ctr   = 1;
 my $ipt_sync       = 1;
 my $ipt_flush      = 0;
+my $ipt_del_chains = 0;
 my $ipt_list       = 0;
 my $ipt_file       = '';
 my $no_ipt_sync    = 0;
@@ -381,6 +382,8 @@ Getopt::Long::Configure('no_ignore_case');
     'Flush'          => \$ipt_flush,    # Synonym for --ipt-flush
     'ipt-list'       => \$ipt_list,     # List any existing fwsnort chains.
     'List'           => \$ipt_list,     # Synonym for --ipt-list
+    'ipt-del'        => \$ipt_del_chains, # Delete fwsnort chains.
+    'X'              => \$ipt_del_chains, # Synonym for --ipt-del.
     'ipt-file=s'     => \$ipt_file,     # Read iptables policy from a file.
     'Home-net=s'     => \$home_net,     # Manually specify home network.
     'External-net=s' => \$ext_net,      # Manually specify external network.
@@ -1988,10 +1991,23 @@ sub ipt_jump_chain() {
                 next unless $process_chains{$chain};
 
                 if ($chain eq 'INPUT' or $chain eq 'FORWARD') {
+                    ### delete any existing jump rule so that fwsnort.sh can
+                    ### be executed many times in a row without adding several
+                    ### jump rules
+                    push @ipt_script_lines, "\$IPTABLES -D $chain " .
+                        qq|-i $intf -j $config{"FWSNORT_$chain"}| .
+                        ' 2> /dev/null';
+
+                    ### now add the jump rule
                     push @ipt_script_lines, "\$IPTABLES -I $chain " .
                         qq|$config{"FWSNORT_${chain}_JUMP"} -i | .
                         qq|$intf -j $config{"FWSNORT_$chain"}|;
                 } elsif ($chain eq 'OUTPUT') {
+
+                    push @ipt_script_lines, "\$IPTABLES -D $chain " .
+                        qq|-o $intf -j $config{'FWSNORT_OUTPUT'}| .
+                        ' 2> /dev/null';
+
                     push @ipt_script_lines, "\$IPTABLES -I $chain " .
                         qq|$config{'FWSNORT_OUTPUT_JUMP'} -o | .
                         qq|$intf -j $config{'FWSNORT_OUTPUT'}|;
@@ -2003,15 +2019,31 @@ sub ipt_jump_chain() {
             next unless $process_chains{$chain};
 
             if ($no_exclude_loopback) {
+
+                push @ipt_script_lines, "\$IPTABLES -D $chain " .
+                    qq|-j $config{"FWSNORT_$chain"}| .
+                    ' 2> /dev/null';
+
                 push @ipt_script_lines, "\$IPTABLES -I $chain " .
                     qq|$config{"FWSNORT_${chain}_JUMP"} | .
                     qq|-j $config{"FWSNORT_$chain"}|;
             } else {
                 if ($chain eq 'INPUT' or $chain eq 'FORWARD') {
+
+                    push @ipt_script_lines, "\$IPTABLES -D $chain " .
+                        qq|-i ! lo -j $config{"FWSNORT_$chain"}| .
+                        ' 2> /dev/null';
+
                     push @ipt_script_lines, "\$IPTABLES -I $chain " .
                         qq|$config{"FWSNORT_${chain}_JUMP"} -i ! lo | .
                         qq|-j $config{"FWSNORT_$chain"}|;
+
                 } elsif ($chain eq 'OUTPUT') {
+
+                    push @ipt_script_lines, "\$IPTABLES -D $chain " .
+                        qq|-o ! lo -j $config{"FWSNORT_$chain"}| .
+                        ' 2> /dev/null';
+
                     push @ipt_script_lines, "\$IPTABLES -I $chain " .
                         qq|$config{"FWSNORT_${chain}_JUMP"} -o ! lo | .
                         qq|-j $config{"FWSNORT_$chain"}|;
@@ -2170,11 +2202,40 @@ sub ipt_flush() {
         if ($exists == 0) {
             print "[+] Flushing $chain chain...\n";
             system "$cmds{'iptables'} -F $chain";
+            if ($ipt_del_chains) {
+                ### must remove any jump rules from the built-in
+                ### chains
+                &del_jump_rule($chain);
+
+                print "    Deleting $chain chain...\n";
+                system "$cmds{'iptables'} -X $chain";
+            }
         } else {
             print "[-] Chain $chain does not exist...\n";
         }
     }
     exit 0;
+}
+
+sub del_jump_rule() {
+    my $chain = shift;
+
+    my $ipt = new IPTables::Parse
+        or die "[*] Could not acquire IPTables::Parse object";
+
+    for my $built_in_chain qw/INPUT OUTPUT FORWARD/ {
+        my $rules_ar = $ipt->chain_rules('filter', $built_in_chain, '');
+
+        for (my $i=0; $i <= $#$rules_ar; $i++) {
+            my $rule_num = $i+1;
+            if ($rules_ar->[$i]->{'target'} eq $chain) {
+                system "$cmds{'iptables'} -D $built_in_chain $rule_num";
+                last;
+            }
+        }
+    }
+
+    return;
 }
 
 sub fwsnort_init() {
@@ -2197,7 +2258,7 @@ sub fwsnort_init() {
     &required_vars();
 
     ### flush all fwsnort chains.
-    &ipt_flush() if $ipt_flush;
+    &ipt_flush() if $ipt_flush or $ipt_del_chains;
 
     ### list all fwsnort chains.
     &ipt_list() if $ipt_list;

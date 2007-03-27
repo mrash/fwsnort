@@ -1,3 +1,12 @@
+fwsnort-0.9.1 (04//2007):
+    - Bug fix to remove any existing jump rules from the built-in INPUT,
+      OUTPUT, and FORWARD chains before creating a new jump rules.  This
+      allows the fwsnort.sh script to be executed multiple times without
+      creating a new jump rule into the fwsnort chains for each execution.
+    - Added the -X command line argument to allow fwsnort to delete all of
+      the fwsnort chains; this emulates the iptables command line argument
+      of the same name.
+
 fwsnort-0.9.0 (03/22/2007):
     - Added support for multiple content matches since this is supported by
       iptables.  This made a 10% increase in the fwsnort translation rate -
