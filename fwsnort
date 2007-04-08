@@ -4,6 +4,8 @@
 #
 # File: fwsnort
 #
+# URL: http://www.cipherdyne.org/fwsnort
+#
 # Purpose: To translate snort rules into equivalent iptables rules.
 #          fwsnort is based on the original snort2iptables shell script
 #          written by William Stearns.
