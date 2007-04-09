@@ -1,16 +1,21 @@
 fwsnort-1.0 (04//2007):
-    - Major update to include support for the QUEUE target with a new command
-      line option --QUEUE.  This changes the default LOG target to the QUEUE
-      target instead, and at the same time builds a modified Snort rule set in
-      the /etc/fwsnort/snort_rules_mod directory.  This rule set has all
-      content, uricontent, depth, offset, distance, and within criteria
-      removed because these are matched within the kernel itself via the
-      fwsnort policy.  The end result should be that snort_inline should run
-      faster, because the fwsnort policy only send those packets that conform
-      to the preliminary content/uricontent matches to userspace via the QUEUE
-      target.  Hence, the vast majority of packets (which are not malicious)
-      are allowed to be processed via the Linux kernel without ever having to
-      be sent to userspace.
+    - Major update to include support for the NFQUEUE and QUEUE targets with
+      new command line options --NFQUEUE and --QUEUE.  This changes the
+      default LOG target to the NFQUEUE or QUEUE targets instead, and at the
+      same time builds a parallel Snort rule set in the
+      /etc/fwsnort/snort_rules_queue directory.  Every Snort rule in this
+      directory has at least one "content" keyword, which fwsnort uses in the
+      resulting iptables policy.  This policy only sends those packets to
+      snort_inline via the NFQUEUE or QUEUE target that match a content field
+      within some Snort rule.  The end result is that snort_inline should run
+      faster because the vast majority of packets (which are not malicious)
+      are processed via the Linux kernel without ever having to be sent to
+      userspace for analysis.  There is a tradeoff here in terms of attack
+      detection; snort_inline does not receive all packets associated with a
+      stream, so it cannot detect attacks quite as effectively (snort_inline
+      does not have an opportunity to look at reassembled buffers).  However,
+      this trade off may be acceptable for large sites where performance is
+      more important.
     - Bug fix to remove any existing jump rules from the built-in INPUT,
       OUTPUT, and FORWARD chains before creating a new jump rules.  This
       allows the fwsnort.sh script to be executed multiple times without
