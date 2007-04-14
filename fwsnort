@@ -346,6 +346,7 @@ my $snort_type     = '';
 my $ulog_nlgroup   = 1;
 my $queue_mode     = 0;
 my $nfqueue_mode   = 0;
+my $nfqueue_num    = 0;
 my $ulog_mode      = 0;
 my $exclude_re     = '';
 my $include_re     = '';
@@ -447,6 +448,7 @@ Getopt::Long::Configure('no_ignore_case');
                                         #  a modified rule set based on this.
     'NFQUEUE'        => \$nfqueue_mode, # Same as QUEUE mode, except use the
                                         #  updated NFQUEUE target.
+    'queue-num=i'    => \$nfqueue_num,  # Specifies the NFQUEUE number.
     'verbose'        => \$verbose,
     'logfile=s'      => \$logfile,      # Specify the logfile path.
     'stdout'         => \$stdout,       # Print log messages to stdout.
@@ -1731,6 +1733,9 @@ sub ipt_build_opts() {
                 $target_str .= qq| -j QUEUE|;
             } else {
                 $target_str .= qq| -j NFQUEUE|;
+                if ($nfqueue_num) {
+                    $target_str .= " --queue-num $nfqueue_num";
+                }
             }
         } else {
             if ($hdr_href->{'action'} eq 'log' or $ulog_mode) {
@@ -2489,6 +2494,15 @@ sub handle_cmd_line() {
 "    communicated to userland (hence speeding up Snort_inline).\n";
     }
 
+    if ($nfqueue_num != 0) {
+        unless ($nfqueue_num > 0 and $nfqueue_num < 65536) {
+            die "[*] --queue-num must be between 0 and 65535 (inclusive)";
+        }
+        unless ($nfqueue_mode) {
+            die "[*] Must also specifiy --NFQUEUE mode if using --queue-num";
+        }
+    }
+
     if ($no_ipt_log and not ($ipt_drop or $ipt_reject)) {
         die "[*] --ipt-no-log option can only be used ",
             "with --ipt-drop or --ipt-reject";
@@ -3025,6 +3039,15 @@ Options:
     -l   --logfile=<file>     - Log messages to <file> instead of the
                                 normal location at
                                 $logfile
+    -N   --NFQUEUE            - Build a policy designed to only send packets
+                                that match Snort signature "content" fields
+                                to userspace via the NFQUEUE target. This is
+                                designed to build a hybrid fwsnort policy
+                                that can be used by snort_inline.
+    -q   --queue-num=<num>    - Specify the queue number in --NFQUEUE mode;
+                                the default is zero.
+    -Q   --QUEUE              - Same as the --NFQUEUE option, except use the
+                                older iptables QUEUE target.
     -U   --Ulog               - Force ULOG target for all log generation.
     --ulog-nlgroup=<groupnum> - Specify a ULOG netlink group (the default
                                 is 1).  This gets used in -U mode, or for
