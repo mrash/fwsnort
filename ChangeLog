@@ -28,7 +28,8 @@ fwsnort-1.0 (04//2007):
       mode but is unable to translate the specified signatures, the user is
       notified.  Also, any existing /etc/fwsnort/fwsnort.sh script is not
       archived and erased until fwsnort is actually going to write a new one.
-    - Added mailing list via SourceForge.
+    - Added sid values to iptables comment match string.
+    - Added mailing list at SourceForge.
 
 fwsnort-0.9.0 (03/22/2007):
     - Added support for multiple content matches since this is supported by
