@@ -1698,13 +1698,9 @@ sub ipt_build_opts() {
     ### one line above the rule
     my $comment    = '';
     my $target_str = '';
-    for my $key qw(msg classtype reference priority rev) {
+    for my $key qw(sid msg classtype reference priority rev) {
         if (defined $opts_href->{$key}) {
-            if ($key eq 'msg') {
-                $comment .= qq|$key: "$opts_href->{$key}"; |;
-            } else {
-                $comment .= qq|$key: $opts_href->{$key}; |;
-            }
+            $comment .= qq|$key:$opts_href->{$key}; |;
         }
     }
     $comment =~ s/\s*$//;
