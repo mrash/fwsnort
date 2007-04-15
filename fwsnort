@@ -530,7 +530,8 @@ if ($include_sids) {
 ### FORWARD chains to our fwsnort chains
 &ipt_jump_chain() unless $no_ipt_jumps;
 
-push @ipt_script_lines, "\n### EOF ###";
+push @ipt_script_lines, qq|\n\$ECHO "[+] Finished."|;
+push @ipt_script_lines, "### EOF ###";
 
 print "\n[+] Logfile: $logfile\n";
 
