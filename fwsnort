@@ -293,6 +293,21 @@ my $ip_re = qr|(?:[0-2]?\d{1,2}\.){3}[0-2]?\d{1,2}|;
 my %snort_dump_cache = ();
 my %ipt_dump_cache = ();
 
+### for iptables rule tests
+my $NON_HOST = '127.0.0.2';
+
+my $IPT_SUCCESS = 1;
+my $IPT_FAILURE = 0;
+
+### header lengths; note that IP and TCP lengths are defined
+### in the fwsnort.conf file since they may each contain options,
+### but until the --payload option is added to the string match
+### extension there is no way to account for them except to
+### define an average length.
+my $MAC_HDR_LEN = 14;
+my $UDP_HDR_LEN = 8;
+my $ICMP_HDR_LEN = 8;
+
 ### config and commands hashes (constructed by import_config())
 my %config = ();
 my %cmds   = ();
@@ -359,6 +374,9 @@ my $no_exclude_loopback = 0;
 my $no_ipt_log_ip_opts  = 0;
 my $no_ipt_log_tcp_opts = 0;
 my $ipt_log_tcp_seq     = 0;
+
+### to be added to the string match extension
+my $ipt_has_string_payload_offset_opt = 0;
 
 ### default to processing these filter chains
 my %process_chains = (
@@ -813,7 +831,7 @@ sub parse_rule_options() {
 
     if ($queue_mode or $nfqueue_mode) {
 
-        ### we only disqualify a signature in QUEUE mode if it does
+        ### we only disqualify a signature in NFQUEUE/QUEUE mode if it does
         ### not contain the "content" or "uricontent" keywords
         my $found_content = 0;
         while ($rule_options =~ /(\w+):\s*(.*?)\s*;/g) {
@@ -1641,31 +1659,27 @@ sub ipt_build_opts() {
         }
     }
 
+    my $avg_hdr_len = $config{'AVG_IP_HEADER_LEN'};
+    if (defined $hdr_href->{'proto'}) {
+        if ($hdr_href->{'proto'} =~ /udp/i) {
+            $avg_hdr_len += $UDP_HDR_LEN;  ### udp header is 8 bytes
+        } elsif ($hdr_href->{'proto'} =~ /icmp/i) {
+            $avg_hdr_len += $ICMP_HDR_LEN;  ### icmp header is 8 bytes
+        } else {
+            ### default to TCP
+            $avg_hdr_len += $config{'AVG_TCP_HEADER_LEN'};
+        }
+    } else {
+        ### don't know what the average transport layer (if there
+        ### is one) length will be; add 10 bytes just to be safe
+        $avg_hdr_len += 10;
+    }
+
     ### append dsize option (requires CONFIG_IP_NF_MATCH_LENGTH)
     if (defined $opts_href->{'dsize'}) {
         ### get the average packet header size based on the protocol
         ### (the iptables length match applies to the network header
         ### and up).
-        my $avg_hdr_len = $config{'AVG_IP_HEADER_LEN'};
-        if (defined $hdr_href->{'proto'}) {
-            if ($hdr_href->{'proto'} =~ /tcp/i) {
-                $avg_hdr_len += $config{'AVG_TCP_HEADER_LEN'};
-            } elsif ($hdr_href->{'proto'} =~ /udp/i) {
-                $avg_hdr_len += 8;  ### udp header is 8 bytes
-            } elsif ($hdr_href->{'proto'} =~ /icmp/i) {
-                $avg_hdr_len += 8;  ### icmp header is 8 bytes
-            } elsif ($hdr_href->{'proto'} =~ /ip/i) {
-                ### default to TCP
-                $avg_hdr_len += $config{'AVG_TCP_HEADER_LEN'};
-            } else {
-                ### default to TCP
-                $avg_hdr_len += $config{'AVG_TCP_HEADER_LEN'};
-            }
-        } else {
-            ### don't know what the average transport layer (if there
-            ### is one) length will be; add 10 bytes just to be safe
-            $avg_hdr_len += 10;
-        }
         if ($opts_href->{'dsize'} =~ m|(\d+)\s*<>\s*(\d+)|) {
             my $netfilter_len1 = $1 + $avg_hdr_len;
             my $netfilter_len2 = $2 + $avg_hdr_len;
@@ -1690,8 +1704,8 @@ sub ipt_build_opts() {
     }
 
     ### append snort content options
-    my $ipt_content_criteria
-            = &build_content_matches($opts_href, $content_aref, $offsets_href);
+    my $ipt_content_criteria = &build_content_matches($opts_href,
+            $content_aref, $offsets_href, $avg_hdr_len);
 
     $rule .= $ipt_content_criteria if $ipt_content_criteria;
 
@@ -1779,7 +1793,7 @@ sub ipt_build_opts() {
 }
 
 sub build_content_matches() {
-    my ($opts_href, $content_ar, $offsets_hr) = @_;
+    my ($opts_href, $content_ar, $offsets_hr, $avg_hdr_len) = @_;
 
     my $ipt_content_criteria = '';
 
@@ -1848,14 +1862,29 @@ sub build_content_matches() {
                 my $distance = -1;
                 my $within   = -1;
 
-                $offset = $offsets_hr->{$i}->{'offset'}
-                    if defined $offsets_hr->{$i}->{'offset'};
-                $depth = $offsets_hr->{$i}->{'depth'}
-                    if defined $offsets_hr->{$i}->{'depth'};
-                $distance = $offsets_hr->{$i}->{'distance'}
-                    if defined $offsets_hr->{$i}->{'distance'};
-                $within = $offsets_hr->{$i}->{'within'}
-                    if defined $offsets_hr->{$i}->{'within'};
+                if ($ipt_has_string_payload_offset_opt) {
+                    $offset = $offsets_hr->{$i}->{'offset'}
+                            + $avg_hdr_len + $MAC_HDR_LEN
+                        if defined $offsets_hr->{$i}->{'offset'};
+                    $depth = $offsets_hr->{$i}->{'depth'}
+                            + $avg_hdr_len + $MAC_HDR_LEN
+                        if defined $offsets_hr->{$i}->{'depth'};
+                    $distance = $offsets_hr->{$i}->{'distance'}
+                            + $avg_hdr_len + $MAC_HDR_LEN
+                        if defined $offsets_hr->{$i}->{'distance'};
+                    $within = $offsets_hr->{$i}->{'within'}
+                            + $avg_hdr_len + $MAC_HDR_LEN
+                        if defined $offsets_hr->{$i}->{'within'};
+                } else {
+                    $offset = $offsets_hr->{$i}->{'offset'}
+                        if defined $offsets_hr->{$i}->{'offset'};
+                    $depth = $offsets_hr->{$i}->{'depth'}
+                        if defined $offsets_hr->{$i}->{'depth'};
+                    $distance = $offsets_hr->{$i}->{'distance'}
+                        if defined $offsets_hr->{$i}->{'distance'};
+                    $within = $offsets_hr->{$i}->{'within'}
+                        if defined $offsets_hr->{$i}->{'within'};
+                }
 
                 if ($offset > -1) {
                     $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
@@ -1895,9 +1924,15 @@ sub build_content_matches() {
                     $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
                         {'within'}{'iptopt'} . " $within";
                 }
+
+                ### if the --payload option is available for
+                ### the string match extension
+                $ipt_content_criteria .= ' --payload'
+                    if $ipt_has_string_payload_offset_opt;
             }
         }
     }
+
     return $ipt_content_criteria;
 }
 
@@ -2606,12 +2641,11 @@ sub required_vars() {
 
 sub ipt_test() {
 
+    my $test_rule_rv = -1;
+
     ### test for the LOG target.
-    my $rv = (system "$cmds{'iptables'} -I INPUT 1 -s " .
-        "127.0.0.2 -j LOG 2> /dev/null") >> 8;
-    if ($rv == 0) {
-        system "$cmds{'iptables'} -D INPUT 1";
-    } else {
+    unless (&ipt_rule_test("-I INPUT 1 -s " .
+            "$NON_HOST -j LOG") == $IPT_SUCCESS) {
         die "[*] iptables has not been compiled with logging support.  ",
             "If you want to\n    have fwsnort generate an iptables script ",
             "    anyway then specify the\n    --no-ipt-test option. ",
@@ -2620,12 +2654,9 @@ sub ipt_test() {
     }
 
     ### test for the comment match (where Snort msg fields are placed)
-    $rv = (system "$cmds{'iptables'} -I INPUT 1 -s " .
-        qq|127.0.0.2 -m comment --comment "testing the comment match" | .
-        qq|-j LOG 2> /dev/null|) >> 8;
-    if ($rv == 0) {
-        system "$cmds{'iptables'} -D INPUT 1";
-    } else {
+    unless (&ipt_rule_test("-I INPUT 1 -s " .
+            qq|$NON_HOST -m comment --comment "testing the comment match" | .
+            qq|-j LOG|) == $IPT_SUCCESS) {
         unless ($no_ipt_comments) {
             print"[-] It looks like the iptables 'comment' match is not ",
                 "available, disabling.\n";
@@ -2634,11 +2665,9 @@ sub ipt_test() {
     }
 
     ### test for the ipv4options extension.
-    $rv = (system "$cmds{'iptables'} -I INPUT 1 -p icmp -m " .
-        "ipv4options --rr -s 127.0.0.2 -j LOG 2> /dev/null") >> 8;
-    if ($rv == 0) {
-        system "$cmds{'iptables'} -D INPUT 1";
-    } else {
+    unless (&ipt_rule_test("-I INPUT 1 -p icmp -m " .
+        "ipv4options --rr -s $NON_HOST -j LOG") == $IPT_SUCCESS) {
+
         &logr("[-] Netfilter ipv4options extension not available, " .
             "disabling ipopts translation.");
         ### put ipopts in the unsupported list
@@ -2652,11 +2681,8 @@ sub ipt_test() {
     }
 
     ### test for the ttl match.
-    $rv = (system "$cmds{'iptables'} -I INPUT 1 -p icmp -s 127.0.0.2 " .
-        "-m ttl --ttl-eq 1 -j LOG 2> /dev/null") >> 8;
-    if ($rv == 0) {
-        system "$cmds{'iptables'} -D INPUT 1";
-    } else {
+    unless (&ipt_rule_test("-I INPUT 1 -p icmp -s $NON_HOST " .
+            "-m ttl --ttl-eq 1 -j LOG") == $IPT_SUCCESS) {
         ### put ttl in the unsupported list
         &logr("[-] Netfilter TTL match not available, " .
             "disabling ttl translation.");
@@ -2670,11 +2696,8 @@ sub ipt_test() {
     }
 
     ### test for the TOS match.
-    $rv = (system "$cmds{'iptables'} -I INPUT 1 -p icmp -s 127.0.0.2 " .
-        "-m tos --tos 8 -j LOG 2> /dev/null") >> 8;
-    if ($rv == 0) {
-        system "$cmds{'iptables'} -D INPUT 1";
-    } else {
+    unless (&ipt_rule_test("-I INPUT 1 -p icmp -s $NON_HOST " .
+            "-m tos --tos 8 -j LOG") == $IPT_SUCCESS) {
         ### put tos in the unsupported list
         &logr("[-] Netfilter TOS match not available, " .
             "disabling tos translation.");
@@ -2688,11 +2711,9 @@ sub ipt_test() {
     }
 
     ### test for the length match.
-    $rv = (system "$cmds{'iptables'} -I INPUT 1 -p icmp -s 127.0.0.2 " .
-        "-m length --length 256 -j LOG 2> /dev/null") >> 8;
-    if ($rv == 0) {
-        system "$cmds{'iptables'} -D INPUT 1";
-    } else {
+    unless (&ipt_rule_test("-I INPUT 1 -p icmp -s $NON_HOST " .
+            "-m length --length 256 -j LOG") == $IPT_SUCCESS) {
+
         ### put length in the unsupported list
         &logr("[-] Netfilter length match not available, " .
             "disabling length translation.");
@@ -2707,74 +2728,72 @@ sub ipt_test() {
 
     ### test for string match support.
     if ($kernel_ver ne '2.4') {
-        ### default to include "--algo bm"
-        $rv = (system "$cmds{'iptables'} -I INPUT 1 -s " .
-            qq|127.0.0.2 -m string --string "test" | .
-            qq|--algo bm -j LOG 2> /dev/null|) >> 8;
-    } else {
-        $rv = (system "$cmds{'iptables'} -I INPUT 1 -s " .
-            qq|127.0.0.2 -m string --string "test" -j LOG 2> /dev/null|) >> 8;
-    }
-    if ($rv == 0) {
-        system "$cmds{'iptables'} -D INPUT 1";
 
-        ### test for --replace-string support (this will only be available
+        ### default to include "--algo bm"
+        $test_rule_rv = &ipt_rule_test("-I INPUT 1 -s " .
+            qq|$NON_HOST -m string --string "test" | .
+            qq|--algo bm -j LOG 2> /dev/null|);
+    } else {
+        $test_rule_rv = &ipt_rule_test("-I INPUT 1 -s " .
+            qq|$NON_HOST -m string --string "test" -j LOG 2> /dev/null|);
+    }
+    if ($test_rule_rv == $IPT_SUCCESS) {
+
+        ### test for --replace-string support (only available for 2.4 kernels
         ### if the replace-string patch has been applied).
-        if ($kernel_ver ne '2.4') {
-            $rv = (system "$cmds{'iptables'} -I INPUT 1 -s " .
-                qq|127.0.0.2 -m string --string "test" --replace-string "repl"| .
-                " --algo bm -j LOG 2> /dev/null") >> 8;
-        } else {
-            $rv = (system "$cmds{'iptables'} -I INPUT 1 -s " .
-                qq|127.0.0.2 -m string --string "test" --replace-string "repl"| .
-                " -j LOG 2> /dev/null") >> 8;
-        }
-        if ($rv == 0) {
-            system "$cmds{'iptables'} -D INPUT 1";
-        } else {
-            if (defined $snort_opts{'filter'}{'replace'}) {
-                $snort_opts{'unsupported'}{'replace'} =
-                    $snort_opts{'filter'}{'replace'}{'regex'};
-                delete $snort_opts{'filter'}{'replace'};
-            } else {
-                $snort_opts{'unsupported'}{'replace'}
-                    = '[\s;]replace:\s*(.*?)\s*;';
+        if ($kernel_ver eq '2.4') {
+            unless (&ipt_rule_test("-I INPUT 1 -s " .
+                    qq|$NON_HOST -m string --string "test" --replace-string | .
+                    qq|"repl" -j LOG|) == $IPT_SUCCESS) {
+                if (defined $snort_opts{'filter'}{'replace'}) {
+                    $snort_opts{'unsupported'}{'replace'} =
+                        $snort_opts{'filter'}{'replace'}{'regex'};
+                    delete $snort_opts{'filter'}{'replace'};
+                } else {
+                    $snort_opts{'unsupported'}{'replace'}
+                        = '[\s;]replace:\s*(.*?)\s*;';
+                }
             }
+        } else {
+            $snort_opts{'unsupported'}{'replace'}
+                = '[\s;]replace:\s*(.*?)\s*;';
         }
     } else {
         die
 "[*] It does not appear that string match support has been compiled into\n",
 "    the kernel.  Fwsnort will not be of very much use without this.\n",
 "    ** NOTE: If you want to have fwsnort generate an iptables policy\n",
-"    anyway, specify the --no-ipt-test option.  Exiting.\n";
+"    anyway, use the --no-ipt-test option.  Exiting.\n";
     }
 
     ### test for --hex-string
     if ($kernel_ver ne '2.4') {
-        $rv = (system "$cmds{'iptables'} -I INPUT 1 -s 127.0.0.2 " .
-            qq{-m string --hex-string "|0a 5d|" --algo bm -j LOG 2> /dev/null}) >> 8;
+        $test_rule_rv = &ipt_rule_test("-I INPUT 1 -s $NON_HOST " .
+            qq{-m string --hex-string "|0a 5d|" --algo bm -j LOG});
     } else {
-        $rv = (system "$cmds{'iptables'} -I INPUT 1 -s 127.0.0.2 " .
-            qq{-m string --hex-string \"|0a 5d|\" -j LOG 2> /dev/null}) >> 8;
+        $test_rule_rv = &ipt_rule_test("-I INPUT 1 -s $NON_HOST " .
+            qq{-m string --hex-string \"|0a 5d|\" -j LOG});
     }
-    if ($rv == 0) {
-        system "$cmds{'iptables'} -D INPUT 1";
-    } else {
+    unless ($test_rule_rv == $IPT_SUCCESS) {
         die
 "[*] It does not appear that the --hex-string patch has been applied.\n",
 "    fwsnort will not be of very much use without this. ** NOTE: If you\n",
 "    want to have fwsnort generate an iptables policy anyway, then",
-"    specify the --no-ipt-test option.  Exiting.\n";
+"    use the --no-ipt-test option.  Exiting.\n";
+    }
+
+    ### test for the --payload option
+    if ($kernel_ver ne '2.4'
+            and &ipt_rule_test("-I INPUT 1 -s $NON_HOST -m string --string " .
+            qq|"test" --algo bm --to 50 --payload -j LOG|) == $IPT_SUCCESS) {
+        $ipt_has_string_payload_offset_opt = 1;
     }
 
     unless ($no_ipt_conntrack) {
         ### test for tcp connection tracking support
-        $rv = (system "$cmds{'iptables'} -I INPUT 1 -s 127.0.0.2 -p tcp " .
-            "--dport 3001 -m state --state ESTABLISHED -j LOG 2> " .
-            "/dev/null") >> 8;
-        if ($rv == 0) {
-            system "$cmds{'iptables'} -D INPUT 1";
-        } else {
+        unless (&ipt_rule_test("-I INPUT 1 -s $NON_HOST -p tcp " .
+                "--dport 3001 -m state --state ESTABLISHED -j LOG")
+                == $IPT_SUCCESS) {
         die
 "[*] It does not appear that Netfilter has been compiled with connection\n",
 "    tracking support.  If you want fwsnort to generate a policy anyway\n",
@@ -2788,19 +2807,13 @@ sub ipt_test() {
     if ($ipt_reject) {
         ### we are going to generate a policy that drops icmp and udp
         ### packets, and kills tcp sessions with tcp-reset.
-        $rv = (system "$cmds{'iptables'} -I INPUT 1 -p tcp -s 127.0.0.2 " .
-            "-j REJECT --reject-with tcp-reset 2> /dev/null") >> 8;
-        if ($rv == 0) {
-            system "$cmds{'iptables'} -D INPUT 1";
-        } else {
+        unless (&ipt_test_rule("-I INPUT 1 -p tcp -s $NON_HOST " .
+            "-j REJECT --reject-with tcp-reset") == $IPT_SUCCESS) {
 
             ### in newer versions of iptables (> 1.3.5?) the "tcp-reset"
             ### command line arg has been changed to "tcp-rst"
-            $rv = (system "$cmds{'iptables'} -I INPUT 1 -p tcp -s 127.0.0.2 " .
-                "-j REJECT --reject-with tcp-rst 2> /dev/null") >> 8;
-            if ($rv == 0) {
-                system "$cmds{'iptables'} -D INPUT 1";
-            } else {
+            unless (&ipt_test_rule("-I INPUT 1 -p tcp -s $NON_HOST " .
+                "-j REJECT --reject-with tcp-rst") == $IPT_SUCCESS) {
                 die
 "[*] It does not appear that the REJECT target has been compiled into\n",
 "    the kernel.  The --ipt-reject option requires this option so that tcp\n",
@@ -2868,6 +2881,28 @@ sub update_rules() {
     }
     print "[+] Finished.\n";
     exit 0;
+}
+
+sub ipt_rule_test() {
+    my $rule = shift;
+    my $chain = '';
+
+    if ($rule =~ m/\-I\s+(\w+)\s/) {
+        $chain = $1;
+    }
+    die qq{[*] Could not extract iptables chain from: "$rule"}
+        unless $chain;
+    my $rv = (system "$cmds{'iptables'} $rule 2> /dev/null") >> 8;
+    if ($rv == 0) {
+        ### rule success, make sure to delete it.  We force that
+        ### the rule has just been inserted, so just delete the
+        ### first rule in the chain.  We could just delete the
+        ### rule using $rule, but it is unlikely that the first
+        ### rule in the chain isn't the one we just added
+        system "$cmds{'iptables'} -D $chain 1";
+        return $IPT_SUCCESS;
+    }
+    return $IPT_FAILURE;
 }
 
 sub chk_commands() {

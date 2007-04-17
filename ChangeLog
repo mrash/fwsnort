@@ -29,7 +29,12 @@ fwsnort-1.0 (04//2007):
       notified.  Also, any existing /etc/fwsnort/fwsnort.sh script is not
       archived and erased until fwsnort is actually going to write a new one.
     - Added sid values to iptables comment match string.
-    - Added mailing list at SourceForge.
+    - Bugfix for iptables string match --from and --to values to skip past
+      packet headers.  This is an approximation until a new --payload option
+      can be added to the string match extension.
+    - Added a single iptables rule testing API internally within fwsnort;
+      this adds a measure of consistency and removes some duplicate code.
+    - Added fwsnort mailing list at SourceForge.
 
 fwsnort-0.9.0 (03/22/2007):
     - Added support for multiple content matches since this is supported by
