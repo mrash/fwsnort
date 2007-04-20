@@ -466,6 +466,9 @@ Getopt::Long::Configure('no_ignore_case');
                                         #  a modified rule set based on this.
     'NFQUEUE'        => \$nfqueue_mode, # Same as QUEUE mode, except use the
                                         #  updated NFQUEUE target.
+    'queue-rules-dir=s' => \$queue_rules_dir, # Change the path to the generated
+                                              # rules directory in --QUEUE or
+                                              # --NFQUEUE mode.
     'queue-num=i'    => \$nfqueue_num,  # Specifies the NFQUEUE number.
     'verbose'        => \$verbose,
     'logfile=s'      => \$logfile,      # Specify the logfile path.
@@ -563,6 +566,10 @@ if ($ipt_rule_ctr > 1) {
 
     chmod 0500, $ipt_script;
 
+    if ($queue_mode or $nfqueue_mode) {
+        print "[+] Snort rule set directory for rules to be queued ",
+            "to userspace:\n    $queue_rules_dir\n";
+    }
     print "[+] iptables script: $ipt_script\n";
 } else {
     print "[-] No Snort rules could be translated.\n";
@@ -3076,8 +3083,12 @@ Options:
                                 to userspace via the NFQUEUE target. This is
                                 designed to build a hybrid fwsnort policy
                                 that can be used by snort_inline.
-    -q   --queue-num=<num>    - Specify the queue number in --NFQUEUE mode;
+    --queue-num=<num>         - Specify the queue number in --NFQUEUE mode;
                                 the default is zero.
+    --queue-rules-dir=<dir>   - Specify the path to the generated set of
+                                Snort rules that are to be queued to
+                                userspace in --NFQUEUE or --QUEUE mode.  The
+                                default is $queue_rules_dir
     -Q   --QUEUE              - Same as the --NFQUEUE option, except use the
                                 older iptables QUEUE target.
     -U   --Ulog               - Force ULOG target for all log generation.
