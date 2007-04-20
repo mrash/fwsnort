@@ -16,3 +16,9 @@ Ahmad Almulhem
       automatically parsing the output of ifconfig.  This allows fwsnort to be
       run on a system where no IP is assigned to an interface such as a linux
       box that is acting as a bridge.
+
+Hank Leininger
+    - Suggested the combination of the QUEUE target and string matching as a
+      way to speed up inline Snort implementations.  This suggestion was made
+      at a talk I gave about Linux Firewalls at ShmooCon 2007, and the
+      --NFQUEUE and --QUEUE command line arguements were the result.
