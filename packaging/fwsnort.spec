@@ -122,6 +122,9 @@ cp -r snort_rules $RPM_BUILD_ROOT%_sysconfdir/%name
 %_libdir/%name
 
 %changelog
+* Thu Apr 19 2007 Michael Rash <mbr@cipherydne.org>
+- fwsnort-1.0 release
+
 * Fri Mar 22 2007 Michael Rash <mbr@cipherydne.org>
 - fwsnort-0.9.0 release
 

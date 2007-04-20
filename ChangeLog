@@ -1,4 +1,4 @@
-fwsnort-1.0 (04//2007):
+fwsnort-1.0 (04/19/2007):
     - Major update to include support for the NFQUEUE and QUEUE targets with
       new command line options --NFQUEUE and --QUEUE.  This changes the
       default LOG target to the NFQUEUE or QUEUE targets instead, and at the
