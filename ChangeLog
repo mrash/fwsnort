@@ -1,3 +1,7 @@
+fwsnort-1.0.1 (//2007):
+    - Added the ability to automatically resolve command paths if any commands
+      cannot be found at the locations specified in the fwsnort.conf file.
+
 fwsnort-1.0 (04/19/2007):
     - Major update to include support for the NFQUEUE and QUEUE targets with
       new command line options --NFQUEUE and --QUEUE.  This changes the

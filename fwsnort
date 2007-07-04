@@ -2907,11 +2907,28 @@ sub ipt_rule_test() {
 }
 
 sub chk_commands() {
-    for my $cmd (keys %cmds) {
-        die "[*] $cmd is not located at $cmds{$cmd}: $!, edit $fwsnort_conf."
-            unless -e $cmds{$cmd};
-        die "[*] $cmd is not executable at $cmds{$cmd}: $!, edit $fwsnort_conf."
-            unless -x $cmds{$cmd};
+    my @path = qw(
+        /bin
+        /sbin
+        /usr/bin
+        /usr/sbin
+        /usr/local/bin
+        /usr/local/sbin
+    );
+    CMD: for my $cmd (keys %cmds) {
+        unless (-x $cmds{$cmd}) {
+            my $found = 0;
+            PATH: for my $dir (@path) {
+                if (-x "${dir}/${cmd}") {
+                    $cmds{$cmd} = "${dir}/${cmd}";
+                    $found = 1;
+                    last PATH;
+                }
+            }
+            unless ($found) {
+                die "[*] Could not find $cmd, edit $fwsnort_conf";
+            }
+        }
     }
     return;
 }
