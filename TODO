@@ -7,3 +7,7 @@
  - Command line argument saving similar to fwknop.
  - fwsnort init scripts?
  - string match application layer offset bugfix (in the kernel).
+ - Ability to execute other fwsnort scripts from within the main fwsnort.sh
+   script.  This would make it possible to have add a new fwsnort rule for
+   a specific signature to an existing fwsnort policy without removing
+   existing rules, or perhaps a new "--policy-add" option is in order.
