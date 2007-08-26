@@ -1,0 +1,140 @@
+------------------------------------------------------------------------
+r385 | mbr | 2007-04-19 22:31:03 -0400 (Thu, 19 Apr 2007) | 1 line
+Changed paths:
+   A /fwsnort/branches/fwsnort-1.0 (from /fwsnort/trunk:384)
+
+created fwsnort-1.0 branch
+------------------------------------------------------------------------
+r384 | mbr | 2007-04-19 22:27:59 -0400 (Thu, 19 Apr 2007) | 1 line
+Changed paths:
+   M /fwsnort/trunk/CREDITS
+
+added Hank L.
+------------------------------------------------------------------------
+r383 | mbr | 2007-04-19 22:21:34 -0400 (Thu, 19 Apr 2007) | 1 line
+Changed paths:
+   M /fwsnort/trunk/ChangeLog
+   M /fwsnort/trunk/packaging/fwsnort.spec
+
+1.0 release date
+------------------------------------------------------------------------
+r382 | mbr | 2007-04-19 22:09:58 -0400 (Thu, 19 Apr 2007) | 1 line
+Changed paths:
+   M /fwsnort/trunk/fwsnort.8
+
+added --queue-num command line argument
+------------------------------------------------------------------------
+r381 | mbr | 2007-04-19 22:08:06 -0400 (Thu, 19 Apr 2007) | 1 line
+Changed paths:
+   M /fwsnort/trunk/fwsnort
+
+added --queue-rules-dir option
+------------------------------------------------------------------------
+r380 | mbr | 2007-04-19 21:47:31 -0400 (Thu, 19 Apr 2007) | 1 line
+Changed paths:
+   M /fwsnort/trunk/fwsnort.8
+
+man page updates to include --NFQUEUE and --QUEUE language
+------------------------------------------------------------------------
+r379 | mbr | 2007-04-16 22:46:13 -0400 (Mon, 16 Apr 2007) | 7 lines
+Changed paths:
+   M /fwsnort/trunk/ChangeLog
+   M /fwsnort/trunk/fwsnort
+
+- Bugfix for iptables string match --from and --to values to skip past
+  packet headers.  This is an approximation until a new --payload option
+  can be added to the string match extension.  Also added an iptables test
+  for the --payload option.
+- Added a single iptables rule testing API internally within fwsnort;
+  this adds a measure of consistency and removes some duplicate code.
+
+------------------------------------------------------------------------
+r378 | mbr | 2007-04-15 19:32:33 -0400 (Sun, 15 Apr 2007) | 1 line
+Changed paths:
+   M /fwsnort/trunk/packaging/fwsnort.spec
+
+updated to 1.0 release
+------------------------------------------------------------------------
+r377 | mbr | 2007-04-15 19:32:04 -0400 (Sun, 15 Apr 2007) | 1 line
+Changed paths:
+   M /fwsnort/trunk/ChangeLog
+
+comment match update
+------------------------------------------------------------------------
+r376 | mbr | 2007-04-15 19:26:06 -0400 (Sun, 15 Apr 2007) | 1 line
+Changed paths:
+   M /fwsnort/trunk/fwsnort
+
+added 'Finished' echo statement to the fwsnort.sh script
+------------------------------------------------------------------------
+r375 | mbr | 2007-04-15 19:10:59 -0400 (Sun, 15 Apr 2007) | 1 line
+Changed paths:
+   M /fwsnort/trunk/fwsnort
+
+Added sid field to iptables comment match
+------------------------------------------------------------------------
+r374 | mbr | 2007-04-15 19:05:52 -0400 (Sun, 15 Apr 2007) | 1 line
+Changed paths:
+   M /fwsnort/trunk/fwsnort
+
+updated to include full command line args for the snort_rules_queue/ files in the preamble section
+------------------------------------------------------------------------
+r373 | mbr | 2007-04-14 10:43:41 -0400 (Sat, 14 Apr 2007) | 1 line
+Changed paths:
+   M /fwsnort/trunk/fwsnort
+
+Added support for NFQUEUE number with --queue-num
+------------------------------------------------------------------------
+r372 | mbr | 2007-04-09 17:21:29 -0400 (Mon, 09 Apr 2007) | 1 line
+Changed paths:
+   M /fwsnort/trunk/ChangeLog
+   M /fwsnort/trunk/fwsnort
+
+Added NFQUEUE target support
+------------------------------------------------------------------------
+r371 | mbr | 2007-04-08 14:59:01 -0400 (Sun, 08 Apr 2007) | 1 line
+Changed paths:
+   M /fwsnort/trunk/fwsnort
+
+updated to preserve userspace signatures in --QUEUE mode, updated snort_rules_mod/ dir to snort_rules_queue
+------------------------------------------------------------------------
+r370 | mbr | 2007-04-08 12:33:38 -0400 (Sun, 08 Apr 2007) | 1 line
+Changed paths:
+   M /fwsnort/trunk/fwsnort
+
+added URL to standard header
+------------------------------------------------------------------------
+r369 | mbr | 2007-04-05 21:10:40 -0400 (Thu, 05 Apr 2007) | 1 line
+Changed paths:
+   M /fwsnort/trunk/VERSION
+   M /fwsnort/trunk/fwsnort
+
+version update to 1.0
+------------------------------------------------------------------------
+r368 | mbr | 2007-04-05 21:08:53 -0400 (Thu, 05 Apr 2007) | 1 line
+Changed paths:
+   M /fwsnort/trunk/ChangeLog
+   M /fwsnort/trunk/fwsnort
+
+major update to add the --QUEUE option to speed-up inline Snort implementations with in-kernel string matching
+------------------------------------------------------------------------
+r367 | mbr | 2007-03-26 21:28:47 -0400 (Mon, 26 Mar 2007) | 1 line
+Changed paths:
+   M /fwsnort/trunk/install.pl
+
+added copyright line
+------------------------------------------------------------------------
+r366 | mbr | 2007-03-26 21:06:05 -0400 (Mon, 26 Mar 2007) | 8 lines
+Changed paths:
+   M /fwsnort/trunk/ChangeLog
+   M /fwsnort/trunk/fwsnort
+
+- Bug fix to remove any existing jump rules from the built-in INPUT,
+  OUTPUT, and FORWARD chains before creating a new jump rules.  This
+  allows the fwsnort.sh script to be executed multiple times without
+  creating a new jump rule into the fwsnort chains for each execution.
+- Added the -X command line argument to allow fwsnort to delete all of
+  the fwsnort chains; this emulates the iptables command line argument
+  of the same name.
+
+------------------------------------------------------------------------

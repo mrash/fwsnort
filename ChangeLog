@@ -1,4 +1,5 @@
-fwsnort-1.0.1 (//2007):
+fwsnort-1.0.1 (08/26/2007):
+    - Bugfix for ipt_rule_test() function name.
     - Added the ability to automatically resolve command paths if any commands
       cannot be found at the locations specified in the fwsnort.conf file.
 
