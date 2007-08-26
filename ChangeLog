@@ -1,3 +1,8 @@
+fwsnort-1.0.2 (08/26/2007):
+    - Bugfix to make sure to add in header lengths for depth and offset values
+      since the string match extension start comparing bytes from the start of
+      the data link header.
+
 fwsnort-1.0.1 (08/26/2007):
     - Bugfix for ipt_rule_test() function name.
     - Added the ability to automatically resolve command paths if any commands
