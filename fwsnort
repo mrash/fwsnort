@@ -2808,12 +2808,12 @@ sub ipt_test() {
     if ($ipt_reject) {
         ### we are going to generate a policy that drops icmp and udp
         ### packets, and kills tcp sessions with tcp-reset.
-        unless (&ipt_test_rule("-I INPUT 1 -p tcp -s $NON_HOST " .
+        unless (&ipt_rule_test("-I INPUT 1 -p tcp -s $NON_HOST " .
             "-j REJECT --reject-with tcp-reset") == $IPT_SUCCESS) {
 
             ### in newer versions of iptables (> 1.3.5?) the "tcp-reset"
             ### command line arg has been changed to "tcp-rst"
-            unless (&ipt_test_rule("-I INPUT 1 -p tcp -s $NON_HOST " .
+            unless (&ipt_rule_test("-I INPUT 1 -p tcp -s $NON_HOST " .
                 "-j REJECT --reject-with tcp-rst") == $IPT_SUCCESS) {
                 die
 "[*] It does not appear that the REJECT target has been compiled into\n",
