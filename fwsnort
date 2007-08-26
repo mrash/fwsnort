@@ -1870,25 +1870,25 @@ sub build_content_matches() {
 
                 if ($ipt_has_string_payload_offset_opt) {
                     $offset = $offsets_hr->{$i}->{'offset'}
-                            + $avg_hdr_len + $MAC_HDR_LEN
                         if defined $offsets_hr->{$i}->{'offset'};
                     $depth = $offsets_hr->{$i}->{'depth'}
-                            + $avg_hdr_len + $MAC_HDR_LEN
                         if defined $offsets_hr->{$i}->{'depth'};
                     $distance = $offsets_hr->{$i}->{'distance'}
-                            + $avg_hdr_len + $MAC_HDR_LEN
                         if defined $offsets_hr->{$i}->{'distance'};
                     $within = $offsets_hr->{$i}->{'within'}
-                            + $avg_hdr_len + $MAC_HDR_LEN
                         if defined $offsets_hr->{$i}->{'within'};
                 } else {
                     $offset = $offsets_hr->{$i}->{'offset'}
+                            + $avg_hdr_len + $MAC_HDR_LEN
                         if defined $offsets_hr->{$i}->{'offset'};
                     $depth = $offsets_hr->{$i}->{'depth'}
+                            + $avg_hdr_len + $MAC_HDR_LEN
                         if defined $offsets_hr->{$i}->{'depth'};
                     $distance = $offsets_hr->{$i}->{'distance'}
+                            + $avg_hdr_len + $MAC_HDR_LEN
                         if defined $offsets_hr->{$i}->{'distance'};
                     $within = $offsets_hr->{$i}->{'within'}
+                            + $avg_hdr_len + $MAC_HDR_LEN
                         if defined $offsets_hr->{$i}->{'within'};
                 }
 
