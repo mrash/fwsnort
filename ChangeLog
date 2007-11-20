@@ -1,6 +1,20 @@
 fwsnort-1.0.3 (11//2007):
     - Added --include-re-caseless and --exclude-re-caseless options to have
-    --include-regex and --exclude-regex options match case insensitively.
+      --include-regex and --exclude-regex options match case insensitively.
+    - Major signature update from Bleeding Threats. This update includes a
+      large number of new signatures with PCRE statements, with an emphasis on
+      detecting SQL injection attacks directed at internal webservers from
+      external sources.
+    - Added the ability to interpret PCRE statements that include simple
+      string matches separated by ".*" and ".+" as multiple iptables string
+      matches.  The only negative consequence in terms of signature detection
+      is that ordering is not preserved; that is, the PCRE "/UNION.+SELECT/"
+      would only match a packet that contains "UNION" followed by "SELECT",
+      whereas an iptables rule that uses a string match for UNION and a
+      separate string match for SELECT would match a packet that contains both
+      strings but in reverse.  Typically this is not a huge concern, and the
+      PCRE translation can be disabled with a new option --no-pcre.
+    - Added asn1 keyword to unsupported list.
 
 fwsnort-1.0.2 (08/26/2007):
     - Bugfix to make sure to add in header lengths for depth and offset values
