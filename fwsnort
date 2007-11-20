@@ -234,6 +234,7 @@ my %snort_opts = (
     ### snort options that cannot be included directly
     ### within iptables filter statements (yet :)
     'unsupported' => {
+        'asn1'         => '[\s;]asn1:\s*.*?\s*;',
         'pcre'         => '[\s;]pcre:\s*.*?\s*;',
         'fragbits'     => '[\s;]fragbits:\s*.*?\s*;',
         'content-list' => '[\s;]content\-list:\s*\".*?\"\s*;',
@@ -268,7 +269,7 @@ my %snort_opts = (
         'session'   => '[\s;]session\s*;',
         'tag'       => '[\s;]tag:\s*.*?\s*;',
         'threshold' => '[\s;]threshold:\s*.*?\s*;',
-        'react'     => '[\s;]react:\s*.*?\s*;'  ### psad can react
+        'react'     => '[\s;]react:\s*.*?\s*;' ### FIXME -j REJECT
     }
 );
 
@@ -365,6 +366,8 @@ my $nfqueue_num    = 0;
 my $ulog_mode      = 0;
 my $exclude_re     = '';
 my $include_re     = '';
+my $include_re_caseless = 0;
+my $exclude_re_caseless = 0;
 my $no_ipt_conntrack  = 0;
 my $snort_conf_file   = '';
 my $ipt_restrict_intf = '';
@@ -414,13 +417,17 @@ Getopt::Long::Configure('no_ignore_case');
     'exclude-sid=s'  => \$exclude_sids, # Exclude these particular snort rules.
     'snort-conf=s'   => \$snort_conf_file, # Get HOME_NET, etc. vars from
                                         # existing Snort config file.
-    'include-type=s' => \$rules_types,  # Process this type of snort rule
+    'include-type=s' => \$rules_types,  # Process only this type of snort rule
                                         # (e.g. "ddos")
     'exclude-type=s' => \$exclude_types,# Exclude specified types (e.g. "ddos").
     'include-regex=s' => \$include_re,  # Include only those signatures that
                                         # match the specified regex.
+    'include-re-caseless' => \$include_re_caseless, # make include regex case
+                                                    # insensitive
     'exclude-regex=s' => \$exclude_re,  # Exclude those signatures that
                                         # match the specified regex.
+    'exclude-re-caseless' => \$exclude_re_caseless, # make exclude regex case
+                                                    # insensitive
     'snort-rdir=s'   => \$rules_dir,    # Manually specify the snort rules
                                         # directory.
     'no-addresses'   => \$no_addr_check, # Don't check local ifconfig output.
@@ -639,11 +646,19 @@ sub parse_snort_rules() {
 
             ### regex filters
             if ($exclude_re) {
-                next RULE if $rule =~ m|$exclude_re|;
+                if ($exclude_re_caseless) {
+                    next RULE if $rule =~ m|$exclude_re|i;
+                } else {
+                    next RULE if $rule =~ m|$exclude_re|;
+                }
             }
 
             if ($include_re) {
-                next RULE unless $rule =~ m|$include_re|;
+                if ($include_re_caseless) {
+                    next RULE unless $rule =~ m|$include_re|i;
+                } else {
+                    next RULE unless $rule =~ m|$include_re|;
+                }
             }
 
             $rule_num++;  ### keep track of the abs num of rules
