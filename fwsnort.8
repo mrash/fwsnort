@@ -9,10 +9,10 @@
 .B fwsnort [options]
 .SH DESCRIPTION
 .B fwsnort
-translates Snort rules into iptables rule approximations and generates a
+translates Snort rules into iptables rules and generates a
 Bourne shell script that implements the resulting iptables commands.
 This ruleset allows network traffic that exhibits Snort signatures to
-be logged and/or dropped by iptables directly without putting any interface
+be logged and/or dropped by iptables directly without putting an interface
 into promiscuous mode or queuing packets from kernel to user space.  Note
 that fwsnort can also build an iptables policy that combines the string
 match extension with the NFQUEUE or QUEUE targets to allow the kernel to
@@ -35,13 +35,17 @@ blocking all inbound http traffic from external addresses, it is probably
 not of much use to try detecting inbound attacks against against tcp/80.
 By default fwsnort generates iptables rules that log Snort sid's within
 a --log-prefix to syslog where the messages can be analyzed with a log
-analyzer such as psad (see http://www.cipherdyne.org/psad/).
+analyzer such as
+.B psad
+(see http://www.cipherdyne.org/psad/).
 .B fwsnort
 relies on the iptables string match module to match Snort content fields
 in the application portion of ip traffic.  Since Snort rules can contain
-hex data in content fields, fwsnort implements a patch against
-iptables-1.2.7a which adds a "--hex-string" option which will accept
-content fields such as "|0d0a5b52504c5d3030320d0a|".
+hex data in content fields (specified between pipe "|" characters), fwsnort
+implements a patch against iptables (which has been accepted by the Netfilter
+project as of iptables-1.2.7a) which adds a "--hex-string" option.  This
+allow iptables to accept content fields from Snort rules such as
+"|0d0a5b52504c5d3030320d0a|" without any modification.
 .B fwsnort
 is able to translate approximately 60% of all rules from the Snort-2.3.3
 IDS into equivalent iptables rules.  For more information about the
@@ -69,6 +73,20 @@ process.  For example, if you don't want any rules from the file
 bleeding-all.rules to be translated, then use "bleeding-all" as the
 argument to this option.  A comma-separated list of types to exclude can
 be specified.
+.TP
+.BR \-\^\-include-regex\ \ <regex>
+Only translate Snort rules that match the specified regular expression. This
+is useful to build
+.B fwsnort
+policies for Snort rules that have a common characteristic (such as a string
+match on the word "Storm" for the Storm worm for example).
+.TP
+.BR \-\^\-exclude-regex\ \ <regex>
+Translate all Snort rules except those that match the specified regular
+expression.  This is useful to omit Snort rules from
+.B fwsnort
+policies that have a common characteristic (such as a string
+match on "HTTP_PORTS" for example).
 .TP
 .BR \-\^\-update-rules
 Download the latest Bleeding Snort rules from http://www.bleedingsnort.com/
