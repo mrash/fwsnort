@@ -146,6 +146,10 @@ my %snort_opts = (
             'iptopt' => '-m string',
             'regex'  => '[\s;]content:\s*\"(.*?)\"\s*;'
         },
+        'pcre' => {
+            'iptopt' => '-m string',
+            'regex'  => '[\s;]pcre:\s*\"(.*?)\"\s*;'
+        },
         'offset'  => {
             'iptopt' => '--from',
             'regex'  => '[\s;]offset:\s*(\d+)\s*;'
@@ -235,7 +239,6 @@ my %snort_opts = (
     ### within iptables filter statements (yet :)
     'unsupported' => {
         'asn1'         => '[\s;]asn1:\s*.*?\s*;',
-        'pcre'         => '[\s;]pcre:\s*.*?\s*;',
         'fragbits'     => '[\s;]fragbits:\s*.*?\s*;',
         'content-list' => '[\s;]content\-list:\s*\".*?\"\s*;',
         'rpc'          => '[\s;]rpc:\s*.*?\s*;',
@@ -345,6 +348,7 @@ my $ipt_flush      = 0;
 my $ipt_del_chains = 0;
 my $ipt_list       = 0;
 my $ipt_file       = '';
+my $no_pcre        = 0;
 my $no_ipt_sync    = 0;
 my $no_ipt_log     = 0;
 my $no_ipt_test    = 0;
@@ -430,6 +434,7 @@ Getopt::Long::Configure('no_ignore_case');
                                                     # insensitive
     'snort-rdir=s'   => \$rules_dir,    # Manually specify the snort rules
                                         # directory.
+    'no-pcre'        => \$no_pcre,      # Make no attempt to translate PCRE's.
     'no-addresses'   => \$no_addr_check, # Don't check local ifconfig output.
     'no-ipt-sync'    => \$no_ipt_sync,  # Do not sync with the iptables policy.
     'no-ipt-log'     => \$no_ipt_log,   # Do not generate iptables logging rules.
@@ -889,7 +894,7 @@ sub parse_rule_options() {
 
         my $found_unsupported = '';
         for my $opt (keys %{$snort_opts{'unsupported'}}) {
-            ### see if we match a regex belonging to an supported option
+            ### see if we match a regex belonging to an unsupported option
             if ($rule_options =~ /$snort_opts{'unsupported'}{$opt}/) {
                 $found_unsupported .= "'$opt', ";
             }
@@ -928,6 +933,23 @@ sub parse_rule_options() {
             $val =~ s/^"//;
             $val =~ s/"$//;
             push @content, $val;
+        }
+        if ($opt eq 'pcre') {
+
+            $val =~ s|^"/||;
+            $val =~ s|/\w{0,3}"$||;
+
+            ### see if this pcre only has strings separated with ".*" or ".+"
+            ### and if so translate to multple string matches
+            my ($pcre_rv, $pcre_strings_ar) = &parse_pcre($val);
+            if ($pcre_rv) {
+                for my $str (@$pcre_strings_ar) {
+                    push @content, $str;
+                }
+            } else {
+                &logr("[-] SID: $sid, unsupported complex pcre: $val");
+                return 0, \%opts, \@content, \%offsets;
+            }
         }
         for my $key qw/offset depth within distance/ {
             if ($opt eq $key) {
@@ -1051,6 +1073,62 @@ sub parse_rule_hdr() {
     } else {
         return '';
     }
+}
+
+sub parse_pcre() {
+    my $pcre = shift;
+    my $rv = 0;
+    my @strings = ();
+
+    if ($pcre =~ m|^\w+$|) {
+        push @strings, $pcre;
+        $rv = 1;
+    } elsif ($pcre =~ m|UNION\x5c\x73\x2bSELECT|) {
+        ### a bunch of bleeding threats rules contain "UNION\s+SELECT"
+        ### as a PCRE.  Sure, the translation below can be evaded, but
+        ### it is better than nothing.
+        push @strings, 'UNION SELECT';
+        $rv = 1;
+    } else {
+        my @ar = ();
+        if ($pcre =~ m|\.\*|) {
+            @ar = split /\.\*/, $pcre;
+            $rv = 1;
+        } elsif ($pcre =~ m|\.\+|) {
+            @ar = split /\.\+/, $pcre;
+            $rv = 1;
+        } elsif ($pcre =~ m|\x5b\x5e\x5c\x6e\x5d\x2b|) {  ### [^\n]+
+            @ar = split /\x5b\x5e\x5c\x6e\x5d\x2b/, $pcre;
+            $rv = 1;
+        }
+        if ($rv == 1) {
+            for my $part (@ar) {
+                next unless $part;  ### some Snort pcre's begin with .* or .+
+                                    ### (which seems useless)
+
+                ### Replace "\(" with hex equivalent in PCRE's
+                ### like: /.+ASCII\(.+SELECT/
+                $part =~ s/\x5c\x28/|5c 28|/;
+
+                ### Replace "\:" with hex equivalent in PCRE's
+                ### like: /User-Agent\:[^\n]+spyaxe/
+                $part =~ s/\x5c\x3a/|5c 3a|/;
+
+                my $basic = $part;
+                $basic =~ s/\|5c 28\|//;
+                $basic =~ s/\|5c 3a\|//;
+
+                if ($basic =~ /^[\w\x20]+$/) {
+                    push @strings, $part;
+                } elsif ($basic eq 'User-Agent') {
+                    push @strings, $part;
+                } else {
+                    $rv = 0;
+                }
+            }
+        }
+    }
+    return $rv, \@strings;
 }
 
 sub queue_get_rule() {
@@ -2489,7 +2567,7 @@ sub fwsnort_init() {
 
     if ($strict) {
         ### make the snort options parser very strict
-        for my $opt qw/uricontent distance within/ {
+        for my $opt qw/uricontent pcre distance within/ {
             $snort_opts{'unsupported'}{$opt}
                 = $snort_opts{'filter'}{$opt};
             delete $snort_opts{'filter'}{$opt};
@@ -2504,6 +2582,12 @@ sub fwsnort_init() {
                 = $snort_opts{'ignore'}{$opt};
             delete $snort_opts{'ignore'}{$opt};
         }
+    }
+    if ($no_pcre) {
+        ### skip trying to translate basic PCRE's
+        $snort_opts{'unsupported'}{'pcre'}
+            = $snort_opts{'filter'}{'pcre'};
+        delete $snort_opts{'filter'}{'pcre'};
     }
     return;
 }
