@@ -1,4 +1,4 @@
-fwsnort-1.0.3 (11//2007):
+fwsnort-1.0.3 (11/22/2007):
     - Added --include-re-caseless and --exclude-re-caseless options to have
       --include-regex and --exclude-regex options match case insensitively.
     - Major signature update from Bleeding Threats. This update includes a
