@@ -7,12 +7,12 @@ fwsnort-1.0.3 (11//2007):
       external sources.
     - Added the ability to interpret PCRE statements that include simple
       string matches separated by ".*" and ".+" as multiple iptables string
-      matches.  The only negative consequence in terms of signature detection
+      matches. The only negative consequence in terms of signature detection
       is that ordering is not preserved; that is, the PCRE "/UNION.+SELECT/"
       would only match a packet that contains "UNION" followed by "SELECT",
       whereas an iptables rule that uses a string match for UNION and a
       separate string match for SELECT would match a packet that contains both
-      strings but in reverse.  Typically this is not a huge concern, and the
+      strings but in reverse. Typically this is not a huge concern, and the
       PCRE translation can be disabled with a new option --no-pcre.
     - Added asn1 keyword to unsupported list.
 

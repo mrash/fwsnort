@@ -147,6 +147,8 @@ my %snort_opts = (
             'regex'  => '[\s;]content:\s*\"(.*?)\"\s*;'
         },
         'pcre' => {
+            ### only basic PCRE's that just have strings separated
+            ### by ".*" or ".+" are supported.
             'iptopt' => '-m string',
             'regex'  => '[\s;]pcre:\s*\"(.*?)\"\s*;'
         },
