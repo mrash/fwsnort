@@ -67,8 +67,11 @@ my %required_perl_modules = (
 ### establish some defaults
 my $uninstall = 0;
 my $cmdline_force_install = 0;
-my $force_install_re = '';
+my $force_mod_re = '';
+my $exclude_mod_re = '';
 my $help = 0;
+my $locale = 'C';  ### default LC_ALL env variable
+my $no_locale = 0;
 
 my $src_dir = getcwd() or die "[*] Could not get current working directory.";
 
@@ -85,12 +88,21 @@ Getopt::Long::Configure('no_ignore_case');
 
 &usage(1) unless (GetOptions(
     'force-mod-install' => \$cmdline_force_install,  ### force install of all modules
-    'Force-mod-regex=s' => \$force_install_re, ### force specific mod install with regex
+    'Force-mod-regex=s' => \$force_mod_re, ### force specific mod install with regex
+    'Exclude-mod-regex=s' => \$exclude_mod_re, ### exclude a particular perl module
     'uninstall' => \$uninstall, ### uninstall fwsnort
+    'LC_ALL=s'  => \$locale,
+    'no-LC_ALL' => \$no_locale,
     'help'      => \$help
 ));
 
 &usage(0) if $help;
+
+### set LC_ALL env variable
+$ENV{'LC_ALL'} = $locale unless $no_locale;
+
+$force_mod_re = qr|$force_mod_re| if $force_mod_re;
+$exclude_mod_re = qr|$exclude_mod_re| if $exclude_mod_re;
 
 ### make sure the system binaries are where we think they are.
 &check_commands();
@@ -200,6 +212,11 @@ sub install_perl_module() {
     die '[*] Missing mod-dir key in required_perl_modules hash.'
         unless defined $required_perl_modules{$mod_name}{'mod-dir'};
 
+    if ($exclude_mod_re and $exclude_mod_re =~ /$mod_name/) {
+        print "[+] Excluding installation of $mod_name module.\n";
+        return;
+    }
+
     my $version = '(NA)';
 
     my $mod_dir = $required_perl_modules{$mod_name}{'mod-dir'};
@@ -221,7 +238,7 @@ sub install_perl_module() {
         ### install regardless of whether the module may already be
         ### installed
         $install_module = 1;
-    } elsif ($force_install_re and $force_install_re =~ /$mod_name/) {
+    } elsif ($force_mod_re and $force_mod_re =~ /$mod_name/) {
         print "[+] Forcing installation of $mod_name module.\n";
         $install_module = 1;
     } else {
@@ -450,12 +467,14 @@ sub preserve_config() {
 sub usage() {
     my $exit = shift;
     print <<_HELP_;
-install.pl: [-F] [-f] [-u] [-h]
+install.pl: [options]
     -f, --force-mod-install        - Install all perl modules regardless
                                      of whether they already installed on
                                      the system.
     -F, --Force-mod-regex <regex>  - Install perl module that matches a
                                      specific regular expression.
+    -E, --Exclude-mod-regex <re>   - Exclude a perl module that matches this
+                                     regular expression.
     -u, --uninstall   - uninstall fwsnort
     -h, --help        - print help and exit
 _HELP_

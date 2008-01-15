@@ -1,3 +1,8 @@
+fwsnort-1.0.4 (01//2008):
+    - Updated install.pl to set the LC_ALL environmental variable to "C". This
+      should fix potential locale problems (this fix was borrowed from the
+      fwknop project).
+
 fwsnort-1.0.3 (11/22/2007):
     - Added --include-re-caseless and --exclude-re-caseless options to have
       --include-regex and --exclude-regex options match case insensitively.
