@@ -98,6 +98,12 @@ alert tcp $EXTERNAL_NET $HTTP_PORTS -> $HOME_NET any (msg:"BLEEDING-EDGE CURRENT
 # sig by Russell and Matt Jonkman
 alert tcp $HOME_NET any -> $EXTERNAL_NET $HTTP_PORTS (msg:"BLEEDING-EDGE CURRENT_EVENTS Mac Trojan HTTP Checkin (accept-language violation)"; flow:established,to_server; content:"GET "; depth:4; content:" HTTP/1.1|0d 0a|Accept-Language\: "; pcre:"/Accept-Language\: [a-zA-Z0-9]{20}/"; classtype:trojan-activity; sid:2007650; rev:1;)
 
+#by Adam Pointon at sentinelsecurity.com.au
+alert udp $HOME_NET any -> $DNS_SERVERS 53 (msg:"BLEEDING-EDGE DNS Possible MITM lookup for WPAD.com"; content:"|04|wpad|03|com|02|"; nocase; reference:url,support.microsoft.com/kb/247333; classtype:attempted-user; sid:2007707; rev:1;)
+alert udp $HOME_NET any -> $DNS_SERVERS 53 (msg:"BLEEDING-EDGE DNS Possible MITM lookup for WPAD.co"; content:"|04|wpad|02|co|02|"; nocase; reference:url,support.microsoft.com/kb/247333; classtype:attempted-user; sid:2007708; rev:1;)
+alert udp $HOME_NET any -> $DNS_SERVERS 53 (msg:"BLEEDING-EDGE DNS Possible MITM lookup for WPAD.net"; content:"|04|wpad|03|net|02|"; nocase; reference:url,support.microsoft.com/kb/247333; classtype:attempted-user; sid:2007709; rev:1;)
+alert udp $HOME_NET any -> $DNS_SERVERS 53 (msg:"BLEEDING-EDGE DNS Possible MITM lookup for WPAD.org"; content:"|04|wpad|03|org|02|"; nocase; reference:url,support.microsoft.com/kb/247333; classtype:attempted-user; sid:2007710; rev:1;) 
+
 #by axnjxn
 #based on referenced article by Pedro Bueno
 #Initial experiments on writing good sigs. These are dependant on the exact variant, but we may learn something
@@ -1629,10 +1635,10 @@ alert tcp $HOME_NET any -> $EXTERNAL_NET $HTTP_PORTS (msg:"BLEEDING-EDGE VIRUS S
 alert tcp $HOME_NET any -> $EXTERNAL_NET $HTTP_PORTS (msg:"BLEEDING-EDGE VIRUS Sality Trojan Web Update"; flow:to_server,established; uricontent:"/new_array2.php?speed="; nocase; classtype:trojan-activity; reference:url,www.sophos.com/security/analyses/w32salityu.html; sid:2003424; rev:1;)
 
 #from castlecops research, http://www.castlecops.com, sig by Matt Jonkman
-alert tcp $HOME_NET any -> $EXTERNAL_NET $HTTP_PORTS (msg:"BLEEDING-EDGE Sality Virus User Agent Detected (KUKU v3.09)"; flow:established,to_server; content:"User-Agent\: KUKU"; nocase; classtype:trojan-activity; sid:2003636; rev:1;)
+alert tcp $HOME_NET any -> $EXTERNAL_NET $HTTP_PORTS (msg:"BLEEDING-EDGE VIRUS Sality Virus User Agent Detected (KUKU v3.09)"; flow:established,to_server; content:"User-Agent\: KUKU"; nocase; classtype:trojan-activity; sid:2003636; rev:2;)
 
 #from the bleeding sandnet
-alert tcp $HOME_NET any -> $EXTERNAL_NET $HTTP_PORTS (msg:"BLEEDING-EDGE Sality Virus User Agent Detected (SPM_ID=)"; flow:established,to_server; content:"User-Agent\: SPM_ID="; nocase; classtype:trojan-activity; sid:2003651; rev:1;)
+alert tcp $HOME_NET any -> $EXTERNAL_NET $HTTP_PORTS (msg:"BLEEDING-EDGE VIRUS Sality Virus User Agent Detected (SPM_ID=)"; flow:established,to_server; content:"User-Agent\: SPM_ID="; nocase; classtype:trojan-activity; sid:2003651; rev:2;)
 
 # Sober
 
@@ -1738,11 +1744,6 @@ alert tcp $HOME_NET !$HTTP_PORTS -> $EXTERNAL_NET 1639 (msg: "BLEEDING-EDGE WORM
 
 #by Matt Jonkman
 alert tcp $HOME_NET any -> $EXTERNAL_NET $HTTP_PORTS (msg:"BLEEDING-EDGE TROJAN Brontok User-Agent Detected (Brontok.A3 Browser)"; flow:established,to_server; content:"User-Agent\: Brontok"; nocase; classtype:trojan-activity; sid:2006999; rev:1;)
-
-#Matt Jonkman, major updates by Chris Byrd
-#Experimenting with this idea. When a bot comes up live and starts spamming, it 
-#  does a massive number of dns queries. This may be an extra way to identify infections
-alert udp !$SMTP_SERVERS any -> $DNS_SERVERS 53 (msg:"BLEEDING-EDGE POLICY Possible Spambot -- Host DNS MX Query High Count"; content: "|01 00|"; offset: 2; depth: 4; content: "|00 0f 00 01|"; distance: 8; threshold:type both, count 30, seconds 10, track by_src; classtype:bad-unknown; sid:2003330; rev:2;)
 
 #By Scott Melnick
 alert tcp $HOME_NET any -> $EXTERNAL_NET $HTTP_PORTS (msg:"BLEEDING-EDGE TROJAN Dialer"; flow: established,to_server; uricontent:"/getnumtemp.asp?nip=0"; nocase; reference:url,isc.sans.org/diary.php?storyid=1388; classtype:trojan-activity; sid:2003083; rev:1;)
@@ -2185,7 +2186,7 @@ alert tcp $EXTERNAL_NET any -> $HOME_NET any (msg:"BLEEDING-EDGE TROJAN Prg Troj
 alert tcp $EXTERNAL_NET any -> $HOME_NET any (msg:"BLEEDING-EDGE TROJAN Prg Trojan v0.3 Binary In Transit"; flow:to_client,established; content:"MZ"; content:"| 5E 7D 66 7D 28 40 19 88 5F 8C 13 50 15 59 08 58 3C 97 00 9B 33 A5 F9 AF 39 68 F0 9F 27 AF E9 A8 25 B7 18 B6 15 7F 0E B6 1A|"; within:128; reference:url,ip.securescience.net/advisories/pubMalwareCaseStudy.pdf; classtype:trojan-activity; sid:2003186; rev:1;)
 
 #by Jeremy Conway
-alert tcp $HOME_NET any -> $EXTERNAL_NET $HTTP_PORTS (msg:"BLEEDING-EDGE TROJAN Prg Trojan HTTP POST"; flow:established,to_server; content:"POST "; depth:5; uricontent:"/s.php?2="; uricontent:"&n="; uricontent:"&v="; uricontent:"&sp="; uricontent:"&lcp="; classtype:trojan-activity; sid:2007688; rev:1;)
+alert tcp $HOME_NET any -> $EXTERNAL_NET $HTTP_PORTS (msg:"BLEEDING-EDGE TROJAN Prg Trojan HTTP POST"; flow:established,to_server; content:"POST "; depth:5; uricontent:"/s.php?2="; uricontent:"&n="; uricontent:"&v="; uricontent:"&sp="; uricontent:"&lcp="; reference:url,ip.securescience.net/advisories/pubMalwareCaseStudy.pdf; classtype:trojan-activity; sid:2007688; rev:2;)
 
 #by Tom Fischer
 alert tcp $HOME_NET any -> $EXTERNAL_NET $HTTP_PORTS (msg:"BLEEDING-EDGE TROJAN PWS-LDPinch Reporting User Activity"; flow:established,to_server; uricontent:".php?ut="; nocase; uricontent:"&idr="; nocase; uricontent:"&lang="; nocase; uricontent:"&ver="; nocase; uricontent:"&winver="; nocase; classtype:trojan-activity; sid:2002812; rev:1;)
@@ -2355,7 +2356,8 @@ alert tcp $EXTERNAL_NET $HTTP_PORTS -> $HOME_NET any (msg:"BLEEDING-EDGE TROJAN 
 
 #from sandnet
 #by Matt Jonkman
-alert tcp $HOME_NET any -> $EXTERNAL_NET $HTTP_PORTS (msg:"BLEEDING-EDGE TROJAN Win32.Agent.GRW Checkin via HTTP"; flow:established,to_server; uricontent:"?v="; uricontent:"&mid="; uricontent:"&r1="; uricontent:"&tm=200"; uricontent:"&av="; uricontent:"&os=Windows"; uricontent:"&uid="; uricontent:"&cht="; classtype:trojan-activity; sid:2007665; rev:1;)
+# Duplicate of sid:2007644, without nocase qualifiers.
+#alert tcp $HOME_NET any -> $EXTERNAL_NET $HTTP_PORTS (msg:"BLEEDING-EDGE TROJAN Win32.Agent.GRW Checkin via HTTP"; flow:established,to_server; uricontent:"?v="; uricontent:"&mid="; uricontent:"&r1="; uricontent:"&tm=200"; uricontent:"&av="; uricontent:"&os=Windows"; uricontent:"&uid="; uricontent:"&cht="; classtype:trojan-activity; sid:2007665; rev:1;)
 
 #by Matt Jonkman, from sandnet snalysis
 alert tcp $HOME_NET any -> $EXTERNAL_NET $HTTP_PORTS (msg:"BLEEDING-EDGE TROJAN Win32.Agent.ajx Trojan Reporting to Server"; flow:established,to_server; uricontent:"/count.php?fid="; nocase; uricontent:"&cid="; nocase; uricontent:"&ver="; nocase; uricontent:"&tid="; nocase; uricontent:"&sn="; nocase; uricontent:"&wc="; nocase; classtype:trojan-activity; sid:2006448; rev:1;)
@@ -2372,6 +2374,9 @@ alert tcp $HOME_NET any -> $EXTERNAL_NET $HTTP_PORTS (msg:"BLEEDING-EDGE TROJAN 
 
 #from sandnet analysis, by matt jonkman
 alert tcp $HOME_NET any -> $EXTERNAL_NET 1024: (msg:"BLEEDING-EDGE TROJAN Win32.Pakes Post Parameters Dected (X-BI, X-TM)"; flow:established,to_server; dsize:<200; content:"GET "; depth:4; content:"|0d 0a|X-Flags\: "; content:"|0d 0a|X-TM\: "; distance:0; content:"|0d 0a|X-BI\: "; distance:0; content:!"User-Agent\: "; nocase; classtype:trojan-activity; sid:2007662; rev:1;)
+
+#by Joe Stewart from SecureWorks
+alert udp $HOME_NET 1024: -> $EXTERNAL_NET 4099 (msg:"BLEEDING-EDGE TROJAN Srizbi registering with controller"; dsize:20;  content:"|2d|"; offset:6; content:"|2d|"; distance:6;  within:1; classtype:trojan-activity; reference:url,www.secureworks.com/research/threats/ronpaul; sid:2007706; rev:1; )
 
 #by Matt JOnkman, from sandnet analysis
 alert tcp $HOME_NET any -> $EXTERNAL_NET $HTTP_PORTS (msg:"BLEEDING-EDGE TROJAN Win32.Small.qh/xSock User-Agent Detected"; flow:established,to_server; content:"User-Agent\: xSock Config"; nocase; classtype:trojan-activity; sid:2007609; rev:1;)
@@ -2485,8 +2490,8 @@ alert tcp $HOME_NET any -> $HOME_NET 139 (msg: "BLEEDING-EDGE VIRUS - W32.Opaser
 #by matt Jonkman, sample submitted anonymously
 # I'm putting these sigs in current events because the worm will likely morph quickly making them obsolete. 
 # If it doesn't we'll move these into a permanent ruleset
-alert tcp $HOME_NET any -> $EXTERNAL_NET $HTTP_PORTS (msg:"BLEEDING-EDGE CURRENT EVENTS Worm.Pyks HTTP C&C Traffic (User-Agent skw00001)"; flow:established,to_server; content:"User-Agent\: skw000"; depth:50; classtype:trojan-activity; reference:url,doc.bleedingthreats.net/2003588; sid:2003588; rev:1;)
-alert tcp $HOME_NET any -> $EXTERNAL_NET $HTTP_PORTS (msg:"BLEEDING-EDGE CURRENT EVENTS Worm.Pyks HTTP C&C Post Traffic (User-Agent h9tslbw0)"; flow:established,to_server; content:"User-Agent\: h9tslbw0"; depth:50; classtype:trojan-activity; reference:url,doc.bleedingthreats.net/2003589; sid:2003589; rev:1;)
+alert tcp $HOME_NET any -> $EXTERNAL_NET $HTTP_PORTS (msg:"BLEEDING-EDGE VIRUS Worm.Pyks HTTP C&C Traffic (User-Agent skw00001)"; flow:established,to_server; content:"User-Agent\: skw000"; depth:50; classtype:trojan-activity; reference:url,doc.bleedingthreats.net/2003588; sid:2003588; rev:2;)
+alert tcp $HOME_NET any -> $EXTERNAL_NET $HTTP_PORTS (msg:"BLEEDING-EDGE VIRUS Worm.Pyks HTTP C&C Post Traffic (User-Agent h9tslbw0)"; flow:established,to_server; content:"User-Agent\: h9tslbw0"; depth:50; classtype:trojan-activity; reference:url,doc.bleedingthreats.net/2003589; sid:2003589; rev:2;)
 
 # Rbot trojan
 #by M Shirk
@@ -3704,6 +3709,11 @@ alert tcp $EXTERNAL_NET $HTTP_PORTS -> $HOME_NET any (msg:"BLEEDING-EDGE POLICY 
 # note: I re-check for the leading HTTP/1 to make sure we're still in the header packet, not in the rest of the binary stream
 alert tcp $EXTERNAL_NET $HTTP_PORTS -> $HOME_NET any (msg:"BLEEDING-EDGE POLICY Binary Download Smaller than 1 MB -- Likely Hostile"; flow:established,from_server; flowbits:isset,BE.http.binary; content:"HTTP/1"; depth:6; content:"MZ"; isdataat: 76,relative; content:"This program "; distance: 0; pcre:"/\x0d\x0aContent-Length\: \d{0,6}\x0d\x0a/"; classtype:policy-violation; sid:2007671; rev:5;)
 
+#Matt Jonkman, major updates by Chris Byrd
+#Experimenting with this idea. When a bot comes up live and starts spamming, it 
+#  does a massive number of dns queries. This may be an extra way to identify infections
+alert udp !$SMTP_SERVERS any -> $DNS_SERVERS 53 (msg:"BLEEDING-EDGE POLICY Possible Spambot -- Host DNS MX Query High Count"; content: "|01 00|"; offset: 2; depth: 4; content: "|00 0f 00 01|"; distance: 8; threshold:type both, count 30, seconds 10, track by_src; classtype:bad-unknown; sid:2003330; rev:2;)
+
 #Submitted by an anonymous researcher
 alert tcp $HOME_NET any -> $EXTERNAL_NET any (msg:"BLEEDING-EDGE POLICY TOR 1.0 Server Key Retrival"; flow:established,to_server;content:"|47 45 54 20 2f 74 6f 72 2f 73 65 72 76 65 72 2f|"; threshold:type limit, track by_src, count 1, seconds 60; classtype:policy-violation; reference:url,tor.eff.org; sid:2002950; rev:2;)
 alert tcp $HOME_NET any -> $EXTERNAL_NET any (msg:"BLEEDING-EDGE POLICY TOR 1.0 Status Update"; flow:established,to_server;content:"|47 45 54 20 2f 74 6f 72 2f 73 74 61 74 75 73 2f|"; threshold:type limit, track by_src, count 1, seconds 60; classtype:policy-violation; reference:url,tor.eff.org; sid:2002951; rev:2;)
@@ -3959,6 +3969,10 @@ alert tcp $EXTERNAL_NET any -> $HTTP_SERVERS $HTTP_PORTS (msg:"BLEEDING-EDGE WEB
 alert tcp $EXTERNAL_NET $HTTP_PORTS -> $HOME_NET any (msg:"BLEEDING-EDGE WEB-CLIENT Apple Quicktime RTSP Overflow (1)"; flow:established,from_server; content:"|22|rtsp|3a|//"; nocase; isdataat:400,relative; content:!"|0a|"; distance:0; within:400; content:!"|22|"; distance:0; within:400; reference:cve,2007-0015; reference:bugtraq,21829; classtype:attempted-admin; sid:2003326; rev:2; )
 alert tcp $EXTERNAL_NET $HTTP_PORTS -> $HOME_NET any (msg:"BLEEDING-EDGE WEB-CLIENT Apple Quicktime RTSP Overflow (2)"; flow:established,from_server; content:"|27|rtsp|3a|//"; nocase; isdataat:400,relative; content:!"|0a|"; distance:0; within:400; content:!"|27|"; distance:0; within:400; reference:cve,2007-0015; reference:bugtraq,21829; classtype:attempted-admin; sid:2003327; rev:2; ) 
 
+#Joint contribution from Andre Ludwig, Blake Hartstein, and Chris Byrd at riosec.com
+alert tcp $EXTERNAL_NET any -> $HOME_NET any (msg: "BLEEDING-EDGE WEB-CLIENT Apple Quicktime RTSP Content-Type overflow attempt"; flow:established,from_server; content:"RTSP/"; nocase; depth:5; content:"|0a|Content-Type|3a|"; nocase; distance:0; content:!"|0a|"; within:50; reference:url,www.kb.cert.org/vuls/id/659761; reference: url,www.milw0rm.com/exploits/4657; classtype:attempted-user; sid:2007703; rev:3; )
+alert udp $EXTERNAL_NET any -> $HOME_NET any (msg: "BLEEDING-EDGE WEB-CLIENT Apple Quicktime RTSP Content-Type overflow attempt"; content:"RTSP/"; nocase; depth:5; content:"|0a|Content-Type|3a|"; nocase; distance:0; content:!"|0a|"; within:50; reference:url,www.kb.cert.org/vuls/id/659761; reference: url,www.milw0rm.com/exploits/4657; classtype:attempted-user; sid:2007704; rev:1; )
+
 #by Blake Hartstein
 alert tcp $EXTERNAL_NET any -> $HTTP_SERVERS $HTTP_PORTS (msg:"BLEEDING-EDGE WEB CGI AWstats Migrate Command Attempt"; flow:established,to_server; uricontent:"/awstats.pl?"; nocase; pcre:"/migrate\s*=\s*\|/Ui"; reference:bugtraq,17844; classtype:web-application-attack; sid:2002900; rev:1; ) 
 
@@ -4067,6 +4081,9 @@ alert tcp $EXTERNAL_NET any -> $HTTP_SERVERS $HTTP_PORTS (msg: "BLEEDING-EDGE WE
 
 #by shirkdog
 alert tcp $EXTERNAL_NET any -> $HOME_NET $HTTP_PORTS (msg: "BLEEDING-EDGE EXPLOIT PHP Attack Tool Morfeus F Scanner"; flow:established,to_server; content:"User-Agent\:"; nocase; pcre:"/User-Agent\:[^\n]+Morfeus\x20F/i";  reference:url,www.webmasterworld.com/search_engine_spiders/3227720.htm; classtype:web-application-attack; sid:2003466; rev:1;)
+
+#Thanks to dxp
+alert tcp $HOME_NET any -> $EXTERNAL_NET $HTTP_PORTS (msg:"BLEEDING-EDGE WEB Neosploit 1.5.x URL Loader"; flow:to_server,established; content:"GET "; depth:4; nocase; pcre:"/\?u\d_\d_\d{3,4}_\d_\d_\d{10}_\d{10}_\d{9,10}[_\da-z]{0,9}$/Ui"; classtype:web-application-attack; sid:2007705; rev:1; )
 
 #by David Maciejak
 alert tcp $EXTERNAL_NET any -> $HTTP_SERVERS $HTTP_PORTS (msg: "BLEEDING-EDGE WEB Netquery Remote Command Execution Attempt"; flow: to_server,established; uricontent:"/nquser.php?"; nocase; pcre:"/(host=\|.+)/i"; reference:bugtraq,14373; classtype: web-application-attack; sid:2002361; rev:2;)
@@ -8807,8 +8824,8 @@ alert tcp $HOME_NET any -> $EXTERNAL_NET 25 (msg:"BLEEDING-EDGE EXPLOIT Outgoing
 
 #by Anonymous Researchers(tm)
 #Intended to catch common shellcode encoding in exploit scripts coming to clients in web sessions
-alert tcp $EXTERNAL_NET $HTTP_PORTS -> $HOME_NET any (msg:"BLEEDING-EDGE EXPLOIT Possible UTF-8 encoded Shellcode Detected";flow:from_server,established;pcre:"/(%U([0-9a-f]{2})){2}/i";classtype:trojan-activity;sid:2003173; rev:2;)
-alert tcp $EXTERNAL_NET $HTTP_PORTS -> $HOME_NET any (msg:"BLEEDING-EDGE EXPLOIT Possible UTF-16 encoded Shellcode Detected";flow:from_server,established;pcre:"/(%U([0-9a-f]{4})){2}/i";classtype:trojan-activity;sid:2003174; rev:2;)
+alert tcp $EXTERNAL_NET $HTTP_PORTS -> $HOME_NET any (msg:"BLEEDING-EDGE EXPLOIT Possible UTF-8 encoded Shellcode Detected";flow:from_server,established;pcre:"/(%U([0-9a-f]{2})){6}/i";classtype:trojan-activity;sid:2003173; rev:3;)
+alert tcp $EXTERNAL_NET $HTTP_PORTS -> $HOME_NET any (msg:"BLEEDING-EDGE EXPLOIT Possible UTF-16 encoded Shellcode Detected";flow:from_server,established;pcre:"/(%U([0-9a-f]{4})){6}/i";classtype:trojan-activity;sid:2003174; rev:3;)
 
 alert tcp $EXTERNAL_NET any -> $HTTP_SERVERS $HTTP_PORTS (msg:"BLEEDING-EDGE EXPLOIT GuppY error.php Arbitrary Remote Code Execution"; flow: to_server,established; uricontent:"/error.php?"; nocase; uricontent:"err="; nocase; uricontent:"_SERVER[REMOTE_ADDR]="; nocase; reference:bugtraq,15609; classtype: web-application-attack; sid:2002703; rev:2; )
 
@@ -9507,7 +9524,7 @@ alert tcp $HTTP_SERVERS $HTTP_PORTS -> any any (msg:"BLEEDING-EDGE ATTACK RESPON
 #by Adam Ellison
 # Detects the old style weak and crackable windows auth in use. By default this should not be in 
 #  active use, but can be forced by hostile parties by a number of methods
-alert tcp $HOME_NET 139 -> any any (msg:"BLEEDING-EDGE ATTACK-RESPONSE Weak Netbios Lanman Auth Challenge Detected"; flow:from_server; content:"|ff 53 4d 42|"; content:"|00 11 22 33 44 55 66 77 88|"; classtype:policy-violation; sid:2006417; rev:3;)
+alert tcp $HOME_NET 139 -> any any (msg:"BLEEDING-EDGE ATTACK RESPONSE Weak Netbios Lanman Auth Challenge Detected"; flow:from_server; content:"|ff 53 4d 42|"; content:"|00 11 22 33 44 55 66 77 88|"; classtype:policy-violation; sid:2006417; rev:4;)
 
 #By Erik Fichtner
 alert tcp $HOME_NET any -> 213.219.122.11/32 $HTTP_PORTS (msg: "BLEEDING-EDGE ATTACK RESPONSE Zone-H.org defacement notification"; flow: established,to_server; content:"notify_"; nocase; pcre:"/notify_(defacer|domain|hackmode|reason)=/i"; classtype: trojan-activity; sid: 2001616; rev:6; )
@@ -9628,7 +9645,7 @@ alert tcp $EXTERNAL_NET any -> $HOME_NET any (msg: "BLEEDING-EDGE F5 BIG-IP 3DNS
 alert tcp $EXTERNAL_NET any -> $HOME_NET any (msg: "BLEEDING-EDGE F5 BIG-IP 3DNS TCP Probe 3"; id: 3; dsize: 24; flags: S,12; content:"|00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00|"; window: 2048; classtype: misc-activity; reference:url,www.f5.com/f5products/v9intro/index.html; sid: 2001611; rev:9; )
 
 #by atomic-penguin, tweak by matt Jonkman to cover other ftp daemons like freeftpd and warftpd
-alert tcp $HOME_NET 21 -> $EXTERNAL_NET any (msg:"BLEEDING-EDGE SCAN Potential FTP Brute-Force attempt"; flow:from_server,established; dsize:<30; content:"530 "; depth:4; pcre:"/530\s+(Login|User|Failed|Not)/smi"; classtype:unsuccessful-user; threshold: type threshold, track by_dst, count 5, seconds 300; sid:2002383; rev:7;)
+alert tcp $HOME_NET 21 -> $EXTERNAL_NET any (msg:"BLEEDING-EDGE SCAN Potential FTP Brute-Force attempt"; flow:from_server,established; dsize:<65; content:"530 "; depth:4; pcre:"/530\s+(Login|User|Failed|Not)/smi"; classtype:unsuccessful-user; threshold: type threshold, track by_dst, count 5, seconds 300; sid:2002383; rev:8;)
 
 #Matt Jonkman
 # Looking for brute forcing of mail services
