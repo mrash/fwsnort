@@ -22,3 +22,10 @@ Hank Leininger
       way to speed up inline Snort implementations.  This suggestion was made
       at a talk I gave about Linux Firewalls at ShmooCon 2007, and the
       --NFQUEUE and --QUEUE command line arguements were the result.
+
+Grant
+    - Submitted patch to exclude loopback interfaces from iptables allow rules
+      parsing.  This behavior can be reversed with the existing
+      --no-exclude-loopback command line argument.
+    - Submitted patch to IPTables::Parse to take into account iptables policy
+      output that contains "0" instead of "all" to represent any protocol.
