@@ -29,3 +29,5 @@ Grant
       --no-exclude-loopback command line argument.
     - Submitted patch to IPTables::Parse to take into account iptables policy
       output that contains "0" instead of "all" to represent any protocol.
+    - Suggested bugfix to allow negated networks to be specified within
+      iptables allow rules or within the fwsnort.conf file.

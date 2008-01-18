@@ -1033,7 +1033,7 @@ sub parse_rule_hdr() {
         unless ($proto =~ /^\w+$/) {
             &logr("[-] Unsupported protocol: \"$proto\" at line: " .
                 "$line_num, skipping.");
-            return '';
+            return {};
         }
 
         my $bidir_flag = 0;
@@ -1062,7 +1062,7 @@ sub parse_rule_hdr() {
                 } else {
                     &logr("[-] Undefined variable $val in rule header " .
                         "at line: $line_num.");
-                    return '';
+                    return {};
                 }
             }
             if ($negate_flag and $val !~ m|!|) {
@@ -1072,9 +1072,8 @@ sub parse_rule_hdr() {
             }
         }
         return \%hsh;
-    } else {
-        return '';
     }
+    return {};
 }
 
 sub parse_pcre() {
@@ -1169,10 +1168,24 @@ sub ipt_allow_traffic() {
     RULE: for my $rule_hr (@{$ipt_policy{$chain}}) {
         $rule_ctr++;
 
+        if ($dumper and $verbose) {
+            print "[+] RULE: $rule_ctr:\n",
+                Dumper($rule_hr);
+        }
         if ($dump_ipt) {
             print "[+] iptables rule: $rule_hr->{'raw'}\n"
                 unless defined $ipt_dump_cache{$rule_hr->{'raw'}};
             $ipt_dump_cache{$rule_hr->{'raw'}} = '';
+        }
+
+        ### don't match on rules to/from the loopback interface
+        unless ($no_exclude_loopback) {
+            if ($rule_hr->{'intf_in'} eq 'lo'
+                    or $rule_hr->{'intf_out'} eq 'lo') {
+                print "[-] Skipping $chain rule $rule_ctr: loopback rule\n"
+                    if $debug;
+                next RULE;
+            }
         }
 
         ### don't match on rules that build state
@@ -1313,6 +1326,20 @@ sub match_addr() {
 
     my $ipt_ip   = '';
     my $ipt_mask = '32';
+    my $negate = 0;
+
+    $negate = 1 if $hdr_src =~ /\!/;
+
+    if ($rule_src =~ /\!/) {
+        if ($negate) {
+            ### if both hdr_src and rule_src are negated
+            ### then revert to normal match.
+            $negate = 0;
+        } else {
+            $negate = 1;
+        }
+    }
+
     if ($rule_src =~ m|($ip_re)/($ip_re)|) {
         $ipt_ip   = $1;
         $ipt_mask = $2;
@@ -1338,9 +1365,15 @@ sub match_addr() {
 #        return 1 if ipv4_in_network(
 #            $ipt_ip, $ipt_mask,
 #            $src_ip, $src_mask);
-        return 1 if ipv4_in_network(
-            $src_ip, $src_mask,
-            $ipt_ip, $ipt_mask);
+        if ($negate) {
+            return 1 unless ipv4_in_network(
+                $src_ip, $src_mask,
+                $ipt_ip, $ipt_mask);
+        } else {
+            return 1 if ipv4_in_network(
+                $src_ip, $src_mask,
+                $ipt_ip, $ipt_mask);
+        }
     }
     return 0;
 }
