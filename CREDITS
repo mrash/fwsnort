@@ -23,7 +23,7 @@ Hank Leininger
       at a talk I gave about Linux Firewalls at ShmooCon 2007, and the
       --NFQUEUE and --QUEUE command line arguements were the result.
 
-Grant
+Grant Ferley
     - Submitted patch to exclude loopback interfaces from iptables allow rules
       parsing.  This behavior can be reversed with the existing
       --no-exclude-loopback command line argument.
