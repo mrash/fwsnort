@@ -1,12 +1,12 @@
 fwsnort-1.0.4 (01//2008):
-    - (Grant) Submitted patch to exclude loopback interfaces from iptables
-      allow rules parsing.  This behavior can be reversed with the existing
-      --no-exclude-loopback command line argument.
-    - (Grant) Submitted patch to IPTables::Parse to take into account iptables
-      policy output that contains "0" instead of "all" to represent any
-      protocol.
-    - (Grant) Submitted patch to IPTables::Parse to set sport and dport to
-      '0:0' if the protocol is 'all'.
+    - (Grant Ferley) Submitted patch to exclude loopback interfaces from
+      iptables allow rules parsing.  This behavior can be reversed with the
+      existing --no-exclude-loopback command line argument.
+    - (Grant Ferley) Submitted patch to IPTables::Parse to take into account
+      iptables policy output that contains "0" instead of "all" to represent
+      any protocol.
+    - (Grant Ferley) Submitted patch to IPTables::Parse to set sport and dport
+      to '0:0' if the protocol is 'all'.
     - Bugfix to allow negated networks to be specified within iptables allow
       rules or within the fwsnort.conf file.
     - Updated install.pl to set the LC_ALL environmental variable to "C". This
