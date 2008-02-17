@@ -402,7 +402,7 @@ my @argv_cp = @ARGV;
 ### make Getopts case sensitive
 Getopt::Long::Configure('no_ignore_case');
 
-&usage(1) unless (GetOptions(
+"[-] Use --help for usage information.\n" unless (GetOptions(
     'ipt-apply'      => \$ipt_apply,    # Apply the generated ruleset.
     'ipt-drop'       => \$ipt_drop,     # Add iptables DROP rules.
     'ipt-reject'     => \$ipt_reject,   # Add iptables REJECT rules.
