@@ -31,3 +31,6 @@ Grant Ferley
       output that contains "0" instead of "all" to represent any protocol.
     - Suggested bugfix to allow negated networks to be specified within
       iptables allow rules or within the fwsnort.conf file.
+
+Franck Joncourt
+    - Submitted patch to fix double dash format in fwsnort man page.
