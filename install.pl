@@ -69,6 +69,7 @@ my $uninstall = 0;
 my $cmdline_force_install = 0;
 my $force_mod_re = '';
 my $exclude_mod_re = '';
+my $deps_dir = 'deps';
 my $help = 0;
 my $locale = 'C';  ### default LC_ALL env variable
 my $no_locale = 0;
@@ -90,6 +91,7 @@ Getopt::Long::Configure('no_ignore_case');
     'force-mod-install' => \$cmdline_force_install,  ### force install of all modules
     'Force-mod-regex=s' => \$force_mod_re, ### force specific mod install with regex
     'Exclude-mod-regex=s' => \$exclude_mod_re, ### exclude a particular perl module
+    'Skip-mod-install'  => \$skip_module_install,
     'uninstall' => \$uninstall, ### uninstall fwsnort
     'LC_ALL=s'  => \$locale,
     'no-LC_ALL' => \$no_locale,
@@ -103,6 +105,10 @@ $ENV{'LC_ALL'} = $locale unless $no_locale;
 
 $force_mod_re = qr|$force_mod_re| if $force_mod_re;
 $exclude_mod_re = qr|$exclude_mod_re| if $exclude_mod_re;
+
+### see if the deps/ directory exists, and if not then we are installing
+### from the -nodeps sources so don't install any perl modules
+$skip_module_install = 1 unless -d $deps_dir;
 
 ### make sure the system binaries are where we think they are.
 &check_commands();
@@ -133,8 +139,10 @@ sub install() {
     }
 
     ### install perl modules
-    for my $module (keys %required_perl_modules) {
-        &install_perl_module($module);
+    unless ($skip_module_install) {
+        for my $module (keys %required_perl_modules) {
+            &install_perl_module($module);
+        }
     }
 
     my $local_rules_dir = 'snort_rules';
@@ -206,6 +214,9 @@ sub install() {
 
 sub install_perl_module() {
     my $mod_name = shift;
+
+    chdir $src_dir or die "[*] Could not chdir $src_dir: $!";
+    chdir $deps_dir or die "[*] Could not chdir($deps_dir): $!";
 
     die '[*] Missing force-install key in required_perl_modules hash.'
         unless defined $required_perl_modules{$mod_name}{'force-install'};
