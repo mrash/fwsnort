@@ -1,0 +1,8 @@
+This directory contains perl modules and other dependencies used by fwsnort.
+These dependencies are included in this directory to ease the installation
+process, but if fwsnort is being installed on a system where all necessary
+dependencies are already installed then it is recommended to install from one
+of the fwsnort "nodeps" tarballs or RPM's.  These distributions of fwsnort do
+not include any perl modules or other dependencies:
+
+http://www.cipherdyne.org/fwsnort/download/
