@@ -1,7 +1,6 @@
 %define name fwsnort
 %define version 1.0.4
 %define release 1
-%define fwsnortlibdir %_libdir/%name
 %define fwsnortlogdir /var/log/fwsnort
 
 ### get the first @INC directory that includes the string "linux".
@@ -50,35 +49,15 @@ to: http://www.cipherdyne.org/projects/fwsnort/.
 
 %setup -q
 
-for i in $(grep -r "use lib" . | cut -d: -f1); do
-	awk '/use lib/ { sub("/usr/lib/fwsnort", "%_libdir/%name") } { print }' $i > $i.tmp
-	mv $i.tmp $i
-done
-
-cd deps
-cd IPTables-Parse && perl Makefile.PL PREFIX=%fwsnortlibdir LIB=%fwsnortlibdir
-cd ..
-cd Net-IPv4Addr && perl Makefile.PL PREFIX=%fwsnortlibdir LIB=%fwsnortlibdir
-cd ../..
-
 %build
 ### build perl modules used by fwsnort
-cd deps
 make OPTS="$RPM_OPT_FLAGS" -C IPTables-Parse
 make OPTS="$RPM_OPT_FLAGS" -C Net-IPv4Addr
-cd ..
 
 %install
 ### config directory
 ### log directory
 mkdir -p $RPM_BUILD_ROOT%fwsnortlogdir
-
-### fwsnort module dirs
-mkdir -p $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/Net/IPv4Addr
-mkdir -p $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/IPTables/Parse
-mkdir -p $RPM_BUILD_ROOT%fwsnortlibdir/auto/Net/IPv4Addr
-mkdir -p $RPM_BUILD_ROOT%fwsnortlibdir/Net
-mkdir -p $RPM_BUILD_ROOT%fwsnortlibdir/IPTables
 
 mkdir -p $RPM_BUILD_ROOT%_bindir
 mkdir -p $RPM_BUILD_ROOT%{_mandir}/man8
@@ -89,13 +68,6 @@ mkdir -p $RPM_BUILD_ROOT%_sysconfdir/%name
 install -m 500 fwsnort $RPM_BUILD_ROOT%_sbindir/
 install -m 644 fwsnort.conf $RPM_BUILD_ROOT%_sysconfdir/%name/
 install -m 644 fwsnort.8 $RPM_BUILD_ROOT%{_mandir}/man8/
-
-### install perl modules used by fwsnort
-cd deps
-install -m 444 Net-IPv4Addr/blib/lib/auto/Net/IPv4Addr/autosplit.ix $RPM_BUILD_ROOT%fwsnortlibdir/auto/Net/IPv4Addr/autosplit.ix
-install -m 444 Net-IPv4Addr/blib/lib/Net/IPv4Addr.pm $RPM_BUILD_ROOT%fwsnortlibdir/Net/IPv4Addr.pm
-install -m 444 IPTables-Parse/blib/lib/IPTables/Parse.pm $RPM_BUILD_ROOT%fwsnortlibdir/IPTables/Parse.pm
-cd ..
 
 ### install snort rules files
 cp -r snort_rules $RPM_BUILD_ROOT%_sysconfdir/%name
@@ -123,8 +95,6 @@ cp -r snort_rules $RPM_BUILD_ROOT%_sysconfdir/%name
 
 %dir %_sysconfdir/%name/snort_rules
 %config(noreplace) %_sysconfdir/%name/snort_rules/*
-
-%_libdir/%name
 
 %changelog
 * Thu Aug 07 2008 Michael Rash <mbr@cipherydne.org>
