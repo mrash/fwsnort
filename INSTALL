@@ -1,22 +1,29 @@
 
-fwsnort has its own installer "install.pl".  Just run install.pl
-to install fwsnort.  After fwsnort has been installed, you will
-need to edit /etc/fwsnort/fwsnort.conf by hand the first time
-you run fwsnort.
+fwsnort has its own installer "install.pl".  Just run install.pl to install
+fwsnort.  After fwsnort has been installed, it is recommended that you edit
+the /etc/fwsnort/fwsnort.conf file to define your internal network and lists
+of your server infrastructure.  You can just run fwsnort with the defaults
+if you like.
 
-fwsnort requires the iptables string match module in order to be able to
-detect application layer attacks.  In addition, fwsnort extends iptables by
-adding a "--hex-string" option with a patch against
-iptables/extensions/libipt_string.c.  This patch has been accepted by the
-iptables maintainers and is a part of iptables as of the 1.2.9 release.
-If you are running a version of iptables that is less than 1.2.9, then you
-will need to apply the patch yourself (the patch is against
-iptables-1.2.7a).  The basic steps to do this are:
+DEPENDENCIES:
 
--download iptables-1.2.7a.tar.bz2 from http://www.netfilter.org
--tar xvfj iptables-1.2.7a.tar.bz2
--cp fwsnort/libipt_string.c.patch iptables-1.2.7a/extensions
--cd iptables-1.2.7a/extensions
--patch libipt_string.c libipt_string.c.patch
--compile and install iptables
--edit /etc/fwsnort/fwsnort.conf to point to the new iptables binary.
+iptables String Matching:
+
+fwsnort requires the iptables string match extensions in order to be able to
+detect application layer attacks.  Most Linux distributions include iptables
+compiled in, and the string match extension is commonly included as well, so
+if you are running a recent Linux distro you may already have string matching
+available.  If not, you will need to enable the
+CONFIG_NETFILTER_XT_MATCH_STRING variable in the kernel config file (for 2.6
+series kernels) and recompile.
+
+Perl modules:
+
+fwsnort requires two perl modules in order to run properly:
+
+IPTables::Parse
+Net-IPv4Addr
+
+These two modules are bundled with fwsnort within the deps/ directory, unless
+you have downloaded the fwsnort-nodeps tarball, in which case these two
+modules need to be installed in the perl library tree.
