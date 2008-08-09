@@ -146,6 +146,7 @@ sub install() {
         }
     }
 
+    chdir $src_dir or die $!;
     my $local_rules_dir = 'snort_rules';
     if (&query_get_bleeding_snort()) {
         chdir $local_rules_dir or die "[*] Could not chdir $local_rules_dir";
