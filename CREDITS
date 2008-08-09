@@ -34,3 +34,5 @@ Grant Ferley
 
 Franck Joncourt
     - Submitted patch to fix double dash format in fwsnort man page.
+    - Architected the process of packaging fwsnort (and the other Cipherdyne
+      projects) for the Debian Linux distribution.
