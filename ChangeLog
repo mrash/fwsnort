@@ -1,4 +1,23 @@
-fwsnort-1.0.4 (01//2008):
+fwsnort-1.0.5 (01//2008):
+    - Restructured perl module paths to make it easy to introduce a "nodeps"
+      distribution of fwsnort that does not contain any perl modules.  This
+      allows better integration with systems that already have all necessary
+      modules installed (including the IPTables::ChainMgr and IPTables::Parse
+      modules).  The main driver for this work is to make all cipherdyne.org
+      projects easily integrated with distributions based on Debian, and
+      Franck Joncourt has been instrumental in making this process a reality.
+      All perl modules are now placed within the "deps" directory, and the
+      install.pl script checks to see if this directory exists - a separate
+      fwsnort-<ver>-nodeps tarball will be distributed without this directory.
+      The Debian package for fwsnort can then reference the -nodeps tarball,
+      and a new "fwsnort-nodeps.spec" file has been added to build an RPM from
+      the fwsnort sources that does not install any perl modules.
+    - Updated to import perl modules from /usr/lib/fwsnort, but only if this
+      path actually exists in the filesystem.  This is similar to the strategy
+      implemented by psad.  A new variable FWSNORT_LIBS_DIR was added to the
+      fwsnort.conf to support this.
+
+fwsnort-1.0.4 (01/22/2008):
     - (Grant Ferley) Submitted patch to exclude loopback interfaces from
       iptables allow rules parsing.  This behavior can be reversed with the
       existing --no-exclude-loopback command line argument.

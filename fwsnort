@@ -91,8 +91,6 @@
 use lib '/usr/lib/fwsnort';
 use Data::Dumper;
 use IO::Socket;
-use IPTables::Parse;
-use Net::IPv4Addr qw(ipv4_in_network);
 use File::Copy;
 use File::Path;
 use Sys::Hostname;
@@ -333,6 +331,7 @@ my $ipt_drop   = 0;
 my $ipt_reject = 0;
 my $help       = 0;
 my $stdout     = 0;
+my $lib_dir    = '';
 my $debug      = 0;
 my $dumper     = 0;
 my $dump_ipt   = 0;
@@ -484,6 +483,7 @@ die "[-] Use --help for usage information.\n" unless (GetOptions(
                                               # rules directory in --QUEUE or
                                               # --NFQUEUE mode.
     'queue-num=i'    => \$nfqueue_num,  # Specifies the NFQUEUE number.
+    'lib-dir=s'      => \$lib_dir,      # Specify path to lib directory.
     'verbose'        => \$verbose,
     'logfile=s'      => \$logfile,      # Specify the logfile path.
     'stdout'         => \$stdout,       # Print log messages to stdout.
@@ -2765,7 +2765,7 @@ sub required_vars() {
         AVG_TCP_HEADER_LEN MAX_FRAME_LEN FWSNORT_INPUT FWSNORT_INPUT_ESTAB
         FWSNORT_OUTPUT FWSNORT_OUTPUT_ESTAB FWSNORT_FORWARD
         FWSNORT_FORWARD_ESTAB FWSNORT_INPUT_JUMP FWSNORT_OUTPUT_JUMP
-        FWSNORT_FORWARD_JUMP
+        FWSNORT_FORWARD_JUMP FWSNORT_LIBS_DIR
     );
     for my $var (@required_vars) {
         die "[*] Variable $var not defined in $fwsnort_conf. Exiting.\n"
@@ -2968,6 +2968,60 @@ sub dump_conf() {
     exit 0;
 }
 
+sub import_perl_modules() {
+
+    my $mod_paths_ar = &get_mod_paths();
+
+    if ($#$mod_paths_ar > -1) {  ### /usr/lib/fwsnort/ exists
+        push @$mod_paths_ar, @INC;
+        splice @INC, 0, $#$mod_paths_ar+1, @$mod_paths_ar;
+    }
+
+    if ($debug) {
+        print STDERR "[+] import_perl_modules(): The \@INC array:\n";
+        print STDERR "$_\n" for @INC;
+    }
+
+    require IPTables::ChainMgr;
+    require Net::IPv4Addr;
+
+    Net::IPv4Addr->import(qw/ipv4_in_network/);
+
+    return;
+}
+
+sub get_mod_paths() {
+
+    my @paths = ();
+
+    $config{'FWSNORT_LIBS_DIR'} = $lib_dir if $lib_dir;
+
+    unless (-d $config{'FWSNORT_LIBS_DIR'}) {
+        my $dir_tmp = $config{'FWSNORT_LIBS_DIR'};
+        $dir_tmp =~ s|lib/|lib64/|;
+        if (-d $dir_tmp) {
+            $config{'FWSNORT_LIBS_DIR'} = $dir_tmp;
+        } else {
+            return [];
+        }
+    }
+
+    opendir D, $config{'FWSNORT_LIBS_DIR'}
+        or die "[*] Could not open $config{'FWSNORT_LIBS_DIR'}: $!";
+    my @dirs = readdir D;
+    closedir D;
+
+    push @paths, $config{'FWSNORT_LIBS_DIR'};
+
+    for my $dir (@dirs) {
+        ### get directories like "/usr/lib/fwsnort/x86_64-linux"
+        next unless -d "$config{'FWSNORT_LIBS_DIR'}/$dir";
+        push @paths, "$config{'FWSNORT_LIBS_DIR'}/$dir"
+            if $dir =~ m|linux| or $dir =~ m|thread|;
+    }
+    return \@paths;
+}
+
 sub setup() {
 
     ### these two directories must already exist for
@@ -2976,6 +3030,9 @@ sub setup() {
         unless -d $fwsnort_dir;
     die "[*] No snort rules directory $rules_dir: $!"
         unless -d $rules_dir;
+
+    ### import psad perl modules
+    &import_perl_modules();
 
     unless (-d $archive_dir) {
         mkdir $archive_dir, 0500 or die $!;
@@ -3220,7 +3277,7 @@ Options:
     -c   --config=<config>    - Use <config> instead of the normal
                                 config file located at
                                 $fwsnort_conf
-    -l   --logfile=<file>     - Log messages to <file> instead of the
+    --logfile=<file>          - Log messages to <file> instead of the
                                 normal location at
                                 $logfile
     -N   --NFQUEUE            - Build a policy designed to only send packets
@@ -3249,6 +3306,7 @@ Options:
     --Dump-snort              - Dump Snort rules on STDOUT.
     --Dump-conf               - Dump configuration on STDOUT and exit.
     --add-deleted             - Added Snort deleted rules.
+    --lib-dir <path>          - Specify path to lib directory.
     --debug                   - Run in debug mode.
     -v   --verbose            - Run in verbose mode.
     -V   --Version            - Print fwsnort version number and exit.
