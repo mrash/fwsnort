@@ -66,6 +66,7 @@ my %required_perl_modules = (
 
 ### establish some defaults
 my $uninstall = 0;
+my $skip_module_install   = 0;
 my $cmdline_force_install = 0;
 my $force_mod_re = '';
 my $exclude_mod_re = '';
