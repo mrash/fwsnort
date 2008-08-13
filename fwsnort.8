@@ -95,6 +95,11 @@ This will overwrite the bleeding-all.rules file in the
 of Snort rules from http://www.snort.org/ as of March, 2005 is only offered
 as a pay service.
 .TP
+.BR \-\^\-snort-rdir\ <snort-rules-directory>
+Manually  specify  the directory where the snort rules files are located.
+The default is
+.B /etc/fwsnort/snort_rules.
+.TP
 .BR \-\^\-snort-sid\ \<sid>
 Generate an iptables ruleset for a single snort rule specified by
 <sid>.  A comma-separated list of sids can be specified, e.g. "2001842,1834".
