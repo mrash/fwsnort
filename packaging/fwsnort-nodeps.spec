@@ -69,9 +69,6 @@ install -m 500 fwsnort $RPM_BUILD_ROOT%_sbindir/
 install -m 644 fwsnort.conf $RPM_BUILD_ROOT%_sysconfdir/%name/
 install -m 644 fwsnort.8 $RPM_BUILD_ROOT%{_mandir}/man8/
 
-### install snort rules files
-cp -r snort_rules $RPM_BUILD_ROOT%_sysconfdir/%name
-
 %clean
 [ "$RPM_BUILD_ROOT" != "/" ] && rm -rf $RPM_BUILD_ROOT
 
@@ -92,9 +89,6 @@ cp -r snort_rules $RPM_BUILD_ROOT%_sysconfdir/%name
 
 %dir %_sysconfdir/%name
 %config(noreplace) %_sysconfdir/%name/fwsnort.conf
-
-%dir %_sysconfdir/%name/snort_rules
-%config(noreplace) %_sysconfdir/%name/snort_rules/*
 
 %changelog
 * Thu Aug 07 2008 Michael Rash <mbr@cipherydne.org>

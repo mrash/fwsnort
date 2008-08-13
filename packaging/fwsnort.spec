@@ -98,7 +98,7 @@ install -m 444 IPTables-Parse/blib/lib/IPTables/Parse.pm $RPM_BUILD_ROOT%fwsnort
 cd ..
 
 ### install snort rules files
-cp -r snort_rules $RPM_BUILD_ROOT%_sysconfdir/%name
+cp -r deps/snort_rules $RPM_BUILD_ROOT%_sysconfdir/%name
 
 %clean
 [ "$RPM_BUILD_ROOT" != "/" ] && rm -rf $RPM_BUILD_ROOT
