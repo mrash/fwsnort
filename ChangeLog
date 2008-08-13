@@ -11,7 +11,7 @@ fwsnort-1.0.5 (01//2008):
       Franck Joncourt has been instrumental in making this process a reality.
       All perl modules are now placed within the "deps" directory, and the
       install.pl script checks to see if this directory exists - a separate
-      fwsnort-<ver>-nodeps tarball will be distributed without this directory.
+      fwsnort-nodeps-<ver> tarball will be distributed without this directory.
       The Debian package for fwsnort can then reference the -nodeps tarball,
       and a new "fwsnort-nodeps.spec" file has been added to build an RPM from
       the fwsnort sources that does not install any perl modules.
