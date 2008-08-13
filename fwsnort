@@ -1085,7 +1085,7 @@ sub parse_pcre() {
         push @strings, $pcre;
         $rv = 1;
     } elsif ($pcre =~ m|UNION\x5c\x73\x2bSELECT|) {
-        ### a bunch of bleeding threats rules contain "UNION\s+SELECT"
+        ### a bunch of Emerging Threats rules contain "UNION\s+SELECT"
         ### as a PCRE.  Sure, the translation below can be evaded, but
         ### it is better than nothing.
         push @strings, 'UNION SELECT';
@@ -3026,9 +3026,9 @@ sub setup() {
 
     ### these two directories must already exist for
     ### things to work
-    die "[*] No fwsnort directory $fwsnort_dir: $!"
+    die "[*] No fwsnort directory $fwsnort_dir"
         unless -d $fwsnort_dir;
-    die "[*] No snort rules directory $rules_dir: $!"
+    die "[*] No snort rules directory $rules_dir, use --snort-rdir"
         unless -d $rules_dir;
 
     ### import psad perl modules
@@ -3050,25 +3050,24 @@ sub setup() {
 }
 
 sub update_rules() {
-    ### make sure we can actually reach snort.org.
-    print "[+] Downloading latest rules:\n",
-        "    http://www.bleedingsnort.com/bleeding-all.rules\n";
+    my $url = 'http://www.emergingthreats.net/rules/emerging-all.rules';
+    print "[+] Downloading latest rules:\n    $url\n";
     chdir $rules_dir or die "[*] Could not chdir $rules_dir: $!";
-    if (-e 'bleeding-all.rules') {
-        move 'bleeding-all.rules', 'bleeding-all.rules.tmp'
-            or die "[*] Could not move bleeding-all.rules -> ",
-            "bleeding-all.rules.tmp";
+    if (-e 'emerging-all.rules') {
+        move 'emerging-all.rules', 'emerging-all.rules.tmp'
+            or die "[*] Could not move emerging-all.rules -> ",
+            "emerging-all.rules.tmp";
     }
-    system "$cmds{'wget'} http://www.bleedingsnort.com/bleeding-all.rules";
-    if (-e 'bleeding-all.rules') {  ### successful download
-        unlink 'bleeding-all.rules.tmp';
+    system "$cmds{'wget'} $url";
+    if (-e 'emerging-all.rules') {  ### successful download
+        unlink 'emerging-all.rules.tmp';
     } else {
-        print "[-] Could not download bleeding-all.rules file.\n";
-        if (-e 'bleeding-all.rules.tmp') {
+        print "[-] Could not download emerging-all.rules file.\n";
+        if (-e 'emerging-all.rules.tmp') {
             ### move the original back
-            move 'bleeding-all.rules', 'bleeding-all.rules.tmp'
-                or die "[*] Could not move bleeding-all.rules -> ",
-                "bleeding-all.rules.tmp";
+            move 'emerging-all.rules', 'emerging-all.rules.tmp'
+                or die "[*] Could not move emerging-all.rules -> ",
+                "emerging-all.rules.tmp";
         }
     }
     print "[+] Finished.\n";
@@ -3262,8 +3261,8 @@ Options:
                                 (CIDR or standard notation).
     --External-net <net/mask> - Manually specify the external network
                                 (CIDR or standard notation).
-    --update-rules            - Download latest Bleeding-Snort rules
-                                from http://www.bleedingsnort.com/
+    --update-rules            - Download latest rules from Emerging Threats
+                                (http://www.emergingthreats.net).
     --include-type=<type>     - Only process snort rules of type <type>
                                 (e.g. "ddos" or "backdoor"). <type> can
                                 be a comma separated list.

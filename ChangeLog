@@ -1,4 +1,7 @@
 fwsnort-1.0.5 (01//2008):
+    - Replaced the bleeding-all.rules file with the emerging-all.rules file.
+      This is because Matt Jonkman now releases his rule sets at
+      http://www.emergingthreats.net/
     - Restructured perl module paths to make it easy to introduce a "nodeps"
       distribution of fwsnort that does not contain any perl modules.  This
       allows better integration with systems that already have all necessary

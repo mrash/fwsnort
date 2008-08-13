@@ -41,8 +41,7 @@ my $lib_dir     = '/usr/lib/fwsnort';
 my $fwsnort_dir = '/etc/fwsnort';
 my $rules_dir   = "${fwsnort_dir}/snort_rules";
 
-### Snort.org no longer allows auto downloads of signatures
-my $bleeding_snort_website = 'www.bleedingsnort.com';
+my $update_website = 'www.emergingthreats.net';
 
 ### system binaries
 my $perlCmd = '/usr/bin/perl';
@@ -147,41 +146,44 @@ sub install() {
     }
 
     chdir $src_dir or die $!;
-    my $local_rules_dir = 'snort_rules';
-    if (&query_get_bleeding_snort()) {
+    my $local_rules_dir = 'deps/snort_rules';
+    if (-d 'deps' and -d $local_rules_dir
+            and &query_get_emerging_threats_sigs()) {
         chdir $local_rules_dir or die "[*] Could not chdir $local_rules_dir";
-        if (-e 'bleeding-all.rules') {
-            move 'bleeding-all.rules', 'bleeding-all.rules.tmp'
-                or die "[*] Could not move bleeding-all.rules -> ",
-                "bleeding-all.rules.tmp";
+        if (-e 'emerging-all.rules') {
+            move 'emerging-all.rules', 'emerging-all.rules.tmp'
+                or die "[*] Could not move emerging-all.rules -> ",
+                "emerging-all.rules.tmp";
         }
-        system "$cmds{'wget'} http://$bleeding_snort_website/bleeding-all.rules";
-        if (-e 'bleeding-all.rules') {  ### successful download
-            unlink 'bleeding-all.rules.tmp';
+        system "$cmds{'wget'} http://$update_website/rules/emerging-all.rules";
+        if (-e 'emerging-all.rules') {  ### successful download
+            unlink 'emerging-all.rules.tmp';
         } else {
-            print "[-] Could not download bleeding-all.rules file.\n";
-            if (-e 'bleeding-all.rules.tmp') {
+            print "[-] Could not download emerging-all.rules file.\n";
+            if (-e 'emerging-all.rules.tmp') {
                 ### move the original back
-                move 'bleeding-all.rules', 'bleeding-all.rules.tmp'
-                    or die "[*] Could not move bleeding-all.rules -> ",
-                    "bleeding-all.rules.tmp";
+                move 'emerging-all.rules', 'emerging-all.rules.tmp'
+                    or die "[*] Could not move emerging-all.rules -> ",
+                    "emerging-all.rules.tmp";
             }
         }
-        chdir '..';
+        chdir '../..';
     }
 
-    opendir D, $local_rules_dir or die "[*] Could not open ",
-        "the $local_rules_dir directory: $!";
-    my @rfiles = readdir D;
-    closedir D;
+    if (-d 'deps' and -d $local_rules_dir) {
+        opendir D, $local_rules_dir or die "[*] Could not open ",
+            "the $local_rules_dir directory: $!";
+        my @rfiles = readdir D;
+        closedir D;
 
-    print "[+] Copying all rules files to $rules_dir\n";
-    for my $rfile (@rfiles) {
-        next unless $rfile =~ /\.rules$/;
-        print "[+] Installing $rfile\n";
-        copy "snort_rules/${rfile}", "${rules_dir}/${rfile}" or
-            die "[*] Could not copy snort_rules/${rfile} ",
-                "-> ${rules_dir}/${rfile}";
+        print "[+] Copying all rules files to $rules_dir\n";
+        for my $rfile (@rfiles) {
+            next unless $rfile =~ /\.rules$/;
+            print "[+] Installing $rfile\n";
+            copy "$local_rules_dir/${rfile}", "${rules_dir}/${rfile}" or
+                die "[*] Could not copy $local_rules_dir/${rfile} ",
+                    "-> ${rules_dir}/${rfile}";
+        }
     }
 
     print "\n";
@@ -370,10 +372,10 @@ sub install_manpage() {
     return;
 }
 
-sub query_get_bleeding_snort() {
+sub query_get_emerging_threats_sigs() {
     my $ans = '';
     print "[+] Would you like to download the latest Snort rules from \n",
-        "    http://$bleeding_snort_website/?\n";
+        "    http://$update_website/?\n";
     while ($ans ne 'y' && $ans ne 'n') {
         print "    ([y]/n)?  ";
         $ans = <STDIN>;
