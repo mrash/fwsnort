@@ -3,10 +3,6 @@
 %define release 1
 %define fwsnortlogdir /var/log/fwsnort
 
-### get the first @INC directory that includes the string "linux".
-### This may be 'i386-linux', or 'i686-linux-thread-multi', etc.
-%define fwsnortmoddir `perl -e '$path='i386-linux'; for (@INC) { if($_ =~ m|.*/(.*linux.*)|) {$path = $1; last; }} print $path'`
-
 Summary: Fwsnort translates Snort rules into equivalent Netfilter rules
 Name: %name
 Version: %version
@@ -42,7 +38,7 @@ of all rules from the Snort-2.3.3 IDS into equivalent iptables rules. For
 more information about the translation strat- egy as well as
 advantages/disadvantages of the method used by fwsnort to obtain intrusion
 detection data, see the README included with the fwsnort sources or browse
-to: http://www.cipherdyne.org/projects/fwsnort/.
+to: http://www.cipherdyne.org/fwsnort/
 
 %prep
 [ "$RPM_BUILD_ROOT" != "/" ] && rm -rf $RPM_BUILD_ROOT
