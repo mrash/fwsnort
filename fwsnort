@@ -88,12 +88,11 @@
 # $Id$
 #
 
-use lib '/usr/lib/fwsnort';
-use Data::Dumper;
 use IO::Socket;
 use File::Copy;
 use File::Path;
 use Sys::Hostname;
+use Data::Dumper;
 use Getopt::Long;
 use strict;
 
@@ -2978,8 +2977,8 @@ sub import_perl_modules() {
     }
 
     if ($debug) {
-        print STDERR "[+] import_perl_modules(): The \@INC array:\n";
-        print STDERR "$_\n" for @INC;
+        print "[+] import_perl_modules(): The \@INC array:\n";
+        print "$_\n" for @INC;
     }
 
     require IPTables::ChainMgr;
