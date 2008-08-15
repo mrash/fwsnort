@@ -70,7 +70,7 @@ also supports a comma-separated list of types, e.g. "ddos,backdoor".
 .BR \-\^\-exclude-type\ \ <rules\ type>
 Exclude all Snort rules from of type <rules type> from the translation
 process.  For example, if you don't want any rules from the file
-bleeding-all.rules to be translated, then use "bleeding-all" as the
+emerging-all.rules to be translated, then use "emerging-all" as the
 argument to this option.  A comma-separated list of types to exclude can
 be specified.
 .TP
@@ -89,8 +89,8 @@ policies that have a common characteristic (such as a string
 match on "HTTP_PORTS" for example).
 .TP
 .BR \-\^\-update-rules
-Download the latest Bleeding Snort rules from http://www.bleedingsnort.com/
-This will overwrite the bleeding-all.rules file in the
+Download the latest Emerging Threats rules from http://www.emergingthreats.net
+This will overwrite the  emerging-all.rules file in the
 /etc/fwsnort/snort_rules/ directory.  Note that the automatic downloading
 of Snort rules from http://www.snort.org/ as of March, 2005 is only offered
 as a pay service.
@@ -315,9 +315,9 @@ Generate iptables rules for ddos and backdoor Snort rules only:
 .PP
 .B # fwsnort --include-type ddos,backdoor
 .PP
-Generate iptables rules for Snort ID's 1834 and 2001842 (from bleeding-all.rules):
+Generate iptables rules for Snort ID's 2008475 and 2003268 (from emerging-all.rules):
 .PP
-.B fwsnort --snort-sid 1834,2001842
+.B fwsnort --snort-sid 2008475,2003268
 .PP
 Generate iptables rules for Snort ID's 1834 and 2001842 but queue them to userspace
 via the NFQUEUE target and restrict exclude the INPUT and OUTPUT chains:
