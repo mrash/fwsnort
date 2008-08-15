@@ -43,7 +43,7 @@ of all rules from the Snort-2.3.3 IDS into equivalent iptables rules. For
 more information about the translation strat- egy as well as
 advantages/disadvantages of the method used by fwsnort to obtain intrusion
 detection data, see the README included with the fwsnort sources or browse
-to: http://www.cipherdyne.org/projects/fwsnort/.
+to: http://www.cipherdyne.org/fwsnort/
 
 %prep
 [ "$RPM_BUILD_ROOT" != "/" ] && rm -rf $RPM_BUILD_ROOT
