@@ -19,6 +19,8 @@ fwsnort-1.0.5 (01//2008):
       path actually exists in the filesystem.  This is similar to the strategy
       implemented by psad.  A new variable FWSNORT_LIBS_DIR was added to the
       fwsnort.conf to support this.
+    - Added support for multiple Snort rule directories as a comma-separated
+      list for the argument to --snort-rdir.
 
 fwsnort-1.0.4 (01/22/2008):
     - (Grant Ferley) Submitted patch to exclude loopback interfaces from
