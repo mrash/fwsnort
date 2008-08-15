@@ -2443,7 +2443,7 @@ sub check_type() {
                 }
             }
             unless ($found) {
-                print "[-] \"$type\" is not a valid include type.\n",
+                print "[-] \"$type\" is not a valid type.\n",
                 "    Choose from the following available signature types:\n";
                 for my $type (sort @valid_types) {
                     print "        $type\n";
@@ -3056,7 +3056,9 @@ sub setup() {
 sub update_rules() {
     my $url = 'http://www.emergingthreats.net/rules/emerging-all.rules';
     print "[+] Downloading latest rules:\n    $url\n";
-    chdir $rules_dir or die "[*] Could not chdir $rules_dir: $!";
+    my $dir = $rules_dir;
+    $dir =~ s/\,.*//;
+    chdir $dir or die "[*] Could not chdir $dir: $!";
     if (-e 'emerging-all.rules') {
         move 'emerging-all.rules', 'emerging-all.rules.tmp'
             or die "[*] Could not move emerging-all.rules -> ",
