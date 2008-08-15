@@ -144,8 +144,8 @@ sub install() {
             &install_perl_module($module);
         }
     }
+    chdir $src_dir or die "[*] Could not chdir $src_dir: $!";
 
-    chdir $src_dir or die $!;
     my $local_rules_dir = 'deps/snort_rules';
     if (-d 'deps' and -d $local_rules_dir
             and &query_get_emerging_threats_sigs()) {
@@ -287,10 +287,10 @@ sub install_perl_module() {
         system $cmds{'make'};
 #        system "$cmds{'make'} test";
         system "$cmds{'make'} install";
-        chdir $src_dir or die "[*] Could not chdir $src_dir: $!";
 
         print "\n\n";
     }
+    chdir $src_dir or die "[*] Could not chdir $src_dir: $!";
     return;
 }
 
