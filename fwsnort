@@ -254,24 +254,24 @@ my %snort_opts = (
         ### Netfilter u32 module.  Functionality has been built
         ### into psad to generate alerts for most of these Snort
         ### options.
-        'id'       => '[\s;]id:\s*(\d+)\s*;',
-        'seq'      => '[\s;]seq:\s*(\d+)\s*;',  ### --log-tcp-sequence
-        'ack'      => '[\s;]ack:\s*.*?\s*;',    ### --log-tcp-sequence
-        'icmp_seq' => '[\s;]icmp_seq:\s*(\d+)\s*;',
-        'icmp_id'  => '[\s;]icmp_id:\s*(\d+)\s*;',
-        'sameip'   => '[\s;]sameip\s*;',
-        'regex'    => '[\s;]regex:\s*(.*?)\s*;',
-        'isdataat' => '[\s;]isdataat:\s*(.*?)\s*;',
+        'id'        => '[\s;]id:\s*(\d+)\s*;',
+        'seq'       => '[\s;]seq:\s*(\d+)\s*;',  ### --log-tcp-sequence
+        'ack'       => '[\s;]ack:\s*.*?\s*;',    ### --log-tcp-sequence
+        'icmp_seq'  => '[\s;]icmp_seq:\s*(\d+)\s*;',
+        'icmp_id'   => '[\s;]icmp_id:\s*(\d+)\s*;',
+        'sameip'    => '[\s;]sameip\s*;',
+        'regex'     => '[\s;]regex:\s*(.*?)\s*;',
+        'isdataat'  => '[\s;]isdataat:\s*(.*?)\s*;',
+        'threshold' => '[\s;]threshold:\s*.*?\s*;'  ### FIXME --limit
     },
 
     ### snort options that fwsnort will ignore
     'ignore' => {
-        'nocase'    => '[\s;]nocase\s*;',
-        'logto'     => '[\s;]logto:\s*\S+\s*;',
-        'session'   => '[\s;]session\s*;',
-        'tag'       => '[\s;]tag:\s*.*?\s*;',
-        'threshold' => '[\s;]threshold:\s*.*?\s*;',
-        'react'     => '[\s;]react:\s*.*?\s*;' ### FIXME -j REJECT
+        'nocase'  => '[\s;]nocase\s*;',
+        'logto'   => '[\s;]logto:\s*\S+\s*;',
+        'session' => '[\s;]session\s*;',
+        'tag'     => '[\s;]tag:\s*.*?\s*;',
+        'react'   => '[\s;]react:\s*.*?\s*;' ### FIXME -j REJECT
     }
 );
 

@@ -21,6 +21,10 @@ fwsnort-1.0.5 (01//2008):
       fwsnort.conf to support this.
     - Added support for multiple Snort rule directories as a comma-separated
       list for the argument to --snort-rdir.
+    - Moved 'threshold' to the unsupported list since there will be several
+      signatures that use this feature to detect the Dan Kaminsky DNS attack,
+      and fwsnort does not yet support the usage of the iptables --limit
+      match.
 
 fwsnort-1.0.4 (01/22/2008):
     - (Grant Ferley) Submitted patch to exclude loopback interfaces from
