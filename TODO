@@ -11,3 +11,6 @@
    script.  This would make it possible to have add a new fwsnort rule for
    a specific signature to an existing fwsnort policy without removing
    existing rules, or perhaps a new "--policy-add" option is in order.
+ - Ability to download Emerging Threats rulesets as a .tar.gz so that the
+   different classtypes can be used (e.g. within --include-type/exclude-type
+   options, etc.)
