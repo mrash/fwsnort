@@ -46,9 +46,6 @@ to: http://www.cipherdyne.org/fwsnort/
 %setup -q
 
 %build
-### build perl modules used by fwsnort
-make OPTS="$RPM_OPT_FLAGS" -C IPTables-Parse
-make OPTS="$RPM_OPT_FLAGS" -C Net-IPv4Addr
 
 %install
 ### config directory
@@ -87,11 +84,11 @@ install -m 644 fwsnort.8 $RPM_BUILD_ROOT%{_mandir}/man8/
 %config(noreplace) %_sysconfdir/%name/fwsnort.conf
 
 %changelog
-* Thu Aug 07 2008 Michael Rash <mbr@cipherydne.org>
+* Thu Aug 17 2008 Michael Rash <mbr@cipherydne.org>
 - Updated to use the deps/ directory for all perl module sources.
 - fwsnort-1.0.5 release
 
-* Tue Jan 22 2007 Michael Rash <mbr@cipherydne.org>
+* Tue Jan 22 2008 Michael Rash <mbr@cipherydne.org>
 - fwsnort-1.0.4 release
 
 * Thu Nov 22 2007 Michael Rash <mbr@cipherydne.org>
