@@ -2983,7 +2983,7 @@ sub import_perl_modules() {
         print "$_\n" for @INC;
     }
 
-    require IPTables::ChainMgr;
+    require IPTables::Parse;
     require Net::IPv4Addr;
 
     Net::IPv4Addr->import(qw/ipv4_in_network/);
