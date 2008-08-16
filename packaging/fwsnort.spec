@@ -40,7 +40,7 @@ fwsnort implements a patch against iptables-1.2.7a which adds a
 "--hex-string" option which will accept content fields such as
 "|0d0a5b52504c5d3030320d0a|". fwsnort is able to translate approximately 60%
 of all rules from the Snort-2.3.3 IDS into equivalent iptables rules. For
-more information about the translation strat- egy as well as
+more information about the translation strategy as well as
 advantages/disadvantages of the method used by fwsnort to obtain intrusion
 detection data, see the README included with the fwsnort sources or browse
 to: http://www.cipherdyne.org/fwsnort/

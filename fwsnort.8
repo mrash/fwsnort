@@ -22,10 +22,11 @@ network communications are not malicious, this should provide a speedup
 for snort_inline since the majority of packets do not then have to be
 copied from kernel memory into user memory and subsequently inspected by
 snort_inline.  There is a tradeoff here in terms of signature detection
-however because snort_inline does not have the opportunity to see all
-packets associated with a session, so stream reassembly and signature
-comparisons against a reassembled buffer do not take place (the stream
-preprocessor - stream4, stream5, etc. - should be disabled).
+however because snort_inline when deployed in this way does not have the
+opportunity to see all packets associated with a session, so stream
+reassembly and signature comparisons against a reassembled buffer do not
+take place (the stream preprocessor - stream4, stream5, etc. - should be
+disabled).
 
 .B fwsnort
 (optionally) uses the IPTables::Parse module to parse
