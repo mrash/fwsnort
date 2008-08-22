@@ -122,7 +122,7 @@ cp -r deps/snort_rules $RPM_BUILD_ROOT%_sysconfdir/%name
 %_libdir/%name
 
 %changelog
-* Thu Aug 17 2008 Michael Rash <mbr@cipherydne.org>
+* Thu Aug 21 2008 Michael Rash <mbr@cipherydne.org>
 - Updated to use the deps/ directory for all perl module sources.
 - fwsnort-1.0.5 release
 

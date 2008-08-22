@@ -84,8 +84,8 @@ install -m 644 fwsnort.8 $RPM_BUILD_ROOT%{_mandir}/man8/
 %config(noreplace) %_sysconfdir/%name/fwsnort.conf
 
 %changelog
-* Thu Aug 17 2008 Michael Rash <mbr@cipherydne.org>
-- Updated to use the deps/ directory for all perl module sources.
+* Thu Aug 21 2008 Michael Rash <mbr@cipherydne.org>
+- Added the fwsnort-nodeps.spec file.
 - fwsnort-1.0.5 release
 
 * Tue Jan 22 2008 Michael Rash <mbr@cipherydne.org>
