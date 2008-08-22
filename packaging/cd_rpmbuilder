@@ -25,7 +25,7 @@
 #
 #############################################################################
 #
-# $Id: cd_rpmbuilder 698 2007-06-06 05:26:21Z mbr $
+# $Id: cd_rpmbuilder 1864 2008-08-22 03:16:19Z mbr $
 #
 
 use File::Find;
@@ -121,7 +121,11 @@ if ($nodeps) {
 &download_file($tar_file);
 &md5_check($tar_file);
 
-move $tar_file, '../SOURCES' or die $!;
+if ($nodeps) {
+    move $tar_file, "../SOURCES/$project-$build_version.tar.gz" or die $!;
+} else {
+    move $tar_file, '../SOURCES' or die $!;
+}
 
 ### build the rpm
 &build_rpm();
