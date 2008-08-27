@@ -3055,7 +3055,7 @@ sub setup() {
 
 sub update_rules() {
     my $url = 'http://www.emergingthreats.net/rules/emerging-all.rules';
-    print "[+] Downloading latest rules:\n    $url\n";
+    print "[+] Downloading latest rules into $rules_dir/\n    $url\n";
     my $dir = $rules_dir;
     $dir =~ s/\,.*//;
     chdir $dir or die "[*] Could not chdir $dir: $!";
