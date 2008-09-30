@@ -2608,12 +2608,13 @@ sub fwsnort_init() {
                 = $snort_opts{'filter'}{$opt};
             delete $snort_opts{'filter'}{$opt};
         }
-        my @ignore = qw/nocase threshold/;
+        my @ignore = qw/nocase/;
 
         if ($kernel_ver eq '2.4') {
             push @ignore, 'offset', 'depth';
         }
         for my $opt (@ignore) {
+            next unless defined $snort_opts{'ignore'}{$opt};
             $snort_opts{'unsupported'}{$opt}
                 = $snort_opts{'ignore'}{$opt};
             delete $snort_opts{'ignore'}{$opt};
