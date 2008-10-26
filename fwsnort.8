@@ -10,8 +10,9 @@
 .SH DESCRIPTION
 .B fwsnort
 translates Snort rules into iptables rules and generates a
-Bourne shell script that implements the resulting iptables commands.
-This ruleset allows network traffic that exhibits Snort signatures to
+shell script that implements the resulting iptables commands.
+This ruleset allows network traffic that matches Snort signatures (i.e.
+attacks and other suspicious network behavior) to
 be logged and/or dropped by iptables directly without putting an interface
 into promiscuous mode or queuing packets from kernel to user space.  Note
 that fwsnort can also build an iptables policy that combines the string
