@@ -1,4 +1,12 @@
-fwsnort-1.0.5 (01//2008):
+fwsnort-1.0.6 (01//2009):
+    - (Franck Joncourt) For the --hex-string and --string matches, if the
+      argument exceeds 128 bytes (iptables 1.4.2) then iptables fails with an
+      error "iptables v1.4.2: STRING too long".  Fixes this with a patch that
+      adds a new variable in fwsnort.conf "MAX_STRING_LEN", so that the size of
+      the content can be limited. If the content (null terminated string) is
+      more than MAX_STRING_LEN chars, fwsnort throws the rule away.
+
+fwsnort-1.0.5 (08/21/2008):
     - Replaced the bleeding-all.rules file with the emerging-all.rules file.
       This is because Matt Jonkman now releases his rule sets at
       http://www.emergingthreats.net/

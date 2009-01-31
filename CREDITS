@@ -40,6 +40,8 @@ Franck Joncourt
       page.
     - Suggested creating the Snort rules directory if it doesn't already exist
       when downloading the rules from Emerging Threats.
+    - Submitted patch for the MAX_STRING_LEN protection around iptables string
+      match arguments.
 
 Justin B Rye
     - Suggested wording updates for the fwsnort(8) man page in support of the

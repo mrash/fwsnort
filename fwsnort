@@ -1717,10 +1717,11 @@ sub ipt_build_rule() {
         $rule .= " $ipt_hdr_opts{'dport'} $hdr_href->{'dport'}";
     }
 
-    &ipt_build_opts($rule, $hdr_href, $opts_href, $content_aref,
+    my $rv = &ipt_build_opts($rule, $hdr_href, $opts_href, $content_aref,
         $offsets_href, $orig_snort_rule, $flow_logging_prefix,
         $chain, $add_snort_comment);
-    return 1;
+
+    return $rv;
 }
 
 sub ipt_build_opts() {
@@ -1850,7 +1851,8 @@ sub ipt_build_opts() {
     my $ipt_content_criteria = &build_content_matches($opts_href,
             $content_aref, $offsets_href, $avg_hdr_len);
 
-    $rule .= $ipt_content_criteria if $ipt_content_criteria;
+    return 0 unless $ipt_content_criteria;
+    $rule .= $ipt_content_criteria;
 
     ### print the rest of the logprefix snort options in a comment
     ### one line above the rule
@@ -1932,7 +1934,7 @@ sub ipt_build_opts() {
     ### write the rule out to the iptables script
     &ipt_add_rule($hdr_href, $opts_href, $orig_snort_rule,
         $rule, $target_str, "### $comment", $add_snort_comment);
-    return;
+    return 1;
 }
 
 sub build_content_matches() {
@@ -1958,6 +1960,10 @@ sub build_content_matches() {
 
         ### handles length of hex blocks
         my $content_len = &get_content_len($content_str);
+        if ($content_len >= $config{'MAX_STRING_LEN'}) {
+        	$ipt_content_criteria = '';
+        	last;
+    	}
 
         if ($content_str =~ /\|.+\|/) {
             ### there is hex data in the content
@@ -2767,7 +2773,7 @@ sub required_vars() {
         AVG_TCP_HEADER_LEN MAX_FRAME_LEN FWSNORT_INPUT FWSNORT_INPUT_ESTAB
         FWSNORT_OUTPUT FWSNORT_OUTPUT_ESTAB FWSNORT_FORWARD
         FWSNORT_FORWARD_ESTAB FWSNORT_INPUT_JUMP FWSNORT_OUTPUT_JUMP
-        FWSNORT_FORWARD_JUMP FWSNORT_LIBS_DIR
+        FWSNORT_FORWARD_JUMP FWSNORT_LIBS_DIR MAX_STRING_LEN
     );
     for my $var (@required_vars) {
         die "[*] Variable $var not defined in $fwsnort_conf. Exiting.\n"
