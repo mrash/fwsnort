@@ -1,4 +1,6 @@
 fwsnort-1.0.6 (01//2009):
+    - (Franck Joncourt) Updated fwsnort to use the "! <option> <arg>" syntax
+      instead of the older "<option> ! <arg>" for the iptables command line.
     - (Franck Joncourt) For the --hex-string and --string matches, if the
       argument exceeds 128 bytes (iptables 1.4.2) then iptables fails with an
       error "iptables v1.4.2: STRING too long".  Fixes this with a patch that

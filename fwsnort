@@ -1482,14 +1482,17 @@ sub ipt_build() {
             }
             for my $src (@$addr_aref) {
                 if (&is_local($src)) {
-                    push @{$process_rules{'OUTPUT'}}, "$ipt_hdr_opts{'src'} " .
-                        "$negate${src}" if $process_chains{'OUTPUT'};
+                    push @{$process_rules{'OUTPUT'}},
+                            "$negate$ipt_hdr_opts{'src'} ${src}"
+                            if $process_chains{'OUTPUT'};
                 } else {
-                    push @{$process_rules{'INPUT'}}, "$ipt_hdr_opts{'src'} " .
-                        "$negate${src}" if $process_chains{'INPUT'};
+                    push @{$process_rules{'INPUT'}},
+                            "$negate$ipt_hdr_opts{'src'} ${src}"
+                            if $process_chains{'INPUT'};
                 }
-                push @{$process_rules{'FORWARD'}}, "$ipt_hdr_opts{'src'} " .
-                    "$negate${src}" if $process_chains{'FORWARD'};
+                push @{$process_rules{'FORWARD'}},
+                        "$negate$ipt_hdr_opts{'src'} ${src}"
+                        if $process_chains{'FORWARD'};
             }
         }
     } else {
@@ -1504,14 +1507,17 @@ sub ipt_build() {
             $negate = '! ' if $snort_hdr_href->{'dst'} =~ m|!|;
             for my $dst (@$dst_addr_aref) {
                 if (&is_local($dst)) {
-                    push @{$process_rules{'INPUT'}}, "$ipt_hdr_opts{'dst'} " .
-                        "$negate${dst}" if $process_chains{'INPUT'};
+                    push @{$process_rules{'INPUT'}},
+                            "$negate$ipt_hdr_opts{'dst'} ${dst}"
+                            if $process_chains{'INPUT'};
                 } else {
-                    push @{$process_rules{'OUTPUT'}}, "$ipt_hdr_opts{'dst'} " .
-                        "$negate${dst}" if $process_chains{'OUTPUT'};
+                    push @{$process_rules{'OUTPUT'}},
+                            "$negate$ipt_hdr_opts{'dst'} ${dst}"
+                            if $process_chains{'OUTPUT'};
                 }
-                push @{$process_rules{'FORWARD'}}, "$ipt_hdr_opts{'dst'} " .
-                    "$negate${dst}" if $process_chains{'FORWARD'};
+                push @{$process_rules{'FORWARD'}},
+                        "$negate$ipt_hdr_opts{'dst'} ${dst}"
+                        if $process_chains{'FORWARD'};
             }
         } else {
             my $src_addr_aref = &expand_addresses($snort_hdr_href->{'src'});
@@ -1528,18 +1534,18 @@ sub ipt_build() {
                 for my $dst (@$dst_addr_aref) {
                     if (&is_local($dst)) {
                         push @{$process_rules{'INPUT'}},
-                            "$ipt_hdr_opts{'src'} $negate_src${src}" .
-                            " $ipt_hdr_opts{'dst'} $negate_dst${dst}"
+                            "$negate_src$ipt_hdr_opts{'src'} ${src}" .
+                            " $negate_dst$ipt_hdr_opts{'dst'} ${dst}"
                             if $process_chains{'INPUT'};
                     } else {
                         push @{$process_rules{'OUTPUT'}},
-                            "$ipt_hdr_opts{'src'} $negate_src${src}" .
-                            " $ipt_hdr_opts{'dst'} $negate_dst${dst}"
+                            "$negate_src$ipt_hdr_opts{'src'} ${src}" .
+                            " $negate_dst$ipt_hdr_opts{'dst'} ${dst}"
                             if $process_chains{'OUTPUT'};
                     }
                     push @{$process_rules{'FORWARD'}},
-                        "$ipt_hdr_opts{'src'} $negate_src${src}" .
-                        " $ipt_hdr_opts{'dst'} $negate_dst${dst}"
+                        "$negate_src$ipt_hdr_opts{'src'} ${src}" .
+                        " $negate_dst$ipt_hdr_opts{'dst'} ${dst}"
                         if $process_chains{'FORWARD'};
                 }
             }
@@ -1577,9 +1583,9 @@ sub ipt_build() {
             ### append interface restriction if necessary
             if ($src_dst =~ m|127\.0\.0\.\d/|) {
                 if ($chain eq 'INPUT' or $chain eq 'FORWARD') {
-                    $rule .= ' -i ! lo';
+                    $rule .= ' ! -i lo';
                 } elsif ($chain eq 'OUTPUT') {
-                    $rule .= ' -o ! lo';
+                    $rule .= ' ! -o lo';
                 }
             }
 
@@ -1707,14 +1713,20 @@ sub ipt_build_rule() {
 
     ### append the source port
     if (defined $hdr_href->{'sport'} and $hdr_href->{'sport'} !~ /any/i) {
-        $hdr_href->{'sport'} =~ s/\!(\d)/! $1/;
-        $rule .= " $ipt_hdr_opts{'sport'} $hdr_href->{'sport'}";
+        my $negate = '';
+        my $sport = $hdr_href->{'sport'};
+        $negate = '! ' if $sport =~ m|!|;
+        $sport =~ s/\!\s*(\d)/$1/;
+        $rule .= " $negate$ipt_hdr_opts{'sport'} $sport";
     }
 
     ### append the destination port
     if (defined $hdr_href->{'dport'} and $hdr_href->{'dport'} !~ /any/i) {
-        $hdr_href->{'dport'} =~ s/\!(\d)/! $1/;
-        $rule .= " $ipt_hdr_opts{'dport'} $hdr_href->{'dport'}";
+        my $negate = '';
+        my $dport = $hdr_href->{'dport'};
+        $negate = '! ' if $dport =~ m|!|;
+        $dport =~ s/\!\s*(\d)/$1/;
+        $rule .= " $negate$ipt_hdr_opts{'dport'} $dport";
     }
 
     my $rv = &ipt_build_opts($rule, $hdr_href, $opts_href, $content_aref,
@@ -1970,7 +1982,7 @@ sub build_content_matches() {
             if ($neg_match) {
                 $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
                     {'content'}{'iptopt'} . ' ' .
-                    qq{--hex-string ! "$content_str"};
+                    qq{! --hex-string "$content_str"};
             } else {
                 $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
                     {'content'}{'iptopt'} . ' ' .
@@ -1980,7 +1992,7 @@ sub build_content_matches() {
             if ($neg_match) {
                 $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
                     {'content'}{'iptopt'} . ' ' .
-                    qq{--string ! "$content_str"};
+                    qq{! --string "$content_str"};
             } else {
                 $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
                     {'content'}{'iptopt'} . ' ' .
@@ -2367,21 +2379,21 @@ sub ipt_jump_chain() {
                 if ($chain eq 'INPUT' or $chain eq 'FORWARD') {
 
                     push @ipt_script_lines, "\$IPTABLES -D $chain " .
-                        qq|-i ! lo -j $config{"FWSNORT_$chain"}| .
+                        qq|! -i lo -j $config{"FWSNORT_$chain"}| .
                         ' 2> /dev/null';
 
                     push @ipt_script_lines, "\$IPTABLES -I $chain " .
-                        qq|$config{"FWSNORT_${chain}_JUMP"} -i ! lo | .
+                        qq|$config{"FWSNORT_${chain}_JUMP"} ! -i lo | .
                         qq|-j $config{"FWSNORT_$chain"}|;
 
                 } elsif ($chain eq 'OUTPUT') {
 
                     push @ipt_script_lines, "\$IPTABLES -D $chain " .
-                        qq|-o ! lo -j $config{"FWSNORT_$chain"}| .
+                        qq|! -o lo -j $config{"FWSNORT_$chain"}| .
                         ' 2> /dev/null';
 
                     push @ipt_script_lines, "\$IPTABLES -I $chain " .
-                        qq|$config{"FWSNORT_${chain}_JUMP"} -o ! lo | .
+                        qq|$config{"FWSNORT_${chain}_JUMP"} ! -o lo | .
                         qq|-j $config{"FWSNORT_$chain"}|;
                 }
             }

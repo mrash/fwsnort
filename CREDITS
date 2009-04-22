@@ -42,6 +42,8 @@ Franck Joncourt
       when downloading the rules from Emerging Threats.
     - Submitted patch for the MAX_STRING_LEN protection around iptables string
       match arguments.
+    - Submitted patch for fwsnort to use the "! <option> <arg>" syntax instead
+      of the older "<option> ! <arg>" for the iptables command line.
 
 Justin B Rye
     - Suggested wording updates for the fwsnort(8) man page in support of the
