@@ -14,7 +14,7 @@
 #
 # Credits: (see the CREDITS file)
 #
-# Version: 1.0.6-pre2
+# Version: 1.0.6-pre3
 #
 # Copyright (C) 2003-2007 Michael Rash (mbr@cipherdyne.org)
 #
@@ -114,7 +114,7 @@ my $ipt_script = "${fwsnort_dir}/fwsnort.sh";
 #===================== end config =======================
 
 ### version number
-my $version = '1.0.6-pre2';
+my $version = '1.0.6-pre3';
 my $revision_svn = '$Revision$';
 my $rev_num = '1';
 ($rev_num) = $revision_svn =~ m|\$Rev.*:\s+(\S+)|;
