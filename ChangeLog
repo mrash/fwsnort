@@ -7,6 +7,10 @@ fwsnort-1.0.6 (01//2009):
       adds a new variable in fwsnort.conf "MAX_STRING_LEN", so that the size of
       the content can be limited. If the content (null terminated string) is
       more than MAX_STRING_LEN chars, fwsnort throws the rule away.
+    - Bug fix to allow fwsnort to properly translate snort rules that have
+      "content" fields with embedded escaped semicolons (e.g. "\;").  This
+      allows fwsnort to translate about 85 additional rules from the Emerging
+      Threats rule set.
     - Updated to the latest complete rule set from Emerging Threats (see
       http://www.emergingthreats.net/).
 

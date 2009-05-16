@@ -935,7 +935,7 @@ sub parse_rule_options() {
         }
     }
 
-    while ($rule_options =~ /(\w+):\s*(.*?)\s*;/g) {
+    while ($rule_options =~ /(\w+):\s*(.*?[^\x5c]);/g) {
         my $opt = $1;
         my $val = $2;
         if ($opt eq 'content' or $opt eq 'uricontent') {
