@@ -9,8 +9,12 @@ fwsnort-1.0.6 (01//2009):
       more than MAX_STRING_LEN chars, fwsnort throws the rule away.
     - Bug fix to allow fwsnort to properly translate snort rules that have
       "content" fields with embedded escaped semicolons (e.g. "\;").  This
-      allows fwsnort to translate about 85 additional rules from the Emerging
+      allows fwsnort to translate about 58 additional rules from the Emerging
       Threats rule set.
+    - Bug fix to allow case insensitive matches to work properly with the
+      --include-re-caseless and --exclude-re-caseless arguments.
+    - Added the --snort-rfile argument so that a specific Snort rules file (or
+      list of files separated by commas) is parsed.
     - Updated to the latest complete rule set from Emerging Threats (see
       http://www.emergingthreats.net/).
 

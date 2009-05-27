@@ -93,6 +93,7 @@ use File::Copy;
 use File::Path;
 use Sys::Hostname;
 use Data::Dumper;
+use Cwd;
 use Getopt::Long;
 use strict;
 
@@ -331,6 +332,7 @@ my $ipt_reject = 0;
 my $help       = 0;
 my $stdout     = 0;
 my $lib_dir    = '';
+my $rules_file = '';
 my $debug      = 0;
 my $dumper     = 0;
 my $dump_ipt   = 0;
@@ -434,6 +436,7 @@ die "[-] Use --help for usage information.\n" unless (GetOptions(
                                                     # insensitive
     'snort-rdir=s'   => \$rules_dir,    # Manually specify the snort rules
                                         # directory.
+    'snort-rfile=s'  => \$rules_file,   # Translate a single rules file.
     'no-pcre'        => \$no_pcre,      # Make no attempt to translate PCRE's.
     'no-addresses'   => \$no_addr_check, # Don't check local ifconfig output.
     'no-ipt-sync'    => \$no_ipt_sync,  # Do not sync with the iptables policy.
@@ -594,12 +597,18 @@ sub parse_snort_rules() {
 
     my @rfiles = ();
 
-    for my $dir (split /\,/, $rules_dir) {
-        opendir D, $dir or die "[*] Could not opendir $dir";
-        for my $file (readdir D) {
-            push @rfiles, "$dir/$file";
+    my $cwd = cwd();
+
+    if ($rules_file) {
+        @rfiles = split /\,/, $rules_file;
+    } else {
+        for my $dir (split /\,/, $rules_dir) {
+            opendir D, $dir or die "[*] Could not opendir $dir";
+            for my $file (readdir D) {
+                push @rfiles, "$dir/$file";
+            }
+            closedir D;
         }
-        closedir D;
     }
 
     my $abs_num  = 0;
@@ -607,6 +616,7 @@ sub parse_snort_rules() {
     my $tot_ipt_apply = 0;
     my $tot_unsup_ctr = 0;
     FILE: for my $rfile (sort @rfiles) {
+        $rfile = $cwd . '/' . $rfile unless $rfile =~ m|^/|;
         my $type = '';
         my $filename = '';
         if ($rfile =~ m|.*/(\S+\.rules)$|) {
@@ -662,19 +672,11 @@ sub parse_snort_rules() {
 
             ### regex filters
             if ($exclude_re) {
-                if ($exclude_re_caseless) {
-                    next RULE if $rule =~ m|$exclude_re|i;
-                } else {
-                    next RULE if $rule =~ m|$exclude_re|;
-                }
+                next RULE unless $rule =~ $exclude_re;
             }
 
             if ($include_re) {
-                if ($include_re_caseless) {
-                    next RULE unless $rule =~ m|$include_re|i;
-                } else {
-                    next RULE unless $rule =~ m|$include_re|;
-                }
+                next RULE unless $rule =~ $include_re;
             }
 
             $rule_num++;  ### keep track of the abs num of rules
@@ -2753,8 +2755,20 @@ sub handle_cmd_line() {
         }
     }
 
-    $exclude_re = qr|$exclude_re| if $exclude_re;
-    $include_re = qr|$include_re| if $include_re;
+    if ($include_re) {
+        if ($include_re_caseless) {
+            $include_re = qr|$include_re|i;
+        } else {
+            $include_re = qr|$include_re|;
+        }
+    }
+    if ($exclude_re) {
+        if ($exclude_re_caseless) {
+            $exclude_re = qr|$exclude_re|i;
+        } else {
+            $exclude_re = qr|$exclude_re|;
+        }
+    }
 
     return;
 }
@@ -3049,12 +3063,18 @@ sub setup() {
     die "[*] No fwsnort directory $fwsnort_dir"
         unless -d $fwsnort_dir;
 
-    for my $dir (split /\,/, $rules_dir) {
-        die "[*] No snort rules directory $dir, use --snort-rdir"
-            unless -d $dir;
+    if ($rules_file) {
+        for my $file (split /\,/, $rules_file) {
+            die "[*] Snort rules file $file does not exist." unless -e $file;
+        }
+    } else {
+        for my $dir (split /\,/, $rules_dir) {
+            die "[*] No snort rules directory $dir, use --snort-rdir"
+                unless -d $dir;
+        }
     }
 
-    ### import psad perl modules
+    ### import fwsnort perl modules
     &import_perl_modules();
 
     unless (-d $archive_dir) {
@@ -3254,6 +3274,8 @@ Options:
     --snort-rdir=<dir>        - Specify path to Snort rules directory.
                                 This can be a list of directories separated
                                 by commas.
+    --snort-rfile=<file>      - Translate a single rules file (or a set of
+                                them separated by commas).
     --no-ipt-comments         - Do not add Snort "msg" fields to iptables
                                 rules with the iptables comment match.
     --no-ipt-sync             - Add iptables rules for signatures that
@@ -3300,6 +3322,10 @@ Options:
                                 match the specified regex.
     --exclude-regex=<regex>   - Exclude all Snort signatures that
                                 match the specified regex.
+    --include-re-caseless     - Make --include-regex searching case
+                                insensitive.
+    --exclude-re-caseless     - Make --exclude-regex searching case
+                                insensitive.
     -c   --config=<config>    - Use <config> instead of the normal
                                 config file located at
                                 $fwsnort_conf

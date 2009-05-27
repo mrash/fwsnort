@@ -64,6 +64,13 @@ for almost all configuration parameters.  fwsnort can be made to
 override this path by specifying a different file on the command
 line with the \-\-config option.
 .TP
+.BR \-\^\-update-rules
+Download the latest Emerging Threats rules from http://www.emergingthreats.net
+This will overwrite the  emerging-all.rules file in the
+/etc/fwsnort/snort_rules/ directory.  Note that the automatic downloading
+of Snort rules from http://www.snort.org/ as of March, 2005 is only offered
+as a pay service.
+.TP
 .BR \-\^\-include-type\ \ <rules\ type>
 Restrict to processing snort rules of <rules type>.  Example rule
 types would include "ddos", "backdoor", and "web-attacks".  This option
@@ -90,18 +97,25 @@ expression.  This is useful to omit Snort rules from
 policies that have a common characteristic (such as a string
 match on "HTTP_PORTS" for example).
 .TP
-.BR \-\^\-update-rules
-Download the latest Emerging Threats rules from http://www.emergingthreats.net
-This will overwrite the  emerging-all.rules file in the
-/etc/fwsnort/snort_rules/ directory.  Note that the automatic downloading
-of Snort rules from http://www.snort.org/ as of March, 2005 is only offered
-as a pay service.
+.BR \-\^\-include-re-caseless
+Make the rule matchine regular expression specified with
+.I \-\-include\-regex
+match case insensitively.
+.TP
+.BR \-\^\-exclude-re-caseless
+Make the rule matchine regular expression specified with
+.I \-\-exclude\-regex
+match case insensitively.
 .TP
 .BR \-\^\-snort-rdir\ <snort-rules-directory>
 Manually specify the directory where the snort rules files are located.
 The default is
 .B /etc/fwsnort/snort_rules.
 Multiple directories are supported as a comma-separated list.
+.TP
+.BR \-\^\-snort-rfile\ <snort-rules-file>
+Manually specify a Snort rules file to translated into iptables rules.
+Multiple files are also supported as a comma-separated list.
 .TP
 .BR \-\^\-snort-sid\ \<sid>
 Generate an iptables ruleset for a single snort rule specified by
