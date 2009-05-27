@@ -701,8 +701,8 @@ sub parse_snort_rules() {
             }
 
             ### parse header portion of Snort rule
-            my $hdr_href = &parse_rule_hdr($rule_hdr, $line_num);
-            unless ($hdr_href) {
+            my $hdr_hr = &parse_rule_hdr($rule_hdr, $line_num);
+            unless ($hdr_hr) {
                 &logr("[-] Unrecognized rule header: \"$rule_hdr\" at " .
                     "line: $line_num, skipping.");
                 $unsup_ctr++;
@@ -711,7 +711,7 @@ sub parse_snort_rules() {
             }
 
             ### parse options portion of Snort rule
-            my ($parse_rv, $opts_href, $content_aref, $offsets_href)
+            my ($parse_rv, $opts_hr, $content_ar, $offsets_hr)
                             = &parse_rule_options($rule_options, $line_num);
 
             unless ($parse_rv) {
@@ -720,7 +720,7 @@ sub parse_snort_rules() {
                 next RULE;
             }
             if ($include_sids) {
-                print "[+] Found sid: $opts_href->{'sid'} in $filename\n";
+                print "[+] Found sid: $opts_hr->{'sid'} in $filename\n";
             }
 
             if ($queue_mode or $nfqueue_mode) {
@@ -767,8 +767,8 @@ sub parse_snort_rules() {
 
             ### construct the equivalent iptables rule and add it
             ### to $ipt_script
-            my ($ipt_rv, $num_rules) = &ipt_build($hdr_href,
-                    $opts_href, $content_aref, $offsets_href, $rule);
+            my ($ipt_rv, $num_rules) = &ipt_build($hdr_hr,
+                    $opts_hr, $content_ar, $offsets_hr, $rule);
 
             if ($ipt_rv) {
                 $ipt_apply++;
@@ -1219,15 +1219,11 @@ sub ipt_allow_traffic() {
             print "[-] Skipping $chain rule $rule_ctr: src $hdr_hr->{'src'} ",
                 "not part of $rule_hr->{'src'}\n" if $debug;
             next RULE;
-        } else {
-#print "........................src $hdr_hr->{'src'} matches $rule_hr->{'src'}\n";
         }
         unless (&match_addr($hdr_hr->{'dst'}, $rule_hr->{'dst'})) {
             print "[-] Skipping $chain rule $rule_ctr: dst $hdr_hr->{'dst'} ",
                 "not part of $rule_hr->{'dst'}\n" if $debug;
             next RULE;
-        } else {
-#print "........................dst $hdr_hr->{'dst'} matches $rule_hr->{'dst'}\n";
         }
 
         ### match src/dst ports
@@ -1276,7 +1272,6 @@ sub ipt_allow_traffic() {
             }
             return 0;
         } elsif ($rule_hr->{'target'} eq 'ACCEPT') {
-#        if ($rule_hr->{'target'} eq 'ACCEPT') {
             if ($dumper) {
                 print "\n[+] RULE $chain ACCEPT:\n",
                     Dumper($hdr_hr),
@@ -1459,8 +1454,8 @@ sub cache_ipt_policy() {
 }
 
 sub ipt_build() {
-    my ($snort_hdr_href, $snort_opts_href,
-            $content_aref, $offsets_href, $orig_snort_rule) = @_;
+    my ($snort_hdr_hr, $snort_opts_hr,
+            $content_ar, $offsets_hr, $orig_snort_rule) = @_;
 
     my $found_rule = 0;
     my $num_rules  = 0;
@@ -1468,21 +1463,21 @@ sub ipt_build() {
     my %process_rules = ();
 
     ### define iptables source and destination
-    if ($snort_hdr_href->{'dst'} =~ /any/i) {
-        if ($snort_hdr_href->{'src'} =~ /any/i) {
+    if ($snort_hdr_hr->{'dst'} =~ /any/i) {
+        if ($snort_hdr_hr->{'src'} =~ /any/i) {
             push @{$process_rules{'INPUT'}}, '' if $process_chains{'INPUT'};
             push @{$process_rules{'FORWARD'}}, ''
                 if $process_chains{'FORWARD'};
         } else {
-            my $addr_aref = &expand_addresses($snort_hdr_href->{'src'});
+            my $addr_ar = &expand_addresses($snort_hdr_hr->{'src'});
             my $negate = '';
-            $negate = '! ' if $snort_hdr_href->{'src'} =~ m|!|;
-            unless ($addr_aref) {
+            $negate = '! ' if $snort_hdr_hr->{'src'} =~ m|!|;
+            unless ($addr_ar) {
                 &logr("[-] No valid source IPs/networks in Snort " .
                     "rule header.");
                 return 0, 0;
             }
-            for my $src (@$addr_aref) {
+            for my $src (@$addr_ar) {
                 if (&is_local($src)) {
                     push @{$process_rules{'OUTPUT'}},
                             "$negate$ipt_hdr_opts{'src'} ${src}"
@@ -1498,16 +1493,16 @@ sub ipt_build() {
             }
         }
     } else {
-        my $dst_addr_aref = &expand_addresses($snort_hdr_href->{'dst'});
-        unless ($dst_addr_aref) {
+        my $dst_addr_ar = &expand_addresses($snort_hdr_hr->{'dst'});
+        unless ($dst_addr_ar) {
             &logr("[-] No valid destination IPs/networks in Snort rule " .
                 "header.");
             return 0, 0;
         }
-        if ($snort_hdr_href->{'src'} =~ /any/i) {
+        if ($snort_hdr_hr->{'src'} =~ /any/i) {
             my $negate = '';
-            $negate = '! ' if $snort_hdr_href->{'dst'} =~ m|!|;
-            for my $dst (@$dst_addr_aref) {
+            $negate = '! ' if $snort_hdr_hr->{'dst'} =~ m|!|;
+            for my $dst (@$dst_addr_ar) {
                 if (&is_local($dst)) {
                     push @{$process_rules{'INPUT'}},
                             "$negate$ipt_hdr_opts{'dst'} ${dst}"
@@ -1522,18 +1517,18 @@ sub ipt_build() {
                         if $process_chains{'FORWARD'};
             }
         } else {
-            my $src_addr_aref = &expand_addresses($snort_hdr_href->{'src'});
+            my $src_addr_ar = &expand_addresses($snort_hdr_hr->{'src'});
             my $negate_src = '';
-            $negate_src = '! ' if $snort_hdr_href->{'src'} =~ m|!|;
+            $negate_src = '! ' if $snort_hdr_hr->{'src'} =~ m|!|;
             my $negate_dst = '';
-            $negate_dst = '! ' if $snort_hdr_href->{'dst'} =~ m|!|;
-            unless ($src_addr_aref) {
+            $negate_dst = '! ' if $snort_hdr_hr->{'dst'} =~ m|!|;
+            unless ($src_addr_ar) {
                 &logr("[-] No valid source IPs/networks in Snort rule " .
                     "header.");
                 return 0, 0;
             }
-            for my $src (@$src_addr_aref) {
-                for my $dst (@$dst_addr_aref) {
+            for my $src (@$src_addr_ar) {
+                for my $dst (@$dst_addr_ar) {
                     if (&is_local($dst)) {
                         push @{$process_rules{'INPUT'}},
                             "$negate_src$ipt_hdr_opts{'src'} ${src}" .
@@ -1557,10 +1552,10 @@ sub ipt_build() {
     ### determine which chain (e.g. stateful/stateless)
     my $flow_established = '';
     unless ($no_ipt_conntrack) {
-        if (defined $snort_hdr_href->{'proto'}
-                and $snort_hdr_href->{'proto'} =~ /tcp/i
-                and defined $snort_opts_href->{'flow'}
-                and $snort_opts_href->{'flow'} =~ /established/i) {
+        if (defined $snort_hdr_hr->{'proto'}
+                and $snort_hdr_hr->{'proto'} =~ /tcp/i
+                and defined $snort_opts_hr->{'flow'}
+                and $snort_opts_hr->{'flow'} =~ /established/i) {
             $flow_established = 'ESTABLISHED';
         }
     }
@@ -1614,10 +1609,10 @@ sub ipt_build() {
             my $rv = &ipt_build_rule(
                 $chain,
                 $rule,
-                $snort_hdr_href,
-                $snort_opts_href,
-                $content_aref,
-                $offsets_href,
+                $snort_hdr_hr,
+                $snort_opts_hr,
+                $content_ar,
+                $offsets_hr,
                 $orig_snort_rule,
                 $flow_established,
                 $add_snort_comment
@@ -1649,9 +1644,9 @@ sub is_local() {
         $ip = $1;
     }
 
-    for my $local_aref (@local_addrs) {
-        my $local_ip   = $local_aref->[0];
-        my $local_mask = $local_aref->[1];
+    for my $local_ar (@local_addrs) {
+        my $local_ip   = $local_ar->[0];
+        my $local_mask = $local_ar->[1];
 
         return 1 if ipv4_in_network(
             $local_ip, $local_mask,
@@ -1682,80 +1677,80 @@ sub get_local_addrs() {
 }
 
 sub ipt_build_rule() {
-    my ($chain, $rule, $hdr_href, $opts_href, $content_aref,
-            $offsets_href, $orig_snort_rule, $flow_logging_prefix,
+    my ($chain, $rule, $hdr_hr, $opts_hr, $content_ar,
+            $offsets_hr, $orig_snort_rule, $flow_logging_prefix,
             $add_snort_comment) = @_;
 
     ### $chain is used only to see whether or not we need to add the
     ### rule to the iptables script based on whether the built-in chain
     ### will pass the traffic in the first place.
     if ($ipt_sync) {
-        return 0 unless &ipt_allow_traffic($hdr_href,
-                $opts_href, $chain, $orig_snort_rule);
+        return 0 unless &ipt_allow_traffic($hdr_hr,
+                $opts_hr, $chain, $orig_snort_rule);
     }
 
     ### append the protocol to the rule
-    if (defined $opts_href->{'ip_proto'}) {
-        return 0 unless $opts_href->{'ip_proto'} =~ /^\w+$/;
+    if (defined $opts_hr->{'ip_proto'}) {
+        return 0 unless $opts_hr->{'ip_proto'} =~ /^\w+$/;
         $rule .= " $snort_opts{'filter'}{'ip_proto'}{'iptopt'} " .
-            "$opts_href->{'ip_proto'}";
+            "$opts_hr->{'ip_proto'}";
     } else {
-        return 0 unless $hdr_href->{'proto'} =~ /^\w+$/;
-        if ((($hdr_href->{'sport'} !~ /any/i and $hdr_href->{'sport'} ne '')
-                or ($hdr_href->{'dport'} !~ /any/i
-                and $hdr_href->{'dport'} ne ''))
-                and $hdr_href->{'proto'} !~ /tcp/i
-                and $hdr_href->{'proto'} !~ /udp/i) {
+        return 0 unless $hdr_hr->{'proto'} =~ /^\w+$/;
+        if ((($hdr_hr->{'sport'} !~ /any/i and $hdr_hr->{'sport'} ne '')
+                or ($hdr_hr->{'dport'} !~ /any/i
+                and $hdr_hr->{'dport'} ne ''))
+                and $hdr_hr->{'proto'} !~ /tcp/i
+                and $hdr_hr->{'proto'} !~ /udp/i) {
             ### force to tcp because Netfiler does not like src/dst
             ### ports with anything other than tcp or udp
-            $hdr_href->{'proto'} = 'tcp';
+            $hdr_hr->{'proto'} = 'tcp';
         }
-        $rule .= " $ipt_hdr_opts{'proto'} $hdr_href->{'proto'}";
+        $rule .= " $ipt_hdr_opts{'proto'} $hdr_hr->{'proto'}";
     }
 
     ### append the source port
-    if (defined $hdr_href->{'sport'} and $hdr_href->{'sport'} !~ /any/i) {
+    if (defined $hdr_hr->{'sport'} and $hdr_hr->{'sport'} !~ /any/i) {
         my $negate = '';
-        my $sport = $hdr_href->{'sport'};
+        my $sport = $hdr_hr->{'sport'};
         $negate = '! ' if $sport =~ m|!|;
         $sport =~ s/\!\s*(\d)/$1/;
         $rule .= " $negate$ipt_hdr_opts{'sport'} $sport";
     }
 
     ### append the destination port
-    if (defined $hdr_href->{'dport'} and $hdr_href->{'dport'} !~ /any/i) {
+    if (defined $hdr_hr->{'dport'} and $hdr_hr->{'dport'} !~ /any/i) {
         my $negate = '';
-        my $dport = $hdr_href->{'dport'};
+        my $dport = $hdr_hr->{'dport'};
         $negate = '! ' if $dport =~ m|!|;
         $dport =~ s/\!\s*(\d)/$1/;
         $rule .= " $negate$ipt_hdr_opts{'dport'} $dport";
     }
 
-    my $rv = &ipt_build_opts($rule, $hdr_href, $opts_href, $content_aref,
-        $offsets_href, $orig_snort_rule, $flow_logging_prefix,
+    my $rv = &ipt_build_opts($rule, $hdr_hr, $opts_hr, $content_ar,
+        $offsets_hr, $orig_snort_rule, $flow_logging_prefix,
         $chain, $add_snort_comment);
 
     return $rv;
 }
 
 sub ipt_build_opts() {
-    my ($rule, $hdr_href, $opts_href, $content_aref,
-            $offsets_href, $orig_snort_rule, $flow_logging_prefix,
+    my ($rule, $hdr_hr, $opts_hr, $content_ar,
+            $offsets_hr, $orig_snort_rule, $flow_logging_prefix,
             $chain, $add_snort_comment) = @_;
 
     ### append tcp flags
-    if (defined $opts_href->{'flags'}) {
+    if (defined $opts_hr->{'flags'}) {
         my $f_str = '';
 
-        $f_str .= 'URG,' if $opts_href->{'flags'} =~ /U/i;
-        $f_str .= 'ACK,' if $opts_href->{'flags'} =~ /A/i;
-        $f_str .= 'PSH,' if $opts_href->{'flags'} =~ /P/i;
-        $f_str .= 'RST,' if $opts_href->{'flags'} =~ /R/i;
-        $f_str .= 'SYN,' if $opts_href->{'flags'} =~ /S/i;
-        $f_str .= 'FIN,' if $opts_href->{'flags'} =~ /F/i;
+        $f_str .= 'URG,' if $opts_hr->{'flags'} =~ /U/i;
+        $f_str .= 'ACK,' if $opts_hr->{'flags'} =~ /A/i;
+        $f_str .= 'PSH,' if $opts_hr->{'flags'} =~ /P/i;
+        $f_str .= 'RST,' if $opts_hr->{'flags'} =~ /R/i;
+        $f_str .= 'SYN,' if $opts_hr->{'flags'} =~ /S/i;
+        $f_str .= 'FIN,' if $opts_hr->{'flags'} =~ /F/i;
         $f_str =~ s/\,$//;
 
-        if ($opts_href->{'flags'} =~ /\+/) {
+        if ($opts_hr->{'flags'} =~ /\+/) {
             ### --tcp-flags ACK ACK
             $rule .= " $snort_opts{'filter'}{'flags'}{'iptopt'} " .
                 "$f_str $f_str";
@@ -1773,8 +1768,8 @@ sub ipt_build_opts() {
         ### tcp session (where the SYN packet came from), but older versions
         ### of snort (pre 1.9) just used tcp flags "A+" to keep track of
         ### this... we need to do the same.
-        if (defined $opts_href->{'flow'} && ! defined $opts_href->{'flags'}) {
-            if ($opts_href->{'flow'} =~ /established/i) {
+        if (defined $opts_hr->{'flow'} && ! defined $opts_hr->{'flags'}) {
+            if ($opts_hr->{'flow'} =~ /established/i) {
                 ### note that this ignores the "stateless" keyword
                 ### as it should...
                 $rule .= " $snort_opts{'filter'}{'flow'}{'iptopt'} ACK ACK";
@@ -1783,45 +1778,45 @@ sub ipt_build_opts() {
     }
 
     ### append icmp type
-    if (defined $opts_href->{'itype'} and $hdr_href->{'proto'} =~ /icmp/i) {
+    if (defined $opts_hr->{'itype'} and $hdr_hr->{'proto'} =~ /icmp/i) {
         $rule .= " $snort_opts{'filter'}{'itype'}{'iptopt'} " .
-            "$opts_href->{'itype'}";
+            "$opts_hr->{'itype'}";
         ### append icmp code (becomes "--icmp-type type/code")
-        if (defined $opts_href->{'icode'}) {
-            $rule .= "/$opts_href->{'icode'}";
+        if (defined $opts_hr->{'icode'}) {
+            $rule .= "/$opts_hr->{'icode'}";
         }
     }
 
     ### append ip options
-    if (defined $opts_href->{'ipopts'}) {
+    if (defined $opts_hr->{'ipopts'}) {
         $rule .= " $snort_opts{'filter'}{'ipopts'}{'iptopt'} " .
-            "--$opts_href->{'ipopts'}"
+            "--$opts_hr->{'ipopts'}"
     }
 
     ### append tos (requires CONFIG_IP_NF_MATCH_TOS)
-    if (defined $opts_href->{'tos'}) {
+    if (defined $opts_hr->{'tos'}) {
         $rule .= " $snort_opts{'filter'}{'tos'}{'iptopt'} " .
-            "$opts_href->{'tos'}"
+            "$opts_hr->{'tos'}"
     }
 
 
     ### append ttl (requires CONFIG_IP_NF_MATCH_TTL)
-    if (defined $opts_href->{'ttl'}) {
-        if ($opts_href->{'ttl'} =~ /\<\s*(\d+)/) {
+    if (defined $opts_hr->{'ttl'}) {
+        if ($opts_hr->{'ttl'} =~ /\<\s*(\d+)/) {
             $rule .= " $snort_opts{'filter'}{'ttl'}{'iptopt'} --ttl-lt $1";
-        } elsif ($opts_href->{'ttl'} =~ /\>\s*(\d+)/) {
+        } elsif ($opts_hr->{'ttl'} =~ /\>\s*(\d+)/) {
             $rule .= " $snort_opts{'filter'}{'ttl'}{'iptopt'} --ttl-gt $1";
         } else {
             $rule .= " $snort_opts{'filter'}{'ttl'}{'iptopt'} " .
-                "--ttl-eq $opts_href->{'ttl'}";
+                "--ttl-eq $opts_hr->{'ttl'}";
         }
     }
 
     my $avg_hdr_len = $config{'AVG_IP_HEADER_LEN'};
-    if (defined $hdr_href->{'proto'}) {
-        if ($hdr_href->{'proto'} =~ /udp/i) {
+    if (defined $hdr_hr->{'proto'}) {
+        if ($hdr_hr->{'proto'} =~ /udp/i) {
             $avg_hdr_len += $UDP_HDR_LEN;  ### udp header is 8 bytes
-        } elsif ($hdr_href->{'proto'} =~ /icmp/i) {
+        } elsif ($hdr_hr->{'proto'} =~ /icmp/i) {
             $avg_hdr_len += $ICMP_HDR_LEN;  ### icmp header is 8 bytes
         } else {
             ### default to TCP
@@ -1834,27 +1829,27 @@ sub ipt_build_opts() {
     }
 
     ### append dsize option (requires CONFIG_IP_NF_MATCH_LENGTH)
-    if (defined $opts_href->{'dsize'}) {
+    if (defined $opts_hr->{'dsize'}) {
         ### get the average packet header size based on the protocol
         ### (the iptables length match applies to the network header
         ### and up).
-        if ($opts_href->{'dsize'} =~ m|(\d+)\s*<>\s*(\d+)|) {
+        if ($opts_hr->{'dsize'} =~ m|(\d+)\s*<>\s*(\d+)|) {
             my $netfilter_len1 = $1 + $avg_hdr_len;
             my $netfilter_len2 = $2 + $avg_hdr_len;
             $rule .= " $snort_opts{'filter'}{'dsize'}{'iptopt'} " .
                 "$netfilter_len1:$netfilter_len2";
-        } elsif ($opts_href->{'dsize'} =~ m|<\s*(\d+)|) {
+        } elsif ($opts_hr->{'dsize'} =~ m|<\s*(\d+)|) {
             my $netfilter_len = $1 + $avg_hdr_len;
             $rule .= " $snort_opts{'filter'}{'dsize'}{'iptopt'} " .
                 "$avg_hdr_len:$netfilter_len";
-        } elsif ($opts_href->{'dsize'} =~ m|>\s*(\d+)|) {
+        } elsif ($opts_hr->{'dsize'} =~ m|>\s*(\d+)|) {
             my $netfilter_len = $1 + $avg_hdr_len;
             if ($netfilter_len < $config{'MAX_FRAME_LEN'} + $avg_hdr_len) {
                 $rule .= " $snort_opts{'filter'}{'dsize'}{'iptopt'} " .
                     "$netfilter_len:" .
                     ($config{'MAX_FRAME_LEN'} + $avg_hdr_len);
             }
-        } elsif ($opts_href->{'dsize'} =~ m|(\d+)|) {
+        } elsif ($opts_hr->{'dsize'} =~ m|(\d+)|) {
             my $netfilter_len = $1 + $avg_hdr_len;
             $rule .= " $snort_opts{'filter'}{'dsize'}{'iptopt'} " .
                 $netfilter_len;
@@ -1862,8 +1857,8 @@ sub ipt_build_opts() {
     }
 
     ### append snort content options
-    my $ipt_content_criteria = &build_content_matches($opts_href,
-            $content_aref, $offsets_href, $avg_hdr_len);
+    my $ipt_content_criteria = &build_content_matches($opts_hr,
+            $content_ar, $offsets_hr, $avg_hdr_len);
 
     return 0 unless $ipt_content_criteria;
     $rule .= $ipt_content_criteria;
@@ -1873,8 +1868,8 @@ sub ipt_build_opts() {
     my $comment    = '';
     my $target_str = '';
     for my $key qw(sid msg classtype reference priority rev) {
-        if (defined $opts_href->{$key}) {
-            $comment .= qq|$key:$opts_href->{$key}; |;
+        if (defined $opts_hr->{$key}) {
+            $comment .= qq|$key:$opts_hr->{$key}; |;
         }
     }
     $comment =~ s/\s*$//;
@@ -1884,7 +1879,7 @@ sub ipt_build_opts() {
     $comment .= " FWS:$version;";
 
     ### build up the logging prefix and comment match
-    if (defined $opts_href->{'sid'}) {
+    if (defined $opts_hr->{'sid'}) {
         unless ($no_ipt_comments) {
             ### add the Snort msg (and other) fields to the iptables rule
             ### with the 'comment' match (which can handle up to 256 chars)
@@ -1908,12 +1903,12 @@ sub ipt_build_opts() {
                 }
             }
         } else {
-            if ($hdr_href->{'action'} eq 'log' or $ulog_mode) {
+            if ($hdr_hr->{'action'} eq 'log' or $ulog_mode) {
                 $target_str .= qq| -j ULOG --ulog-nlgroup $ulog_nlgroup --ulog-prefix "|;
             } else {
                 $target_str .= ' -j LOG ';
                 $target_str .= '--log-ip-options ' unless $no_ipt_log_ip_opts;
-                if ($hdr_href->{'proto'} eq 'tcp') {
+                if ($hdr_hr->{'proto'} eq 'tcp') {
                     $target_str .= '--log-tcp-options ' unless $no_ipt_log_tcp_opts;
                     $target_str .= '--log-tcp-sequence ' if $ipt_log_tcp_seq;
                 }
@@ -1930,7 +1925,7 @@ sub ipt_build_opts() {
                 $target_str .= 'REJ ';
             }
             ### always add the sid
-            $target_str .= qq|SID$opts_href->{'sid'} |;
+            $target_str .= qq|SID$opts_hr->{'sid'} |;
             if ($flow_logging_prefix) {
                 $target_str .= 'ESTAB ';
             }
@@ -1946,13 +1941,13 @@ sub ipt_build_opts() {
     }
 
     ### write the rule out to the iptables script
-    &ipt_add_rule($hdr_href, $opts_href, $orig_snort_rule,
+    &ipt_add_rule($hdr_hr, $opts_hr, $orig_snort_rule,
         $rule, $target_str, "### $comment", $add_snort_comment);
     return 1;
 }
 
 sub build_content_matches() {
-    my ($opts_href, $content_ar, $offsets_hr, $avg_hdr_len) = @_;
+    my ($opts_hr, $content_ar, $offsets_hr, $avg_hdr_len) = @_;
 
     my $ipt_content_criteria = '';
 
@@ -2002,8 +1997,8 @@ sub build_content_matches() {
             }
         }
 
-        if (defined $opts_href->{'replace'}) {
-            my $replace_str = $opts_href->{'replace'};
+        if (defined $opts_hr->{'replace'}) {
+            my $replace_str = $opts_hr->{'replace'};
             $replace_str =~ s/`/\\`/g;
             if ($replace_str =~ /\|.+\|/) {  ### there is hex data in the content
                 $ipt_content_criteria
@@ -2121,16 +2116,16 @@ sub get_content_len() {
 }
 
 sub ipt_add_rule() {
-    my ($hdr_href, $opts_href, $orig_snort_rule, $rule_base,
+    my ($hdr_hr, $opts_hr, $orig_snort_rule, $rule_base,
         $target_str, $comment, $add_snort_comment) = @_;
 
     my $action_rule = '';
-    if ($hdr_href->{'proto'} eq 'tcp') {
-        if ($hdr_href->{'action'} eq 'pass') {
+    if ($hdr_hr->{'proto'} eq 'tcp') {
+        if ($hdr_hr->{'action'} eq 'pass') {
             $action_rule = "$rule_base -j ACCEPT";
         } else {
-            if (defined $opts_href->{'resp'}
-                    and $opts_href->{'resp'} =~ /rst/i) {
+            if (defined $opts_hr->{'resp'}
+                    and $opts_hr->{'resp'} =~ /rst/i) {
                 ### iptables can only send tcp resets to the connection
                 ### client, so we can't support rst_rcv, but we should
                 ### try to tear the connection down anyway.
@@ -2143,22 +2138,22 @@ sub ipt_add_rule() {
                     "--reject-with tcp-reset";
             }
         }
-    } elsif ($hdr_href->{'proto'} eq 'udp') {
-        if ($hdr_href->{'action'} eq 'pass') {
+    } elsif ($hdr_hr->{'proto'} eq 'udp') {
+        if ($hdr_hr->{'action'} eq 'pass') {
             $action_rule = "$rule_base -j ACCEPT";
         } else {
-            if (defined $opts_href->{'resp'}
-                    and $opts_href->{'resp'} =~ /icmp/i) {
-                if ($opts_href->{'resp'} =~ /all/i) {  ### icmp_all
+            if (defined $opts_hr->{'resp'}
+                    and $opts_hr->{'resp'} =~ /icmp/i) {
+                if ($opts_hr->{'resp'} =~ /all/i) {  ### icmp_all
                     $action_rule = "$rule_base -j REJECT " .
                         "--reject-with icmp-port-unreachable";
-                } elsif ($opts_href->{'resp'} =~ /net/i) {  ### icmp_net
+                } elsif ($opts_hr->{'resp'} =~ /net/i) {  ### icmp_net
                     $action_rule = "$rule_base -j REJECT " .
                         "--reject-with icmp-net-unreachable";
-                } elsif ($opts_href->{'resp'} =~ /host/i) {  ### icmp_host
+                } elsif ($opts_hr->{'resp'} =~ /host/i) {  ### icmp_host
                     $action_rule = "$rule_base -j REJECT " .
                         "--reject-with icmp-host-unreachable";
-                } elsif ($opts_href->{'resp'} =~ /port/i) {  ### icmp_port
+                } elsif ($opts_hr->{'resp'} =~ /port/i) {  ### icmp_port
                     $action_rule = "$rule_base -j REJECT " .
                         "--reject-with icmp-port-unreachable";
                 }
@@ -2170,7 +2165,7 @@ sub ipt_add_rule() {
             }
         }
     } else {
-        if ($hdr_href->{'action'} eq 'pass') {
+        if ($hdr_hr->{'action'} eq 'pass') {
             $action_rule = "$rule_base -j ACCEPT";
         } else {
             $action_rule = "$rule_base -j DROP";
@@ -2182,7 +2177,7 @@ sub ipt_add_rule() {
     if ($verbose) {
         push @ipt_script_lines, qq|\$ECHO "[+] rule $ipt_rule_ctr"|;
     }
-    if ($hdr_href->{'action'} ne 'pass') {
+    if ($hdr_hr->{'action'} ne 'pass') {
         if ($queue_mode or $nfqueue_mode) {
             push @ipt_script_lines, $ipt_rule;
         } else {
@@ -2191,7 +2186,7 @@ sub ipt_add_rule() {
     }
     push @ipt_script_lines, $action_rule
         if $action_rule and ($ipt_drop or $ipt_reject or
-            $hdr_href->{'action'} eq 'pass' or defined $opts_href->{'resp'});
+            $hdr_hr->{'action'} eq 'pass' or defined $opts_hr->{'resp'});
     $ipt_rule_ctr++;
     return;
 }
