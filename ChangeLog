@@ -13,8 +13,15 @@ fwsnort-1.0.6 (01//2009):
       Threats rule set.
     - Bug fix to allow case insensitive matches to work properly with the
       --include-re-caseless and --exclude-re-caseless arguments.
+    - Bug fix to move the 'rawbytes' keyword to the list of keywords that are
+      ignored since iptables does a raw match anyway as it doesn't run any
+      preprocessors in the Snort sense.
     - Added the --snort-rfile argument so that a specific Snort rules file (or
       list of files separated by commas) is parsed.
+    - Added a small hack to choose the first port from a port list until the
+      iptables 'multiport' match is supported.
+    - Updated to consolidate spaces in hex matches in the fwsnort.sh script
+      since the spaces are not part of patterns to be searched anyway.
     - Updated to the latest complete rule set from Emerging Threats (see
       http://www.emergingthreats.net/).
 

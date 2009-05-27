@@ -115,7 +115,7 @@ my $ipt_script = "${fwsnort_dir}/fwsnort.sh";
 #===================== end config =======================
 
 ### version number
-my $version = '1.0.6-pre3';
+my $version = '1.0.6-pre2';
 my $revision_svn = '$Revision$';
 my $rev_num = '1';
 ($rev_num) = $revision_svn =~ m|\$Rev.*:\s+(\S+)|;
@@ -246,7 +246,6 @@ my %snort_opts = (
         'byte_jump'    => '[\s;]byte_jump\s*.*?\s*;',
         'window'       => '[\s;]window:\s*.*?\s*;',
         'flowbits'     => '[\s;]flowbits:\s*.*?\s*;',
-        'rawbytes'     => '[\s;]rawbytes:\s*\S+\s*;',
 #        'offset'       => '[\s;]offset:\s*\d+\s*;',
 #        'depth'        => '[\s;]depth:\s*\d+\s*;',
 
@@ -268,11 +267,12 @@ my %snort_opts = (
 
     ### snort options that fwsnort will ignore
     'ignore' => {
-        'nocase'  => '[\s;]nocase\s*;',
-        'logto'   => '[\s;]logto:\s*\S+\s*;',
-        'session' => '[\s;]session\s*;',
-        'tag'     => '[\s;]tag:\s*.*?\s*;',
-        'react'   => '[\s;]react:\s*.*?\s*;' ### FIXME -j REJECT
+        'rawbytes' => '[\s;]rawbytes\s*;',  ### iptables does a raw match anyway
+        'nocase'   => '[\s;]nocase\s*;',
+        'logto'    => '[\s;]logto:\s*\S+\s*;',
+        'session'  => '[\s;]session\s*;',
+        'tag'      => '[\s;]tag:\s*.*?\s*;',
+        'react'    => '[\s;]react:\s*.*?\s*;' ### FIXME -j REJECT
     }
 );
 
@@ -702,7 +702,7 @@ sub parse_snort_rules() {
 
             ### parse header portion of Snort rule
             my $hdr_hr = &parse_rule_hdr($rule_hdr, $line_num);
-            unless ($hdr_hr) {
+            unless (keys %$hdr_hr) {
                 &logr("[-] Unrecognized rule header: \"$rule_hdr\" at " .
                     "line: $line_num, skipping.");
                 $unsup_ctr++;
@@ -1082,6 +1082,19 @@ sub parse_rule_hdr() {
                 $hsh{$var} = $val;
             }
         }
+
+        ### port lists are not supported, but they will be with the iptables
+        ### 'multiport' match.
+        for my $var qw(sport dport) {
+            next unless $hsh{$var} =~ /,/;
+            &logr("[-] Warning: taking the first port in the list " .
+                "$hsh{$var} until the iptables multiport match is supported " .
+                "at line: $line_num.");
+            $hsh{$var} =~ s/,.*//;
+            $hsh{$var} =~ s/\[//;
+            $hsh{$var} =~ s/\]//;
+        }
+
         return \%hsh;
     }
     return {};
@@ -1385,10 +1398,10 @@ sub match_addr() {
 }
 
 sub match_port() {
-    my ($h_port, $ipt_port) = @_;
+    my ($snort_port, $ipt_port) = @_;
     return 1 if $ipt_port eq '0:0';
-    return 1 if $h_port =~ /any/i;
-    return 1 if $ipt_port eq $h_port;
+    return 1 if $snort_port =~ /any/i;
+    return 1 if $ipt_port eq $snort_port;
     my $ipt_start = 0;
     my $ipt_end   = 65535;
     my $h_start   = 0;
@@ -1405,26 +1418,26 @@ sub match_port() {
         $ipt_start = $ipt_end = $1;
     }
 
-    if ($h_port =~ /:/) {
-        if ($h_port =~ /(\d+):/) {
+    if ($snort_port =~ /:/) {
+        if ($snort_port =~ /(\d+):/) {
             $h_start = $1;
         }
-        if ($h_port =~ /:(\d+)/) {
+        if ($snort_port =~ /:(\d+)/) {
             $h_end = $1;
         }
-    } elsif ($h_port =~ /(\d+)/) {
+    } elsif ($snort_port =~ /(\d+)/) {
         $h_start = $h_end = $1;
     }
 
     if ($ipt_port =~ /!/) {
-        if ($h_port =~ /!/) {
+        if ($snort_port =~ /!/) {
             return 0;
         } else {
             return 1 if (($h_start < $ipt_start and $h_end < $ipt_start)
                     or ($h_start > $ipt_end and $h_end > $ipt_end));
         }
     } else {
-        if ($h_port =~ /!/) {
+        if ($snort_port =~ /!/) {
             return 1 if (($ipt_start < $h_start and $ipt_end < $h_start)
                     or ($ipt_start > $h_end and $ipt_end > $h_end));
         } else {
@@ -1954,9 +1967,6 @@ sub build_content_matches() {
     for (my $i=0; $i <= $#$content_ar; $i++) {
 
         my $content_str = $content_ar->[$i];
-        if ($content_str =~ /\|.+?\|\|.+?\|/) {
-            $content_str =~ s/\|(.+?)\|\|(.+?)\|/|$1 $2|/g;
-        }
 
         my $neg_match = 0;
         if ($content_str =~ /\s*\!\s*"/) {
@@ -1964,15 +1974,33 @@ sub build_content_matches() {
             $neg_match = 1;
         }
 
-        $content_str =~ s/`/\\`/g;
-        $content_str =~ s/\x24/\x5c\x24/g;
+        $content_str =~ s/`/|60|/g;     ### ` -> |60|
+        $content_str =~ s/\x24/|24|/g;  ### $ -> |24|
+
+        ### convert all escaped chars to their hex equivalents
+        $content_str =~ s/\x5c(.)/sprintf "|%02x|", (ord($1))/eg;
+
+        my $ctr = 0;
+        while ($content_str =~ m/\|\|/) {
+            ### consolidate consecutive hex blocks
+            if ($content_str =~ /\|.+?\|\|.+?\|/) {
+                $content_str =~ s/\|(.+?)\|\|(.+?)\|/|$1 $2|/;
+            }
+            $ctr++;
+            last if $ctr > 10;
+        }
+
+        ### remove all spaces between hex codes (they simply waste space
+        ### on the command line, and they aren't part of the string to
+        ### search in network traffic anyway).
+        $content_str = &consolidate_hex_spaces($content_str);
 
         ### handles length of hex blocks
         my $content_len = &get_content_len($content_str);
         if ($content_len >= $config{'MAX_STRING_LEN'}) {
-        	$ipt_content_criteria = '';
-        	last;
-    	}
+            $ipt_content_criteria = '';
+            last;
+        }
 
         if ($content_str =~ /\|.+\|/) {
             ### there is hex data in the content
@@ -2113,6 +2141,23 @@ sub get_content_len() {
         }
     }
     return $len;
+}
+
+sub consolidate_hex_spaces() {
+    my $str = shift;
+    my $new_str = '';
+    my $hex_mode = 0;
+    my @chars = split //, $str;
+    for my $char (@chars) {
+        if ($char eq '|') {
+            $hex_mode == 0 ? ($hex_mode = 1) : ($hex_mode = 0);
+        }
+        if ($hex_mode) {
+            next if $char eq ' ';
+        }
+        $new_str .= $char;
+    }
+    return $new_str;
 }
 
 sub ipt_add_rule() {
@@ -2436,7 +2481,7 @@ sub ipt_config_section() {
 sub ipt_type() {
     my $type = shift;
     push @ipt_script_lines, "\n###\n############ ${type}.rules #######" .
-        "#####\n###", "\$ECHO \"[+] Adding $type rules.\"";
+        "#####\n###", "\$ECHO \"[+] Adding $type rules:\"";
     return;
 }
 
