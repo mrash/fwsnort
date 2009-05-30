@@ -1,4 +1,4 @@
-fwsnort-1.0.6 (05/29/2009):
+fwsnort-1.0.6 (05/30/2009):
     - (Franck Joncourt) Updated fwsnort to use the "! <option> <arg>" syntax
       instead of the older "<option> ! <arg>" for the iptables command line.
     - (Franck Joncourt) For the --hex-string and --string matches, if the
@@ -24,6 +24,15 @@ fwsnort-1.0.6 (05/29/2009):
       since the spaces are not part of patterns to be searched anyway.
     - Updated to the latest complete rule set from Emerging Threats (see
       http://www.emergingthreats.net/).
+    - Added the "fwsnort-nobuildreqs.spec" file for building fwsnort on
+      systems (such as Debian) that do not install/upgrade software via RPM.
+      This file omits the "BuildRequires: perl-ExtUtils-MakeMaker" directive,
+      and this fixes errors like the following on an Ubuntu system when
+      building fwsnort with rpmbuild:
+
+      rpm: To install rpm packages on Debian systems, use alien. See README.Debian.
+      error: cannot open Packages index using db3 - No such file or directory (2)
+      error: cannot open Packages database in /var/lib/rpm
 
 fwsnort-1.0.5 (08/21/2008):
     - Replaced the bleeding-all.rules file with the emerging-all.rules file.

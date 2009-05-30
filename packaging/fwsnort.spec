@@ -8,7 +8,7 @@
 ### This may be 'i386-linux', or 'i686-linux-thread-multi', etc.
 %define fwsnortmoddir `perl -e '$path='i386-linux'; for (@INC) { if($_ =~ m|.*/(.*linux.*)|) {$path = $1; last; }} print $path'`
 
-Summary: Fwsnort translates Snort rules into equivalent Netfilter rules
+Summary: Fwsnort translates Snort rules into equivalent iptables rules
 Name: %name
 Version: %version
 Release: %release
