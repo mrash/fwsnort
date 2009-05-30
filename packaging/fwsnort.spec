@@ -18,6 +18,7 @@ Url: http://www.cipherdyne.org/fwsnort/
 Source: %name-%version.tar.gz
 BuildRoot: %_tmppath/%{name}-buildroot
 Requires: iptables
+BuildRequires: perl-ExtUtils-MakeMaker
 #Prereq: rpm-helper
 
 %description
@@ -122,6 +123,10 @@ cp -r deps/snort_rules $RPM_BUILD_ROOT%_sysconfdir/%name
 %_libdir/%name
 
 %changelog
+* Sat May 29 2009 Michael Rash <mbr@cipherydne.org>
+- Added the "BuildRequires: perl-ExtUtils-MakeMaker" statement.
+- fwsnort-1.0.6 release
+
 * Thu Aug 21 2008 Michael Rash <mbr@cipherydne.org>
 - Updated to use the deps/ directory for all perl module sources.
 - fwsnort-1.0.5 release
