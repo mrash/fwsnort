@@ -10,9 +10,9 @@ DEPENDENCIES:
 iptables String Matching:
 
 fwsnort requires the iptables string match extensions in order to be able to
-detect application layer attacks.  Most Linux distributions include iptables
-compiled in, and the string match extension is commonly included as well, so
-if you are running a recent Linux distro you may already have string matching
+detect application layer attacks.  Most Linux distributions include iptables,
+and the string match extension is commonly included as well, so if you are
+running a recent Linux distro you probably already have string matching
 available.  If not, you will need to enable the
 CONFIG_NETFILTER_XT_MATCH_STRING variable in the kernel config file (for 2.6
 series kernels) and recompile.

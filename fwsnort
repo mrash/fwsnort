@@ -16,7 +16,7 @@
 #
 # Version: 1.0.6
 #
-# Copyright (C) 2003-2007 Michael Rash (mbr@cipherdyne.org)
+# Copyright (C) 2003-2009 Michael Rash (mbr@cipherdyne.org)
 #
 # License (GNU Public License):
 #
@@ -36,6 +36,8 @@
 #     from an iptables ruleset if the iptables policy will not allow such
 #     traffic through in the first place).
 #   - New option: --ipt-mark.
+#
+# Reference: Snort is a registered trademark of Sourcefire, Inc
 #
 # Snort Rule Options:
 #
@@ -251,7 +253,7 @@ my %snort_opts = (
 
         ### the following fields get logged by iptables but
         ### we cannot filter them directly except with the
-        ### Netfilter u32 module.  Functionality has been built
+        ### iptables u32 module.  Functionality has been built
         ### into psad to generate alerts for most of these Snort
         ### options.
         'id'        => '[\s;]id:\s*(\d+)\s*;',
@@ -383,6 +385,7 @@ my $no_exclude_loopback = 0;
 my $no_ipt_log_ip_opts  = 0;
 my $no_ipt_log_tcp_opts = 0;
 my $ipt_log_tcp_seq     = 0;
+my $include_perl_triggers = 0;
 
 ### to be added to the string match extension
 my $ipt_has_string_payload_offset_opt = 0;
@@ -423,6 +426,8 @@ die "[-] Use --help for usage information.\n" unless (GetOptions(
     'exclude-sid=s'  => \$exclude_sids, # Exclude these particular snort rules.
     'snort-conf=s'   => \$snort_conf_file, # Get HOME_NET, etc. vars from
                                         # existing Snort config file.
+    'include-perl-triggers' => \$include_perl_triggers, # perl commands to
+                                        # trigger signature matches.
     'include-type=s' => \$rules_types,  # Process only this type of snort rule
                                         # (e.g. "ddos")
     'exclude-type=s' => \$exclude_types,# Exclude specified types (e.g. "ddos").
@@ -445,7 +450,7 @@ die "[-] Use --help for usage information.\n" unless (GetOptions(
                                         # iptables.
     'no-ipt-jumps'   => \$no_ipt_jumps, # Don't jump packets from the INPUT or
                                         # FORWARD chains.
-    'no-ipt-conntrack' => \$no_ipt_conntrack, # Don't use Netfilter connection
+    'no-ipt-conntrack' => \$no_ipt_conntrack, # Don't use iptables connection
                                         # tracking (falls back to ACK flag test).
     'no-ipt-INPUT'   => \$no_ipt_input, # Disable fwsnort rules processed via
                                         # the INPUT chain.
@@ -495,6 +500,11 @@ die "[-] Use --help for usage information.\n" unless (GetOptions(
 
 &usage(0) if $help;
 
+my $is_root = 0;
+if ($< == 0 and $> == 0) {
+    $is_root = 1;
+}
+
 ### handle the command line args
 &handle_cmd_line();
 
@@ -505,8 +515,7 @@ die "[-] Use --help for usage information.\n" unless (GetOptions(
 ### the current iptables policy
 &cache_ipt_policy() if $ipt_sync;
 
-### truncate old log (does anyone actually use the fwsnort
-### parsing log?)
+### truncate old fwsnort log
 &truncate_logfile();
 
 ### check to make sure iptables has various iptables functionality
@@ -1574,6 +1583,7 @@ sub ipt_build() {
     }
 
     my $add_snort_comment = 1;
+    my $add_perl_trigger  = 1;
     for my $chain (keys %process_chains) {
 
         next unless $process_chains{$chain} and $process_rules{$chain};
@@ -1628,11 +1638,13 @@ sub ipt_build() {
                 $offsets_hr,
                 $orig_snort_rule,
                 $flow_established,
-                $add_snort_comment
+                $add_snort_comment,
+                $add_perl_trigger
             );
             if ($rv) {
                 $found_rule        = 1;
                 $add_snort_comment = 0;
+                $add_perl_trigger  = 0;
                 $num_rules++;
             }
         }
@@ -1692,7 +1704,7 @@ sub get_local_addrs() {
 sub ipt_build_rule() {
     my ($chain, $rule, $hdr_hr, $opts_hr, $content_ar,
             $offsets_hr, $orig_snort_rule, $flow_logging_prefix,
-            $add_snort_comment) = @_;
+            $add_snort_comment, $add_perl_trigger) = @_;
 
     ### $chain is used only to see whether or not we need to add the
     ### rule to the iptables script based on whether the built-in chain
@@ -1714,7 +1726,7 @@ sub ipt_build_rule() {
                 and $hdr_hr->{'dport'} ne ''))
                 and $hdr_hr->{'proto'} !~ /tcp/i
                 and $hdr_hr->{'proto'} !~ /udp/i) {
-            ### force to tcp because Netfiler does not like src/dst
+            ### force to tcp because iptables does not like src/dst
             ### ports with anything other than tcp or udp
             $hdr_hr->{'proto'} = 'tcp';
         }
@@ -1741,7 +1753,7 @@ sub ipt_build_rule() {
 
     my $rv = &ipt_build_opts($rule, $hdr_hr, $opts_hr, $content_ar,
         $offsets_hr, $orig_snort_rule, $flow_logging_prefix,
-        $chain, $add_snort_comment);
+        $chain, $add_snort_comment, $add_perl_trigger);
 
     return $rv;
 }
@@ -1749,7 +1761,7 @@ sub ipt_build_rule() {
 sub ipt_build_opts() {
     my ($rule, $hdr_hr, $opts_hr, $content_ar,
             $offsets_hr, $orig_snort_rule, $flow_logging_prefix,
-            $chain, $add_snort_comment) = @_;
+            $chain, $add_snort_comment, $add_perl_trigger) = @_;
 
     ### append tcp flags
     if (defined $opts_hr->{'flags'}) {
@@ -1847,31 +1859,32 @@ sub ipt_build_opts() {
         ### (the iptables length match applies to the network header
         ### and up).
         if ($opts_hr->{'dsize'} =~ m|(\d+)\s*<>\s*(\d+)|) {
-            my $netfilter_len1 = $1 + $avg_hdr_len;
-            my $netfilter_len2 = $2 + $avg_hdr_len;
+            my $iptables_len1 = $1 + $avg_hdr_len;
+            my $iptables_len2 = $2 + $avg_hdr_len;
             $rule .= " $snort_opts{'filter'}{'dsize'}{'iptopt'} " .
-                "$netfilter_len1:$netfilter_len2";
+                "$iptables_len1:$iptables_len2";
         } elsif ($opts_hr->{'dsize'} =~ m|<\s*(\d+)|) {
-            my $netfilter_len = $1 + $avg_hdr_len;
+            my $iptables_len = $1 + $avg_hdr_len;
             $rule .= " $snort_opts{'filter'}{'dsize'}{'iptopt'} " .
-                "$avg_hdr_len:$netfilter_len";
+                "$avg_hdr_len:$iptables_len";
         } elsif ($opts_hr->{'dsize'} =~ m|>\s*(\d+)|) {
-            my $netfilter_len = $1 + $avg_hdr_len;
-            if ($netfilter_len < $config{'MAX_FRAME_LEN'} + $avg_hdr_len) {
+            my $iptables_len = $1 + $avg_hdr_len;
+            if ($iptables_len < $config{'MAX_FRAME_LEN'} + $avg_hdr_len) {
                 $rule .= " $snort_opts{'filter'}{'dsize'}{'iptopt'} " .
-                    "$netfilter_len:" .
+                    "$iptables_len:" .
                     ($config{'MAX_FRAME_LEN'} + $avg_hdr_len);
             }
         } elsif ($opts_hr->{'dsize'} =~ m|(\d+)|) {
-            my $netfilter_len = $1 + $avg_hdr_len;
+            my $iptables_len = $1 + $avg_hdr_len;
             $rule .= " $snort_opts{'filter'}{'dsize'}{'iptopt'} " .
-                $netfilter_len;
+                $iptables_len;
         }
     }
 
     ### append snort content options
-    my $ipt_content_criteria = &build_content_matches($opts_hr,
-            $content_ar, $offsets_hr, $avg_hdr_len);
+    my ($ipt_content_criteria, $perl_trigger_str)
+        = &build_content_matches($opts_hr, $content_ar, $offsets_hr,
+                $avg_hdr_len);
 
     return 0 unless $ipt_content_criteria;
     $rule .= $ipt_content_criteria;
@@ -1955,7 +1968,8 @@ sub ipt_build_opts() {
 
     ### write the rule out to the iptables script
     &ipt_add_rule($hdr_hr, $opts_hr, $orig_snort_rule,
-        $rule, $target_str, "### $comment", $add_snort_comment);
+        $rule, $target_str, "### $comment", $add_snort_comment,
+        $perl_trigger_str, $add_perl_trigger);
     return 1;
 }
 
@@ -1963,6 +1977,9 @@ sub build_content_matches() {
     my ($opts_hr, $content_ar, $offsets_hr, $avg_hdr_len) = @_;
 
     my $ipt_content_criteria = '';
+    my $perl_trigger_command = '';
+
+    $perl_trigger_command = q|perl -e 'print "| if $include_perl_triggers;
 
     for (my $i=0; $i <= $#$content_ar; $i++) {
 
@@ -1975,6 +1992,7 @@ sub build_content_matches() {
         }
 
         $content_str =~ s/`/|60|/g;     ### ` -> |60|
+        $content_str =~ s/'/|27|/g;     ### ' -> |27|
         $content_str =~ s/\x24/|24|/g;  ### $ -> |24|
 
         ### convert all escaped chars to their hex equivalents
@@ -2014,6 +2032,7 @@ sub build_content_matches() {
                     qq{--hex-string "$content_str"};
             }
         } else {
+            ### there is no hex data in the content
             if ($neg_match) {
                 $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
                     {'content'}{'iptopt'} . ' ' .
@@ -2075,6 +2094,9 @@ sub build_content_matches() {
                 if ($offset > -1) {
                     $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
                         {'offset'}{'iptopt'} . " $offset";
+                    $perl_trigger_command .= 'A'x$offset
+                        if $include_perl_triggers;
+
                 } elsif ($distance > -1) {  ### offset always trumps distance
                     ### see if we need to increase the distance based on the
                     ### length of the previous pattern match and offset
@@ -2089,6 +2111,9 @@ sub build_content_matches() {
                     $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
                         {'distance'}{'iptopt'} . " $distance";
                     $offset = $distance;
+
+                    $perl_trigger_command .= 'A'x$distance
+                        if $include_perl_triggers;
                 }
                 if ($depth > -1) {
                     ### make sure there is room for the pattern
@@ -2098,6 +2123,10 @@ sub build_content_matches() {
 
                     $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
                         {'depth'}{'iptopt'} . " $depth";
+
+                    $perl_trigger_command .= 'A'x$depth
+                        if $include_perl_triggers;
+
                 } elsif ($within > -1) {  ### depth trumps within
                     ### the minimum within value must allow room for
                     ### the current pattern as well as the previous one
@@ -2109,6 +2138,9 @@ sub build_content_matches() {
                     $within = $min_within if $within < $min_within;
                     $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
                         {'within'}{'iptopt'} . " $within";
+
+                    $perl_trigger_command .= 'A'x$within
+                        if $include_perl_triggers;
                 }
 
                 ### if the --payload option is available for
@@ -2117,9 +2149,22 @@ sub build_content_matches() {
                     if $ipt_has_string_payload_offset_opt;
             }
         }
+
+        if ($include_perl_triggers) {
+            ### now append the perl trigger command bytes
+            if ($neg_match) {
+                $perl_trigger_command .= 'A'x(&get_content_len($content_str));
+            } else {
+                $perl_trigger_command .= &translate_perl_trigger($content_str);
+            }
+        }
     }
 
-    return $ipt_content_criteria;
+    if ($include_perl_triggers) {
+        $perl_trigger_command .= qq|"'|;
+    }
+
+    return $ipt_content_criteria, $perl_trigger_command;
 }
 
 sub get_content_len() {
@@ -2160,9 +2205,56 @@ sub consolidate_hex_spaces() {
     return $new_str;
 }
 
+sub translate_perl_trigger() {
+    my $str = shift;
+    my $trigger_str = '';
+    my $hex_mode = 0;
+    my $append_hex_str = '';
+    my $append_non_hex_str = '';
+
+    my @chars = split //, $str;
+
+    for my $char (@chars) {
+        if ($char eq '|') {
+            if ($hex_mode) {
+                if ($append_hex_str) {
+                    while ($append_hex_str =~ /(.{2})/g) {
+                        $trigger_str .= "\\x$1";
+                    }
+                    $append_hex_str = '';
+                }
+                $hex_mode = 0;
+            } else {
+                if ($append_non_hex_str) {
+                    $trigger_str .= qq|$append_non_hex_str|;
+                    $append_non_hex_str = '';
+                }
+                $hex_mode = 1;
+            }
+            next;
+        }
+
+        if ($hex_mode) {
+            $append_hex_str .= $char;
+        } else {
+            $append_non_hex_str .= $char;
+        }
+    }
+
+    if ($append_hex_str) {
+        while ($append_hex_str =~ /(.{2})/g) {
+            $trigger_str .= "\\x$1";
+        }
+    }
+    $trigger_str .= qq|$append_non_hex_str| if $append_non_hex_str;
+
+    return $trigger_str;
+}
+
 sub ipt_add_rule() {
     my ($hdr_hr, $opts_hr, $orig_snort_rule, $rule_base,
-        $target_str, $comment, $add_snort_comment) = @_;
+        $target_str, $comment, $add_snort_comment,
+        $perl_trigger_str, $add_perl_trigger) = @_;
 
     my $action_rule = '';
     if ($hdr_hr->{'proto'} eq 'tcp') {
@@ -2219,6 +2311,9 @@ sub ipt_add_rule() {
     my $ipt_rule = $rule_base . $target_str;
 
     push @ipt_script_lines, "\n### $orig_snort_rule" if $add_snort_comment;
+    if ($include_perl_triggers and $add_perl_trigger) {
+        push @ipt_script_lines, "### $perl_trigger_str";
+    }
     if ($verbose) {
         push @ipt_script_lines, qq|\$ECHO "[+] rule $ipt_rule_ctr"|;
     }
@@ -2516,7 +2611,7 @@ sub check_type() {
 }
 
 sub import_config() {
-    open C, "< $fwsnort_conf" or die $!;
+    open C, "< $fwsnort_conf" or die "[*] Could not open $fwsnort_conf: $!";
     my @lines = <C>;
     close C;
     my $l_ctr = 0;
@@ -2741,7 +2836,17 @@ sub handle_cmd_line() {
         die "[*] Cannot specify both --ipt-drop and --ipt-reject";
     }
 
+    unless ($is_root) {
+        $no_ipt_sync = 1;
+        $no_ipt_test = 1;
+        $logfile = './fwsnort.log';  ### local file
+        unlink $logfile if -e $logfile;
+        $ipt_script = './fwsnort.sh';  ### local file
+        unlink $ipt_script if -e $ipt_script;
+    }
+
     if ($ipt_apply) {
+        die "[*] You need to be root for --ipt-apply" unless $is_root;
         if (-e $ipt_script) {
             print "[+] Executing $ipt_script\n";
             system $ipt_script;
@@ -2877,7 +2982,7 @@ sub ipt_test() {
     unless (&ipt_rule_test("-I INPUT 1 -p icmp -m " .
         "ipv4options --rr -s $NON_HOST -j LOG") == $IPT_SUCCESS) {
 
-        &logr("[-] Netfilter ipv4options extension not available, " .
+        &logr("[-] iptables ipv4options extension not available, " .
             "disabling ipopts translation.");
         ### put ipopts in the unsupported list
         if (defined $snort_opts{'filter'}{'ipopts'}) {
@@ -2893,7 +2998,7 @@ sub ipt_test() {
     unless (&ipt_rule_test("-I INPUT 1 -p icmp -s $NON_HOST " .
             "-m ttl --ttl-eq 1 -j LOG") == $IPT_SUCCESS) {
         ### put ttl in the unsupported list
-        &logr("[-] Netfilter TTL match not available, " .
+        &logr("[-] iptables TTL match not available, " .
             "disabling ttl translation.");
         if (defined $snort_opts{'filter'}{'ttl'}) {
             $snort_opts{'unsupported'}{'ttl'} =
@@ -2908,7 +3013,7 @@ sub ipt_test() {
     unless (&ipt_rule_test("-I INPUT 1 -p icmp -s $NON_HOST " .
             "-m tos --tos 8 -j LOG") == $IPT_SUCCESS) {
         ### put tos in the unsupported list
-        &logr("[-] Netfilter TOS match not available, " .
+        &logr("[-] iptables TOS match not available, " .
             "disabling tos translation.");
         if (defined $snort_opts{'filter'}{'tos'}) {
             $snort_opts{'unsupported'}{'tos'} =
@@ -2924,7 +3029,7 @@ sub ipt_test() {
             "-m length --length 256 -j LOG") == $IPT_SUCCESS) {
 
         ### put length in the unsupported list
-        &logr("[-] Netfilter length match not available, " .
+        &logr("[-] iptables length match not available, " .
             "disabling length translation.");
         if (defined $snort_opts{'filter'}{'dsize'}) {
             $snort_opts{'unsupported'}{'dsize'} =
@@ -3004,7 +3109,7 @@ sub ipt_test() {
                 "--dport 3001 -m state --state ESTABLISHED -j LOG")
                 == $IPT_SUCCESS) {
         die
-"[*] It does not appear that Netfilter has been compiled with connection\n",
+"[*] It does not appear that iptables has been compiled with connection\n",
 "    tracking support.  If you want fwsnort to generate a policy anyway\n",
 "    and just use a tcp flags check for established tcp connections, then\n",
 "    use the --no-ipt-conntrack option.  **NOTE: The resulting fwsnort\n",
@@ -3117,12 +3222,16 @@ sub setup() {
     ### import fwsnort perl modules
     &import_perl_modules();
 
-    unless (-d $archive_dir) {
-        mkdir $archive_dir, 0500 or die $!;
-    }
+    if ($is_root) {
+        unless (-d $archive_dir) {
+            mkdir $archive_dir, 0500 or
+                die "[*] Could not mkdir($archive_dir): $!";
+        }
 
-    unless (-d $log_dir) {
-        mkdir $log_dir, 0755 or die $!;
+        unless (-d $log_dir) {
+            mkdir $log_dir, 0755 or
+                die "[*] Could not mkdir($log_dir): $!";
+        }
     }
 
     if (($queue_mode or $nfqueue_mode) and not -d $queue_rules_dir) {
@@ -3352,6 +3461,12 @@ Options:
                                 (CIDR or standard notation).
     --update-rules            - Download latest rules from Emerging Threats
                                 (http://www.emergingthreats.net).
+    --include-perl-triggers   - Include 'perl -e "print ..."' commands that
+                                build payload data that matches snort
+                                rules.  By combining these commands with
+                                netcat, it is easy to test whether the
+                                iptables policy built by fwsnort properly
+                                detects attacks.
     --include-type=<type>     - Only process snort rules of type <type>
                                 (e.g. "ddos" or "backdoor"). <type> can
                                 be a comma separated list.
