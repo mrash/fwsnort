@@ -71,6 +71,13 @@ This will overwrite the  emerging-all.rules file in the
 of Snort rules from http://www.snort.org/ as of March, 2005 is only offered
 as a pay service.
 .TP
+.BR \-6 ", " \-\^\-ip6tables
+Enable
+.B ip6tables
+mode so that the fwsnort rule set is built into an ip6tables policy instead
+of the iptables policy.  This allows fwsnort controls to apply to IPv6
+traffic.
+.TP
 .BR \-\^\-include-type\ \ <rules\ type>
 Restrict to processing snort rules of <rules type>.  Example rule
 types would include "ddos", "backdoor", and "web-attacks".  This option

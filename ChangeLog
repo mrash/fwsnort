@@ -1,4 +1,9 @@
-fwsnort-1.0.7 (07//2009):
+fwsnort-1.1 (01//2010):
+    - Added the ability to build an fwsnort policy that utilizes ip6tables
+      instead of iptables.  This allows fwsnort filtering and altering
+      capabilities to apply to IPv6 traffic instead of just IPv4 traffic.  To
+      enable ip6tables usage, use the "-6" or "--ip6tables" command line
+      arguments.
     - Added the --include-perl-triggers command line argument so that
       translated Snort rules can easily be tested.  This argument instructs
       fwsnort to include 'perl -e print ... ' commands as comments in the

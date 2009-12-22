@@ -48,3 +48,7 @@ Franck Joncourt
 Justin B Rye
     - Suggested wording updates for the fwsnort(8) man page in support of the
       Debian package for fwsnort.
+
+D T
+    - Asked about whether fwsnort could be updated to apply to IPv6 traffic
+      on the fwsnort mailing list.

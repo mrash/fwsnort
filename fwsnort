@@ -376,6 +376,8 @@ my $exclude_re     = '';
 my $include_re     = '';
 my $include_re_caseless = 0;
 my $exclude_re_caseless = 0;
+my $enable_ip6tables  = 0;
+my $ipt_var_str       = 'IPTABLES';
 my $no_ipt_conntrack  = 0;
 my $snort_conf_file   = '';
 my $ipt_restrict_intf = '';
@@ -417,6 +419,8 @@ die "[-] Use --help for usage information.\n" unless (GetOptions(
     'ipt-list'       => \$ipt_list,     # List any existing fwsnort chains.
     'List'           => \$ipt_list,     # Synonym for --ipt-list
     'ipt-del'        => \$ipt_del_chains, # Delete fwsnort chains.
+    'ip6tables'      => \$enable_ip6tables, # Turn on ip6tables mode.
+    '6'              => \$enable_ip6tables, # Synonym for --ip6tables.
     'X'              => \$ipt_del_chains, # Synonym for --ipt-del.
     'ipt-file=s'     => \$ipt_file,     # Read iptables policy from a file.
     'Home-net=s'     => \$home_net,     # Manually specify home network.
@@ -1069,7 +1073,7 @@ sub parse_rule_hdr() {
             'dport'  => $dport,
         );
 
-        ### map to exapanded values (e.g. $HOME -> "any" or whatever
+        ### map to expanded values (e.g. $HOME -> "any" or whatever
         ### is defined in fwsnort.conf)
         for my $var qw(src sport dst dport) {
             my $val = $hsh{$var};
@@ -1079,6 +1083,11 @@ sub parse_rule_hdr() {
                 $val = $1;
                 if (defined $config{$val}) {
                     $val = $config{$val};
+                    if ($enable_ip6tables and $val =~ /\b$ip_re\b/) {
+                        &logr("[-] --ip6tables mode enabled but IPv4 " .
+                            "address in rule variable at line: $line_num.");
+                        return {};
+                    }
                 } else {
                     &logr("[-] Undefined variable $val in rule header " .
                         "at line: $line_num.");
@@ -1591,7 +1600,7 @@ sub ipt_build() {
         ### build iptables INPUT rules
         for my $src_dst (@{$process_rules{$chain}}) {
 
-            my $rule = "\$IPTABLES -A ";
+            my $rule = "\$${ipt_var_str} -A ";
 
             ### see if we can jump to the ESTABLISHED inspection chain.
             if ($flow_established) {
@@ -2350,11 +2359,11 @@ sub ipt_whitelist() {
             next unless $process_chains{$chain};
 
             if ($chain eq 'INPUT' or $chain eq 'FORWARD') {
-                push @ipt_script_lines, "\$IPTABLES -A " .
+                push @ipt_script_lines, "\$${ipt_var_str} -A " .
                     qq|$config{"FWSNORT_$chain"} -s $addr -j RETURN|;
             }
             if ($chain eq 'OUTPUT' or $chain eq 'FORWARD') {
-                push @ipt_script_lines, "\$IPTABLES -A " .
+                push @ipt_script_lines, "\$${ipt_var_str} -A " .
                     qq|$config{"FWSNORT_$chain"} -d $addr -j RETURN|;
             }
         }
@@ -2393,33 +2402,33 @@ sub ipt_blacklist() {
 
                 if ($target eq 'DROP') {
                     if ($chain eq 'INPUT' or $chain eq 'FORWARD') {
-                        push @ipt_script_lines, "\$IPTABLES -A " .
+                        push @ipt_script_lines, "\$${ipt_var_str} -A " .
                             qq|$config{"FWSNORT_$chain"} -s $addr -j DROP|;
                     }
                     if ($chain eq 'OUTPUT' or $chain eq 'FORWARD') {
-                        push @ipt_script_lines, "\$IPTABLES -A " .
+                        push @ipt_script_lines, "\$${ipt_var_str} -A " .
                             qq|$config{"FWSNORT_$chain"} -d $addr -j DROP|;
                     }
                 } else {
                     if ($chain eq 'INPUT' or $chain eq 'FORWARD') {
-                        push @ipt_script_lines, "\$IPTABLES -A " .
+                        push @ipt_script_lines, "\$${ipt_var_str} -A " .
                             qq|$config{"FWSNORT_$chain"} -s $addr -p tcp | .
                             qq|-j REJECT --reject-with tcp-reset|;
-                        push @ipt_script_lines, "\$IPTABLES -A " .
+                        push @ipt_script_lines, "\$${ipt_var_str} -A " .
                             qq|$config{"FWSNORT_$chain"} -s $addr -p udp | .
                             qq|-j REJECT --reject-with icmp-port-unreachable|;
-                        push @ipt_script_lines, "\$IPTABLES -A " .
+                        push @ipt_script_lines, "\$${ipt_var_str} -A " .
                             qq|$config{"FWSNORT_$chain"} -s $addr -p icmp | .
                             qq|-j REJECT --reject-with icmp-host-unreachable|;
                     }
                     if ($chain eq 'OUTPUT' or $chain eq 'FORWARD') {
-                        push @ipt_script_lines, "\$IPTABLES -A " .
+                        push @ipt_script_lines, "\$${ipt_var_str} -A " .
                             qq|$config{"FWSNORT_$chain"} -d $addr -p tcp | .
                             qq|-j REJECT --reject-with tcp-reset|;
-                        push @ipt_script_lines, "\$IPTABLES -A " .
+                        push @ipt_script_lines, "\$${ipt_var_str} -A " .
                             qq|$config{"FWSNORT_$chain"} -d $addr -p udp | .
                             qq|-j REJECT --reject-with icmp-port-unreachable|;
-                        push @ipt_script_lines, "\$IPTABLES -A " .
+                        push @ipt_script_lines, "\$${ipt_var_str} -A " .
                             qq|$config{"FWSNORT_$chain"} -d $addr -p icmp | .
                             qq|-j REJECT --reject-with icmp-host-unreachable|;
                     }
@@ -2444,8 +2453,8 @@ sub ipt_add_chains() {
                     $config{"FWSNORT_${built_in_chain}_ESTAB"};
             }
             push @ipt_script_lines,
-                "\$IPTABLES -N $chain 2> /dev/null",
-                "\$IPTABLES -F $chain\n";
+                "\$${ipt_var_str} -N $chain 2> /dev/null",
+                "\$${ipt_var_str} -F $chain\n";
         }
     }
     return;
@@ -2460,7 +2469,7 @@ sub ipt_add_conntrack_jumps() {
     for my $chain (keys %process_chains) {
         next unless $process_chains{$chain};
 
-        push @ipt_script_lines, qq|\$IPTABLES -A $config{"FWSNORT_$chain"} | .
+        push @ipt_script_lines, qq|\$${ipt_var_str} -A $config{"FWSNORT_$chain"} | .
             "-p tcp -m state --state ESTABLISHED -j " .
             $config{"FWSNORT_${chain}_ESTAB"};
     }
@@ -2479,21 +2488,21 @@ sub ipt_jump_chain() {
                     ### delete any existing jump rule so that fwsnort.sh can
                     ### be executed many times in a row without adding several
                     ### jump rules
-                    push @ipt_script_lines, "\$IPTABLES -D $chain " .
+                    push @ipt_script_lines, "\$${ipt_var_str} -D $chain " .
                         qq|-i $intf -j $config{"FWSNORT_$chain"}| .
                         ' 2> /dev/null';
 
                     ### now add the jump rule
-                    push @ipt_script_lines, "\$IPTABLES -I $chain " .
+                    push @ipt_script_lines, "\$${ipt_var_str} -I $chain " .
                         qq|$config{"FWSNORT_${chain}_JUMP"} -i | .
                         qq|$intf -j $config{"FWSNORT_$chain"}|;
                 } elsif ($chain eq 'OUTPUT') {
 
-                    push @ipt_script_lines, "\$IPTABLES -D $chain " .
+                    push @ipt_script_lines, "\$${ipt_var_str} -D $chain " .
                         qq|-o $intf -j $config{'FWSNORT_OUTPUT'}| .
                         ' 2> /dev/null';
 
-                    push @ipt_script_lines, "\$IPTABLES -I $chain " .
+                    push @ipt_script_lines, "\$${ipt_var_str} -I $chain " .
                         qq|$config{'FWSNORT_OUTPUT_JUMP'} -o | .
                         qq|$intf -j $config{'FWSNORT_OUTPUT'}|;
                 }
@@ -2505,31 +2514,31 @@ sub ipt_jump_chain() {
 
             if ($no_exclude_loopback) {
 
-                push @ipt_script_lines, "\$IPTABLES -D $chain " .
+                push @ipt_script_lines, "\$${ipt_var_str} -D $chain " .
                     qq|-j $config{"FWSNORT_$chain"}| .
                     ' 2> /dev/null';
 
-                push @ipt_script_lines, "\$IPTABLES -I $chain " .
+                push @ipt_script_lines, "\$${ipt_var_str} -I $chain " .
                     qq|$config{"FWSNORT_${chain}_JUMP"} | .
                     qq|-j $config{"FWSNORT_$chain"}|;
             } else {
                 if ($chain eq 'INPUT' or $chain eq 'FORWARD') {
 
-                    push @ipt_script_lines, "\$IPTABLES -D $chain " .
+                    push @ipt_script_lines, "\$${ipt_var_str} -D $chain " .
                         qq|! -i lo -j $config{"FWSNORT_$chain"}| .
                         ' 2> /dev/null';
 
-                    push @ipt_script_lines, "\$IPTABLES -I $chain " .
+                    push @ipt_script_lines, "\$${ipt_var_str} -I $chain " .
                         qq|$config{"FWSNORT_${chain}_JUMP"} ! -i lo | .
                         qq|-j $config{"FWSNORT_$chain"}|;
 
                 } elsif ($chain eq 'OUTPUT') {
 
-                    push @ipt_script_lines, "\$IPTABLES -D $chain " .
+                    push @ipt_script_lines, "\$${ipt_var_str} -D $chain " .
                         qq|! -o lo -j $config{"FWSNORT_$chain"}| .
                         ' 2> /dev/null';
 
-                    push @ipt_script_lines, "\$IPTABLES -I $chain " .
+                    push @ipt_script_lines, "\$${ipt_var_str} -I $chain " .
                         qq|$config{"FWSNORT_${chain}_JUMP"} ! -o lo | .
                         qq|-j $config{"FWSNORT_$chain"}|;
                 }
@@ -2565,10 +2574,14 @@ sub ipt_hdr() {
 
 sub ipt_config_section() {
     ### build the config section of the iptables script
+    my $ipt_cmd = $cmds{'iptables'};
+    if ($enable_ip6tables) {
+        $ipt_cmd = $cmds{'ip6tables'};
+    }
     push @ipt_script_lines,
         '#==================== config ====================',
         "ECHO=$cmds{'echo'}",
-        "IPTABLES=$cmds{'iptables'}",
+        "${ipt_var_str}=$ipt_cmd",
         "#================== end config ==================\n";
     return;
 }
@@ -2756,6 +2769,14 @@ sub fwsnort_init() {
 
     &get_local_addrs() unless $no_addr_check;
 
+    if ($enable_ip6tables) {
+        for my $opt qw/itype icode ttl tos ipopts/ {
+            $snort_opts{'unsupported'}{$opt}
+                = $snort_opts{'filter'}{$opt};
+            delete $snort_opts{'filter'}{$opt};
+        }
+    }
+
     if ($strict) {
         ### make the snort options parser very strict
         for my $opt qw/uricontent pcre distance within/ {
@@ -2857,6 +2878,11 @@ sub handle_cmd_line() {
     }
 
     $ipt_sync = 0 if $no_ipt_sync;
+
+    if ($enable_ip6tables) {
+        ### switch to ip6tables
+        $ipt_var_str = 'IP6TABLES';
+    }
 
     $process_chains{'INPUT'}   = 0 if $no_ipt_input;
     $process_chains{'FORWARD'} = 0 if $no_ipt_forward;
@@ -3455,6 +3481,8 @@ Options:
                                 from fwsnort rules.
     --restrict-intf=<intf>    - Restrict fwsnort rules to a specified
                                 interface (e.g. "eth0").
+    -6, --ip6tables           - Enable ip6tables mode to build an fwsnort
+                                policy via ip6tables instead of iptables.
     --Home-net <net/mask>     - Manually specify the Home network
                                 (CIDR or standard notation).
     --External-net <net/mask> - Manually specify the external network
