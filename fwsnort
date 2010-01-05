@@ -14,7 +14,7 @@
 #
 # Credits: (see the CREDITS file)
 #
-# Version: 1.1-pre2
+# Version: 1.1-pre3
 #
 # Copyright (C) 2003-2009 Michael Rash (mbr@cipherdyne.org)
 #
@@ -103,7 +103,7 @@ use strict;
 my $fwsnort_conf = "/etc/fwsnort/fwsnort.conf";
 
 ### version number
-my $version = '1.1-pre2';
+my $version = '1.1-pre3';
 my $revision_svn = '$Revision$';
 my $rev_num = '1';
 ($rev_num) = $revision_svn =~ m|\$Rev.*:\s+(\S+)|;
