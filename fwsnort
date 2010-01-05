@@ -99,22 +99,8 @@ use Cwd;
 use Getopt::Long;
 use strict;
 
-#======================== config ========================
-my $fwsnort_dir = '/etc/fwsnort';
-my $rules_dir   = "${fwsnort_dir}/snort_rules";
-my $archive_dir = "${fwsnort_dir}/archive";
-my $queue_rules_dir = "${rules_dir}_queue";
-my $log_dir     = '/var/log';
-
 ### config file
-my $fwsnort_conf = "${fwsnort_dir}/fwsnort.conf";
-
-### log file
-my $logfile = "${log_dir}/fwsnort.log";
-
-### iptables script
-my $ipt_script = "${fwsnort_dir}/fwsnort.sh";
-#===================== end config =======================
+my $fwsnort_conf = "/etc/fwsnort/fwsnort.conf";
 
 ### version number
 my $version = '1.1';
@@ -285,7 +271,7 @@ my %multi_line_vars = (
 );
 
 ### array that contains iptables script (will be written
-### to $ipt_script)
+### to $config{'FWSNORT_SCRIPT'})
 my @ipt_script_lines = ();
 
 ### contains a cache of the iptables policy
@@ -340,10 +326,17 @@ my $dumper     = 0;
 my $dump_ipt   = 0;
 my $dump_snort = 0;
 my $strict     = 0;
+my $ipt_script = '';
+my $logfile    = '';
+my $rules_dir  = '';
+my $homedir    = '';
+my $run_last   = 0;
+my $queue_rules_dir = '';
 my $dump_conf  = 0;
 my $kernel_ver = '2.6';  ### default
 my $verbose    = 0;
 my $print_ver  = 0;
+my $cmdl_homedir   = '';
 my $update_rules   = 0;  ### used to download latest snort rules
 my $ipt_print_type = 0;
 my $ipt_rule_ctr   = 1;
@@ -388,6 +381,7 @@ my $no_ipt_log_ip_opts  = 0;
 my $no_ipt_log_tcp_opts = 0;
 my $ipt_log_tcp_seq     = 0;
 my $include_perl_triggers = 0;
+my $duplicate_last_build  = 0;
 
 ### to be added to the string match extension
 my $ipt_has_string_payload_offset_opt = 0;
@@ -407,7 +401,7 @@ my @argv_cp = @ARGV;
 ### make Getopts case sensitive
 Getopt::Long::Configure('no_ignore_case');
 
-die "[-] Use --help for usage information.\n" unless (GetOptions(
+die "[*] Use --help for usage information.\n" unless (GetOptions(
     'ipt-apply'      => \$ipt_apply,    # Apply the generated ruleset.
     'ipt-drop'       => \$ipt_drop,     # Add iptables DROP rules.
     'ipt-reject'     => \$ipt_reject,   # Add iptables REJECT rules.
@@ -494,6 +488,8 @@ die "[-] Use --help for usage information.\n" unless (GetOptions(
                                               # rules directory in --QUEUE or
                                               # --NFQUEUE mode.
     'queue-num=i'    => \$nfqueue_num,  # Specifies the NFQUEUE number.
+    'Home-dir=s'     => \$cmdl_homedir,
+    'Last-cmd'       => \$run_last,
     'lib-dir=s'      => \$lib_dir,      # Specify path to lib directory.
     'verbose'        => \$verbose,
     'logfile=s'      => \$logfile,      # Specify the logfile path.
@@ -511,6 +507,8 @@ if ($< == 0 and $> == 0) {
 
 ### handle the command line args
 &handle_cmd_line();
+
+&run_last_cmdline() if $run_last;
 
 ### import config, initialize various things, etc.
 &fwsnort_init();
@@ -582,26 +580,28 @@ if ($include_sids) {
 
 push @ipt_script_lines, qq|\n\$ECHO "[+] Finished."|, '### EOF ###';
 
-print "\n[+] Logfile: $logfile\n";
+print "\n[+] Logfile: $config{'LOG_FILE'}\n";
 
 if ($ipt_rule_ctr > 1) {
 
     ### archive any existing ipt_script file
-    &archive($ipt_script);
+    &archive($config{'FWSNORT_SCRIPT'});
 
     ### write the iptables script out to disk
     &write_ipt_script();
 
-    chmod 0500, $ipt_script;
+    chmod 0500, $config{'FWSNORT_SCRIPT'};
 
     if ($queue_mode or $nfqueue_mode) {
         print "[+] Snort rule set directory for rules to be queued ",
-            "to userspace:\n    $queue_rules_dir\n";
+            "to userspace:\n    $config{'QUEUE_RULES_DIR'}\n";
     }
-    print "[+] iptables script: $ipt_script\n";
+    print "[+] iptables script: $config{'FWSNORT_SCRIPT'}\n";
 } else {
     print "[-] No Snort rules could be translated.\n";
 }
+
+&save_args() unless $run_last;
 
 exit 0;
 #===================== end main ======================
@@ -615,7 +615,7 @@ sub parse_snort_rules() {
     if ($rules_file) {
         @rfiles = split /\,/, $rules_file;
     } else {
-        for my $dir (split /\,/, $rules_dir) {
+        for my $dir (split /\,/, $config{'RULES_DIR'}) {
             opendir D, $dir or die "[*] Could not opendir $dir";
             for my $file (readdir D) {
                 push @rfiles, "$dir/$file";
@@ -779,7 +779,7 @@ sub parse_snort_rules() {
             }
 
             ### construct the equivalent iptables rule and add it
-            ### to $ipt_script
+            ### to $config{'FWSNORT_SCRIPT'}
             my ($ipt_rv, $num_rules) = &ipt_build($hdr_hr,
                     $opts_hr, $content_ar, $offsets_hr, $rule);
 
@@ -801,8 +801,8 @@ sub parse_snort_rules() {
         }
 
         if (($queue_mode or $nfqueue_mode) and @queue_rules) {
-            open M, "> $queue_rules_dir/$filename" or die "[*] Could not ",
-                "open $queue_rules_dir/$filename: $!";
+            open M, "> $config{'QUEUE_RULES_DIR'}/$filename" or die "[*] Could not ",
+                "open $config{'QUEUE_RULES_DIR'}/$filename: $!";
             print M "#\n### This file generated with: fwsnort @argv_cp\n#\n\n";
             print M "$_\n", for @queue_rules;
             print M "\n### EOF ###\n";
@@ -2551,7 +2551,7 @@ sub ipt_jump_chain() {
 sub ipt_hdr() {
     push @ipt_script_lines,
         "#!$cmds{'sh'}\n#", '#'x76,
-        "#\n# File:  $ipt_script",
+        "#\n# File:  $config{'FWSNORT_SCRIPT'}",
         "#\n# Purpose:  This script was auto-" .
         "generated by fwsnort, and implements",
         "#           an iptables ruleset based upon " .
@@ -2598,7 +2598,7 @@ sub check_type() {
         for my $type (keys %$type_hr) {
             my $found = 0;
             my @valid_types = ();
-            for my $dir (split /\,/, $rules_dir) {
+            for my $dir (split /\,/, $config{'RULES_DIR'}) {
                 if (-e "$dir/${type}.rules") {
                     $found = 1;
                 } else {
@@ -2650,6 +2650,9 @@ sub import_config() {
             }
         }
     }
+
+    &expand_vars();
+
     return;
 }
 
@@ -2822,6 +2825,8 @@ sub get_kernel_ver() {
 
 sub handle_cmd_line() {
 
+    &get_homedir();
+
     ### Print the version number and exit if -V given on the command line.
     if ($print_ver) {
         print "[+] fwsnort v$version (file revision: $rev_num)\n",
@@ -2860,20 +2865,20 @@ sub handle_cmd_line() {
     unless ($is_root) {
         $no_ipt_sync = 1;
         $no_ipt_test = 1;
-        $logfile = './fwsnort.log';  ### local file
-        unlink $logfile if -e $logfile;
-        $ipt_script = './fwsnort.sh';  ### local file
-        unlink $ipt_script if -e $ipt_script;
+        $config{'LOG_FILE'} = './fwsnort.log';  ### local file
+        unlink $config{'LOG_FILE'} if -e $config{'LOG_FILE'};
+        $config{'FWSNORT_SCRIPT'} = './fwsnort.sh';  ### local file
+        unlink $config{'FWSNORT_SCRIPT'} if -e $config{'FWSNORT_SCRIPT'};
     }
 
     if ($ipt_apply) {
         die "[*] You need to be root for --ipt-apply" unless $is_root;
-        if (-e $ipt_script) {
-            print "[+] Executing $ipt_script\n";
-            system $ipt_script;
+        if (-e $config{'FWSNORT_SCRIPT'}) {
+            print "[+] Executing $config{'FWSNORT_SCRIPT'}\n";
+            system $config{'FWSNORT_SCRIPT'};
             exit 0;
         } else {
-            die "[*] $ipt_script does not exist.";
+            die "[*] $config{'FWSNORT_SCRIPT'} does not exist.";
         }
     }
 
@@ -2962,6 +2967,39 @@ sub import_snort_conf() {
     return;
 }
 
+sub expand_vars() {
+
+    my $has_sub_var = 1;
+    my $resolve_ctr = 0;
+
+    while ($has_sub_var) {
+        $resolve_ctr++;
+        $has_sub_var = 0;
+        if ($resolve_ctr >= 20) {
+            die "[*] Exceeded maximum variable resolution counter.";
+        }
+        for my $hr (\%config, \%cmds) {
+            for my $var (keys %$hr) {
+                my $val = $hr->{$var};
+                if ($val =~ m|\$(\w+)|) {
+                    my $sub_var = $1;
+                    die "[*] sub-ver $sub_var not allowed within same ",
+                        "variable $var" if $sub_var eq $var;
+                    if (defined $config{$sub_var}) {
+                        $val =~ s|\$$sub_var|$config{$sub_var}|;
+                        $hr->{$var} = $val;
+                    } else {
+                        die "[*] sub-var \"$sub_var\" not defined in ",
+                            "config for var: $var.";
+                    }
+                    $has_sub_var = 1;
+                }
+            }
+        }
+    }
+    return;
+}
+
 sub required_vars() {
     my @required_vars = qw(
         HOME_NET EXTERNAL_NET HTTP_SERVERS SMTP_SERVERS DNS_SERVERS
@@ -2970,7 +3008,8 @@ sub required_vars() {
         AVG_TCP_HEADER_LEN MAX_FRAME_LEN FWSNORT_INPUT FWSNORT_INPUT_ESTAB
         FWSNORT_OUTPUT FWSNORT_OUTPUT_ESTAB FWSNORT_FORWARD
         FWSNORT_FORWARD_ESTAB FWSNORT_INPUT_JUMP FWSNORT_OUTPUT_JUMP
-        FWSNORT_FORWARD_JUMP FWSNORT_LIBS_DIR MAX_STRING_LEN
+        FWSNORT_FORWARD_JUMP MAX_STRING_LEN CONF_DIR RULES_DIR ARCHIVE_DIR
+        QUEUE_RULES_DIR LOG_DIR LIBS_DIR CONF_FILE FWSNORT_SCRIPT LOG_FILE
     );
     for my $var (@required_vars) {
         die "[*] Variable $var not defined in $fwsnort_conf. Exiting.\n"
@@ -3199,29 +3238,29 @@ sub get_mod_paths() {
 
     my @paths = ();
 
-    $config{'FWSNORT_LIBS_DIR'} = $lib_dir if $lib_dir;
+    $config{'LIBS_DIR'} = $lib_dir if $lib_dir;
 
-    unless (-d $config{'FWSNORT_LIBS_DIR'}) {
-        my $dir_tmp = $config{'FWSNORT_LIBS_DIR'};
+    unless (-d $config{'LIBS_DIR'}) {
+        my $dir_tmp = $config{'LIBS_DIR'};
         $dir_tmp =~ s|lib/|lib64/|;
         if (-d $dir_tmp) {
-            $config{'FWSNORT_LIBS_DIR'} = $dir_tmp;
+            $config{'LIBS_DIR'} = $dir_tmp;
         } else {
             return [];
         }
     }
 
-    opendir D, $config{'FWSNORT_LIBS_DIR'}
-        or die "[*] Could not open $config{'FWSNORT_LIBS_DIR'}: $!";
+    opendir D, $config{'LIBS_DIR'}
+        or die "[*] Could not open $config{'LIBS_DIR'}: $!";
     my @dirs = readdir D;
     closedir D;
 
-    push @paths, $config{'FWSNORT_LIBS_DIR'};
+    push @paths, $config{'LIBS_DIR'};
 
     for my $dir (@dirs) {
         ### get directories like "/usr/lib/fwsnort/x86_64-linux"
-        next unless -d "$config{'FWSNORT_LIBS_DIR'}/$dir";
-        push @paths, "$config{'FWSNORT_LIBS_DIR'}/$dir"
+        next unless -d "$config{'LIBS_DIR'}/$dir";
+        push @paths, "$config{'LIBS_DIR'}/$dir"
             if $dir =~ m|linux| or $dir =~ m|thread|;
     }
     return \@paths;
@@ -3231,15 +3270,20 @@ sub setup() {
 
     ### these two directories must already exist for
     ### things to work
-    die "[*] No fwsnort directory $fwsnort_dir"
-        unless -d $fwsnort_dir;
+    die "[*] No fwsnort directory $config{'CONF_DIR'}"
+        unless -d $config{'CONF_DIR'};
+
+    $config{'FWSNORT_SCRIPT'}  = $ipt_script if $ipt_script;
+    $config{'RULES_DIR'}       = $rules_dir if $rules_dir;
+    $config{'QUEUE_RULES_DIR'} = $queue_rules_dir if $queue_rules_dir;
+    $config{'LOG_FILE'}        = $logfile if $logfile;
 
     if ($rules_file) {
         for my $file (split /\,/, $rules_file) {
             die "[*] Snort rules file $file does not exist." unless -e $file;
         }
     } else {
-        for my $dir (split /\,/, $rules_dir) {
+        for my $dir (split /\,/, $config{'RULES_DIR'}) {
             die "[*] No snort rules directory $dir, use --snort-rdir"
                 unless -d $dir;
         }
@@ -3249,19 +3293,19 @@ sub setup() {
     &import_perl_modules();
 
     if ($is_root) {
-        unless (-d $archive_dir) {
-            mkdir $archive_dir, 0500 or
-                die "[*] Could not mkdir($archive_dir): $!";
+        unless (-d $config{'ARCHIVE_DIR'}) {
+            mkdir $config{'ARCHIVE_DIR'}, 0500 or
+                die "[*] Could not mkdir($config{'ARCHIVE_DIR'}): $!";
         }
 
-        unless (-d $log_dir) {
-            mkdir $log_dir, 0755 or
-                die "[*] Could not mkdir($log_dir): $!";
+        unless (-d $config{'LOG_DIR'}) {
+            mkdir $config{'LOG_DIR'}, 0755 or
+                die "[*] Could not mkdir($config{'LOG_DIR'}): $!";
         }
     }
 
-    if (($queue_mode or $nfqueue_mode) and not -d $queue_rules_dir) {
-        mkdir $queue_rules_dir, 0500 or die $!;
+    if (($queue_mode or $nfqueue_mode) and not -d $config{'QUEUE_RULES_DIR'}) {
+        mkdir $config{'QUEUE_RULES_DIR'}, 0500 or die $!;
     }
 
     return;
@@ -3269,8 +3313,8 @@ sub setup() {
 
 sub update_rules() {
     my $url = 'http://www.emergingthreats.net/rules/emerging-all.rules';
-    print "[+] Downloading latest rules into $rules_dir/\n    $url\n";
-    my $dir = $rules_dir;
+    print "[+] Downloading latest rules into $config{'RULES_DIR'}/\n    $url\n";
+    my $dir = $config{'RULES_DIR'};
     $dir =~ s/\,.*//;
     chdir $dir or die "[*] Could not chdir $dir: $!";
     if (-e 'emerging-all.rules') {
@@ -3347,7 +3391,7 @@ sub archive() {
     my $file = shift;
     return unless $file =~ m|/|;
     my ($filename) = ($file =~ m|.*/(.*)|);
-    my $targetbase = "${archive_dir}/${filename}.old";
+    my $targetbase = "$config{'ARCHIVE_DIR'}/${filename}.old";
     for (my $i = 4; $i > 1; $i--) {  ### keep five copies of the old config files
         my $oldfile = $targetbase . $i;
         my $newfile = $targetbase . ($i+1);
@@ -3365,7 +3409,8 @@ sub archive() {
 }
 
 sub write_ipt_script() {
-    open F, "> $ipt_script" or die "[*] Could not open $ipt_script: $!";
+    open F, "> $config{'FWSNORT_SCRIPT'}" or
+        die "[*] Could not open $config{'FWSNORT_SCRIPT'}: $!";
     print F "$_\n" for @ipt_script_lines;
     close F;
     return;
@@ -3393,8 +3438,69 @@ sub expand_addresses() {
     return \@addrs;
 }
 
+sub run_last_cmdline() {
+
+    my $save_file = "$homedir/.fwsnort.run";
+
+    open S, "< $save_file" or die "[*] Could not open $save_file: $!";
+    my $arg_line = <S>;
+    close S;
+    chomp $arg_line;
+
+    print "[+] Running with last command line args: $arg_line\n";
+
+    @ARGV = split /\s+/, $arg_line;
+    @argv_cp = @ARGV;
+
+    ### run GetOpt() to get command line args
+    &handle_cmd_line();
+
+    return;
+}
+
+sub save_args() {
+    my $save_file  = "$homedir/.fwsnort.run";
+
+    open S, "> $save_file" or die "[*] Could not open $save_file";
+    print S "@argv_cp\n";
+    close S;
+
+    return;
+}
+
+sub get_homedir() {
+    my $uid = $<;
+    if ($cmdl_homedir) {
+        $homedir = $cmdl_homedir;
+    } else {
+        ### prefer homedir specified in /etc/passwd (if it exists)
+        if (-e '/etc/passwd') {
+            open P, "< /etc/passwd" or die "[*] Could not open /etc/passwd. ",
+                "Exiting.\n";
+            my @lines = <P>;
+            close P;
+            for my $line (@lines) {
+                ### mbr:x:222:222:Michael Rash:/home/mbr:/bin/bash
+                chomp $line;
+                if ($line =~ /^(?:.*:){2}$uid:(?:.*:){2}(\S+):/) {
+                    $homedir = $1;
+                    last;
+                }
+            }
+        }
+        unless ($homedir and -d $homedir) {
+            $homedir = $ENV{'HOME'} if defined $ENV{'HOME'};
+        }
+    }
+    die '[*] Could not determine homedir, use --Home option.'
+        unless ($homedir and -d $homedir);
+
+    return;
+}
+
 sub truncate_logfile() {
-    open L, "> $logfile" or die "[*] Could not open $logfile: $!";
+    open L, "> $config{'LOG_FILE'}" or
+        die "[*] Could not open $config{'LOG_FILE'}: $!";
     close L;
     return;
 }
@@ -3404,7 +3510,8 @@ sub logr() {
     if ($stdout) {
         print STDOUT "$msg\n";
     } else {
-        open F, ">> $logfile" or die "[*] Could not open $logfile: $!";
+        open F, ">> $config{'LOG_FILE'}"
+            or die "[*] Could not open $config{'LOG_FILE'}: $!";
         print F "$msg\n";
         close F;
     }
@@ -3425,8 +3532,8 @@ Options:
                                 which options it will translate into
                                 iptables rules.
     --ipt-script=<script>     - Print iptables script to <script>
-                                instead of the normal location at
-                                $ipt_script
+                                instead of the default location at
+                                /etc/fwsnort/fwsnort.sh
     --ipt-apply               - Execute the fwsnort.sh script.
     --ipt-reject              - Add a protocol dependent REJECT rule
                                 (tcp resets for tcp or icmp port
@@ -3513,8 +3620,8 @@ Options:
                                 config file located at
                                 $fwsnort_conf
     --logfile=<file>          - Log messages to <file> instead of the
-                                normal location at
-                                $logfile
+                                default location at:
+                                /var/log/fwsnort/fwsnort.log
     -N   --NFQUEUE            - Build a policy designed to only send packets
                                 that match Snort signature "content" fields
                                 to userspace via the NFQUEUE target. This is
@@ -3525,7 +3632,7 @@ Options:
     --queue-rules-dir=<dir>   - Specify the path to the generated set of
                                 Snort rules that are to be queued to
                                 userspace in --NFQUEUE or --QUEUE mode.  The
-                                default is $queue_rules_dir
+                                default is /etc/fwsnort/snort_rules_queue/.
     -Q   --QUEUE              - Same as the --NFQUEUE option, except use the
                                 older iptables QUEUE target.
     -U   --Ulog               - Force ULOG target for all log generation.
@@ -3540,7 +3647,9 @@ Options:
                                 existing iptables policy).
     --Dump-snort              - Dump Snort rules on STDOUT.
     --Dump-conf               - Dump configuration on STDOUT and exit.
-    --add-deleted             - Added Snort deleted rules.
+    --add-deleted             - Added Snort "deleted" rules.
+    --Last-cmd                - Rebuild fwsnort.sh with the same command
+                                line args as the previous execution.
     --lib-dir <path>          - Specify path to lib directory.
     --debug                   - Run in debug mode.
     -v   --verbose            - Run in verbose mode.

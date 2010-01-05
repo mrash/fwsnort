@@ -9,6 +9,16 @@ fwsnort-1.1 (01//2010):
       fwsnort to include 'perl -e print ... ' commands as comments in the
       /etc/fwsnort/fwsnort.sh script, and these commands can be combined
       with netcat to send payloads across the wire that match Snort rules.
+    - Updated fwsnort to create logs in the /var/log/fwsnort/ directory
+      instead of directly in the /var/log/ directory.  The path is controlled
+      by a new variable 'LOG_FILE' in the /etc/fwsnort/fwsnort.conf file.
+    - Added several variables in /etc/fwsnort/fwsnort.conf to control paths
+      to everything from the config file to the snort rules path.  Coupled
+      with this is the ability to create variables within path components and
+      fwsnort will expand them (e.g. 'CONF_DIR /etc/fwsnort;
+      CONF_FILE $CONF_DIR/fwsnort.conf').
+    - Added --Last-cmd arg so that it is easy to rebuild the fwsnort.sh script
+      with the same command line args as the previous execution.
 
 fwsnort-1.0.6 (05/30/2009):
     - (Franck Joncourt) Updated fwsnort to use the "! <option> <arg>" syntax

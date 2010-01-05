@@ -36,10 +36,9 @@ use Getopt::Long;
 use strict;
 
 #========================= config ========================
+my $fwsnort_conf_file = 'fwsnort.conf';
+
 my $sbin_dir    = '/usr/sbin';
-my $lib_dir     = '/usr/lib/fwsnort';
-my $fwsnort_dir = '/etc/fwsnort';
-my $rules_dir   = "${fwsnort_dir}/snort_rules";
 
 my $update_website = 'www.emergingthreats.net';
 
@@ -50,6 +49,8 @@ my $wgetCmd = '/usr/bin/wget';
 my $gzipCmd = '/bin/gzip';
 my $tarCmd  = '/bin/tar';
 #======================= end config ======================
+
+my %config = ();
 
 ### map perl modules to versions
 my %required_perl_modules = (
@@ -103,6 +104,8 @@ Getopt::Long::Configure('no_ignore_case');
 ### set LC_ALL env variable
 $ENV{'LC_ALL'} = $locale unless $no_locale;
 
+&import_config();
+
 $force_mod_re = qr|$force_mod_re| if $force_mod_re;
 $exclude_mod_re = qr|$exclude_mod_re| if $exclude_mod_re;
 
@@ -129,13 +132,13 @@ sub install() {
     die "[*] You must run install.pl from the fwsnort " .
         "sources directory." unless -e 'fwsnort' and -e 'fwsnort.conf';
 
-    unless (-d $fwsnort_dir) {
-        print "[+] mkdir $fwsnort_dir\n";
-        mkdir $fwsnort_dir, 0500;
+    unless (-d $config{'CONF_DIR'}) {
+        print "[+] mkdir $config{'CONF_DIR'}\n";
+        mkdir $config{'CONF_DIR'}, 0500;
     }
-    unless (-d $rules_dir) {
-        print "[+] mkdir $rules_dir\n";
-        mkdir $rules_dir, 0500;
+    unless (-d $config{'RULES_DIR'}) {
+        print "[+] mkdir $config{'RULES_DIR'}\n";
+        mkdir $config{'RULES_DIR'}, 0500;
     }
 
     ### install perl modules
@@ -176,13 +179,13 @@ sub install() {
         my @rfiles = readdir D;
         closedir D;
 
-        print "[+] Copying all rules files to $rules_dir\n";
+        print "[+] Copying all rules files to $config{'RULES_DIR'}\n";
         for my $rfile (@rfiles) {
             next unless $rfile =~ /\.rules$/;
             print "[+] Installing $rfile\n";
-            copy "$local_rules_dir/${rfile}", "${rules_dir}/${rfile}" or
-                die "[*] Could not copy $local_rules_dir/${rfile} ",
-                    "-> ${rules_dir}/${rfile}";
+            copy "$local_rules_dir/${rfile}", "$config{'RULES_DIR'}/${rfile}"
+                or die "[*] Could not copy $local_rules_dir/${rfile} ",
+                    "-> $config{'RULES_DIR'}/${rfile}";
         }
     }
 
@@ -192,16 +195,16 @@ sub install() {
     &install_manpage();
 
     my $preserve_rv = 0;
-    if (-e "${fwsnort_dir}/fwsnort.conf") {
+    if (-e "$config{'CONF_DIR'}/fwsnort.conf") {
         $preserve_rv = &query_preserve_config();
     }
 
     if ($preserve_rv) {
         &preserve_config();
     } else {
-        print "[+] Copying fwsnort.conf -> ${fwsnort_dir}/fwsnort.conf\n";
-        copy 'fwsnort.conf', "${fwsnort_dir}/fwsnort.conf";
-        chmod 0600, "${fwsnort_dir}/fwsnort.conf";
+        print "[+] Copying fwsnort.conf -> $config{'CONF_DIR'}/fwsnort.conf\n";
+        copy 'fwsnort.conf', "$config{'CONF_DIR'}/fwsnort.conf";
+        chmod 0600, "$config{'CONF_DIR'}/fwsnort.conf";
     }
 
     print "[+] Copying fwsnort -> ${sbin_dir}/fwsnort\n";
@@ -261,19 +264,20 @@ sub install_perl_module() {
             print "[+] Module $mod_name is already installed in the ",
                 "system perl tree, skipping.\n";
         } else {
-            ### install the module in the /usr/lib/fwknop directory because
+            ### install the module in the /usr/lib/fwsnort directory because
             ### it is not already installed.
             $install_module = 1;
         }
     }
 
     if ($install_module) {
-        unless (-d $lib_dir) {
-            print "[+] Creating $lib_dir\n";
-            mkdir $lib_dir, 0755 or die "[*] Could not mkdir $lib_dir: $!";
+        unless (-d $config{'LIBS_DIR'}) {
+            print "[+] Creating $config{'LIBS_DIR'}\n";
+            mkdir $config{'LIBS_DIR'}, 0755
+                or die "[*] Could not mkdir $config{'LIBS_DIR'}: $!";
         }
         print "[+] Installing the $mod_name $version perl " .
-            "module in $lib_dir/\n";
+            "module in $config{'LIBS_DIR'}/\n";
         my $mod_dir = $required_perl_modules{$mod_name}{'mod-dir'};
         chdir $mod_dir or die "[*] Could not chdir to ",
             "$mod_dir: $!";
@@ -283,7 +287,8 @@ sub install_perl_module() {
                 "http://www.cipherdyne.org/\n";
         }
         system "$cmds{'make'} clean" if -e 'Makefile';
-        system "$cmds{'perl'} Makefile.PL PREFIX=$lib_dir LIB=$lib_dir";
+        system "$cmds{'perl'} Makefile.PL " .
+            "PREFIX=$config{'LIBS_DIR'} LIB=$config{'LIBS_DIR'}";
         system $cmds{'make'};
 #        system "$cmds{'make'} test";
         system "$cmds{'make'} install";
@@ -388,6 +393,77 @@ sub query_get_emerging_threats_sigs() {
     return 0;
 }
 
+sub import_config() {
+    open C, "< $fwsnort_conf_file"
+        or die "[*] Could not open $fwsnort_conf_file: $!";
+    while (<C>) {
+        next if /^\s*#/;
+        if (/^\s*(\S+)\s+(.*?)\;/) {
+            my $varname = $1;
+            my $val     = $2;
+            if ($val =~ m|/.+| and $varname =~ /^\s*(\S+)Cmd$/) {
+                ### found a command
+                $cmds{$1} = $val;
+            } else {
+                $config{$varname} = $val;
+            }
+        }
+    }
+    close C;
+
+    ### resolve internal vars within variable values
+    &expand_vars();
+
+    &required_vars();
+
+    return;
+}
+
+sub expand_vars() {
+
+    my $has_sub_var = 1;
+    my $resolve_ctr = 0;
+
+    while ($has_sub_var) {
+        $resolve_ctr++;
+        $has_sub_var = 0;
+        if ($resolve_ctr >= 20) {
+            die "[*] Exceeded maximum variable resolution counter.";
+        }
+        for my $hr (\%config, \%cmds) {
+            for my $var (keys %$hr) {
+                my $val = $hr->{$var};
+                if ($val =~ m|\$(\w+)|) {
+                    my $sub_var = $1;
+                    die "[*] sub-ver $sub_var not allowed within same ",
+                        "variable $var" if $sub_var eq $var;
+                    if (defined $config{$sub_var}) {
+                        $val =~ s|\$$sub_var|$config{$sub_var}|;
+                        $hr->{$var} = $val;
+                    } else {
+                        die "[*] sub-var \"$sub_var\" not defined in ",
+                            "config for var: $var."
+                    }
+                    $has_sub_var = 1;
+                }
+            }
+        }
+    }
+    return;
+}
+
+sub required_vars() {
+    my @required_vars = qw(
+        CONF_DIR RULES_DIR ARCHIVE_DIR QUEUE_RULES_DIR LOG_DIR LIBS_DIR
+        CONF_FILE FWSNORT_SCRIPT LOG_FILE
+    );
+    for my $var (@required_vars) {
+        die "[*] Variable $var not defined in $fwsnort_conf_file. Exiting.\n"
+            unless defined $config{$var};
+    }
+    return;
+}
+
 sub check_commands() {
     my @path = qw(
         /bin
@@ -435,16 +511,16 @@ sub preserve_config() {
     my @new_lines = <C>;
     close C;
 
-    open CO, "< ${fwsnort_dir}/$file" or die "[*] Could not open ",
-        "${fwsnort_dir}/$file: $!";
+    open CO, "< $config{'CONF_DIR'}/$file" or die "[*] Could not open ",
+        "$config{'CONF_DIR'}/$file: $!";
     my @orig_lines = <CO>;
     close CO;
 
-    print "[+] Preserving existing config: ${fwsnort_dir}/$file\n";
+    print "[+] Preserving existing config: $config{'CONF_DIR'}/$file\n";
     ### write to a tmp file and then move.
     my $printed_intf_warning = 0;
-    open CONF, "> ${fwsnort_dir}/${file}.new" or die "[*] Could not open ",
-        "${fwsnort_dir}/${file}.new: $!";
+    open CONF, "> $config{'CONF_DIR'}/${file}.new" or die "[*] Could not open ",
+        "$config{'CONF_DIR'}/${file}.new: $!";
     for my $new_line (@new_lines) {
         if ($new_line =~ /^\s*#/) {
             print CONF $new_line;
@@ -475,7 +551,7 @@ sub preserve_config() {
         }
     }
     close CONF;
-    move "${fwsnort_dir}/${file}.new", "${fwsnort_dir}/$file";
+    move "$config{'CONF_DIR'}/${file}.new", "$config{'CONF_DIR'}/$file";
     return;
 }
 
