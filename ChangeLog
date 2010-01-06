@@ -1,4 +1,4 @@
-fwsnort-1.1 (01//2010):
+fwsnort-1.1 (01/05/2010):
     - Added the ability to build an fwsnort policy that utilizes ip6tables
       instead of iptables.  This allows fwsnort filtering and altering
       capabilities to apply to IPv6 traffic instead of just IPv4 traffic.  To
