@@ -1,7 +1,7 @@
 .\" Process this file with
 .\" groff -man -Tascii foo.1
 .\"
-.TH FWSNORT 8 "Feb, 2007" Linux
+.TH FWSNORT 8 "Jan, 2010" Linux
 .SH NAME
 .B fwsnort
 \- Firewall Snort
@@ -352,6 +352,10 @@ logfile, and iptables policy checking are enabled by default without
 having to specify any command line arguments:
 .PP
 .B # fwsnort
+.PP
+Generate ip6tables rules for attacks delivered over IPv6:
+.PP
+.B # fwsnort -6
 .PP
 Generate iptables rules for ddos and backdoor Snort rules only:
 .PP
