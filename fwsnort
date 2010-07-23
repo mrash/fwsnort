@@ -270,14 +270,29 @@ my %multi_line_vars = (
     'BLACKLIST' => '',
 );
 
-### array that contains iptables script (will be written
+### array that contains the fwsnort iptables script (will be written
 ### to $config{'FWSNORT_SCRIPT'})
 my @ipt_script_lines = ();
+
+### array that contains the fwsnort policy in iptables-save format.
+### This will also contain the running iptables policy, so the fwsnort
+### policy is integrated in.
+my @fwsnort_save_lines = ();
+my @ipt_save_lines     = ();
+my $ipt_save_index     = 0;
 
 ### contains a cache of the iptables policy
 my %ipt_policy = ();
 my %ipt_default_policy_setting = ();
 my %ipt_default_drop = ();
+my %ipt_save_existing_chains = ();
+
+### hashes for save format data
+my %save_format_whitelist = ();
+my %save_format_blacklist = ();
+my %save_format_prereqs   = ();
+my %save_format_rules     = ();
+my %save_format_conntrack_jumps = ();
 
 ### regex to match ip addresses
 my $ip_re = qr|(?:[0-2]?\d{1,2}\.){3}[0-2]?\d{1,2}|;
@@ -290,6 +305,9 @@ my $NON_HOST = '127.0.0.2';
 
 my $IPT_SUCCESS = 1;
 my $IPT_FAILURE = 0;
+
+my $MATCH_EQUIV  = 1;
+my $MATCH_SUBSTR = 2;
 
 ### header lengths; note that IP and TCP lengths are defined
 ### in the fwsnort.conf file since they may each contain options,
@@ -322,6 +340,7 @@ my $stdout     = 0;
 my $lib_dir    = '';
 my $rules_file = '';
 my $debug      = 0;
+my $is_root    = 0;
 my $dumper     = 0;
 my $dump_ipt   = 0;
 my $dump_snort = 0;
@@ -500,10 +519,8 @@ die "[*] Use --help for usage information.\n" unless (GetOptions(
 
 &usage(0) if $help;
 
-my $is_root = 0;
-if ($< == 0 and $> == 0) {
-    $is_root = 1;
-}
+### see if we are running as root
+&is_root();
 
 ### handle the command line args
 &handle_cmd_line();
@@ -520,9 +537,12 @@ if ($< == 0 and $> == 0) {
 ### truncate old fwsnort log
 &truncate_logfile();
 
-### check to make sure iptables has various iptables functionality
+### check to make sure iptables has various functionality available
 ### such as the LOG target, --hex-strings, the comment match, etc.
 &ipt_test() unless $no_ipt_test;
+
+### cache the running iptables policy in iptables-save format
+&cache_ipt_save_policy();
 
 ### print a header at the top of the iptables ruleset
 ### script
@@ -574,6 +594,9 @@ if ($include_sids) {
 ### fwsnort.sh script.
 &parse_snort_rules();
 
+### append all translated rules to the iptables-save formatted array
+&save_format_append_rules();
+
 ### jump packets (as appropriate) from the INPUT and
 ### FORWARD chains to our fwsnort chains
 &ipt_jump_chain() unless $no_ipt_jumps;
@@ -602,6 +625,10 @@ if ($ipt_rule_ctr > 1) {
 }
 
 &save_args() unless $run_last;
+
+open T, "> fws_ipt.save" or die $!;
+print T for @fwsnort_save_lines;
+close T;
 
 exit 0;
 #===================== end main ======================
@@ -1597,16 +1624,19 @@ sub ipt_build() {
 
         next unless $process_chains{$chain} and $process_rules{$chain};
 
-        ### build iptables INPUT rules
         for my $src_dst (@{$process_rules{$chain}}) {
 
             my $rule = "\$${ipt_var_str} -A ";
+            my $save_rule = '-A';
+            my $fwsnort_chain = '';
 
             ### see if we can jump to the ESTABLISHED inspection chain.
             if ($flow_established) {
                 $rule .= $config{"FWSNORT_${chain}_ESTAB"};
+                $fwsnort_chain = $config{"FWSNORT_${chain}_ESTAB"};
             } else {
                 $rule .= $config{"FWSNORT_$chain"};
+                $fwsnort_chain = $config{"FWSNORT_$chain"};
             }
 
             ### append interface restriction if necessary
@@ -1640,6 +1670,7 @@ sub ipt_build() {
 
             my $rv = &ipt_build_rule(
                 $chain,
+                $fwsnort_chain,
                 $rule,
                 $snort_hdr_hr,
                 $snort_opts_hr,
@@ -1711,7 +1742,7 @@ sub get_local_addrs() {
 }
 
 sub ipt_build_rule() {
-    my ($chain, $rule, $hdr_hr, $opts_hr, $content_ar,
+    my ($chain, $fwsnort_chain, $rule, $hdr_hr, $opts_hr, $content_ar,
             $offsets_hr, $orig_snort_rule, $flow_logging_prefix,
             $add_snort_comment, $add_perl_trigger) = @_;
 
@@ -1739,7 +1770,8 @@ sub ipt_build_rule() {
             ### ports with anything other than tcp or udp
             $hdr_hr->{'proto'} = 'tcp';
         }
-        $rule .= " $ipt_hdr_opts{'proto'} $hdr_hr->{'proto'}";
+        $rule .= " $ipt_hdr_opts{'proto'} $hdr_hr->{'proto'} " .
+            "-m $hdr_hr->{'proto'}";
     }
 
     ### append the source port
@@ -1762,7 +1794,7 @@ sub ipt_build_rule() {
 
     my $rv = &ipt_build_opts($rule, $hdr_hr, $opts_hr, $content_ar,
         $offsets_hr, $orig_snort_rule, $flow_logging_prefix,
-        $chain, $add_snort_comment, $add_perl_trigger);
+        $chain, $fwsnort_chain, $add_snort_comment, $add_perl_trigger);
 
     return $rv;
 }
@@ -1770,7 +1802,7 @@ sub ipt_build_rule() {
 sub ipt_build_opts() {
     my ($rule, $hdr_hr, $opts_hr, $content_ar,
             $offsets_hr, $orig_snort_rule, $flow_logging_prefix,
-            $chain, $add_snort_comment, $add_perl_trigger) = @_;
+            $chain, $fwsnort_chain, $add_snort_comment, $add_perl_trigger) = @_;
 
     ### append tcp flags
     if (defined $opts_hr->{'flags'}) {
@@ -1978,7 +2010,7 @@ sub ipt_build_opts() {
     ### write the rule out to the iptables script
     &ipt_add_rule($hdr_hr, $opts_hr, $orig_snort_rule,
         $rule, $target_str, "### $comment", $add_snort_comment,
-        $perl_trigger_str, $add_perl_trigger);
+        $perl_trigger_str, $add_perl_trigger, $chain, $fwsnort_chain);
     return 1;
 }
 
@@ -2002,6 +2034,7 @@ sub build_content_matches() {
 
         $content_str =~ s/`/|60|/g;     ### ` -> |60|
         $content_str =~ s/'/|27|/g;     ### ' -> |27|
+        $content_str =~ s/\x2d/|2d|/g;  ### - -> |2d|
         $content_str =~ s/\x24/|24|/g;  ### $ -> |24|
 
         ### convert all escaped chars to their hex equivalents
@@ -2263,7 +2296,7 @@ sub translate_perl_trigger() {
 sub ipt_add_rule() {
     my ($hdr_hr, $opts_hr, $orig_snort_rule, $rule_base,
         $target_str, $comment, $add_snort_comment,
-        $perl_trigger_str, $add_perl_trigger) = @_;
+        $perl_trigger_str, $add_perl_trigger, $chain, $fwsnort_chain) = @_;
 
     my $action_rule = '';
     if ($hdr_hr->{'proto'} eq 'tcp') {
@@ -2326,17 +2359,92 @@ sub ipt_add_rule() {
     if ($verbose) {
         push @ipt_script_lines, qq|\$ECHO "[+] rule $ipt_rule_ctr"|;
     }
+
+    ### save format handling
+    my $save_format_ipt_rule    = $ipt_rule . " \n";
+    my $save_format_action_rule = $action_rule . " \n";
+
+    $save_format_ipt_rule    =~ s|\$${ipt_var_str}\s+\-A|-A|;
+    $save_format_action_rule =~ s|\$${ipt_var_str}\s+\-A|-A|;
+
     if ($hdr_hr->{'action'} ne 'pass') {
         if ($queue_mode or $nfqueue_mode) {
+
             push @ipt_script_lines, $ipt_rule;
+            push @{$save_format_rules{$fwsnort_chain}}, $save_format_ipt_rule;
+
         } else {
+
             push @ipt_script_lines, $ipt_rule unless $no_ipt_log;
+            push @{$save_format_rules{$fwsnort_chain}}, $save_format_ipt_rule
+                unless $no_ipt_log;
         }
     }
-    push @ipt_script_lines, $action_rule
-        if $action_rule and ($ipt_drop or $ipt_reject or
-            $hdr_hr->{'action'} eq 'pass' or defined $opts_hr->{'resp'});
+
+    if ($action_rule and ($ipt_drop or $ipt_reject or
+            $hdr_hr->{'action'} eq 'pass' or defined $opts_hr->{'resp'})) {
+
+        push @ipt_script_lines, $action_rule;
+        push @{$save_format_rules{$fwsnort_chain}}, $save_format_action_rule;
+    }
+
     $ipt_rule_ctr++;
+    return;
+}
+
+sub save_format_append_rules() {
+
+     for my $chain (sort keys %ipt_save_existing_chains) {
+
+        next unless &is_fwsnort_chain($chain, $MATCH_EQUIV);
+
+        ### make sure that whitelist/blacklist and established jump rules
+        ### are added at the beginning of each chain in save format
+        &save_format_add_prereqs($chain);
+
+        for my $rule (@{$save_format_rules{$chain}}) {
+            push @fwsnort_save_lines, $rule;
+        }
+    }
+
+    ### now append any last lines from the iptables-save output that
+    ### had nothing to do with fwsnort (other custom chains, etc.)
+    for (my $i = $ipt_save_index; $i <= $#ipt_save_lines; $i++) {
+        next if &is_fwsnort_chain($ipt_save_lines[$i], $MATCH_SUBSTR);
+        push @fwsnort_save_lines, $ipt_save_lines[$i];
+    }
+
+    return;
+}
+
+sub save_format_add_prereqs() {
+    my $chain = shift;
+
+    return if defined $save_format_prereqs{$chain};
+
+    ### add whitelist
+    if (defined $save_format_whitelist{$chain}) {
+        for my $whitelist_rule (@{$save_format_whitelist{$chain}}) {
+            push @fwsnort_save_lines, "$whitelist_rule \n";
+        }
+    }
+
+    ### add blacklist
+    if (defined $save_format_blacklist{$chain}) {
+        for my $blacklist_rule (@{$save_format_blacklist{$chain}}) {
+            push @fwsnort_save_lines, "$blacklist_rule \n";
+        }
+    }
+
+    ### add jump rules into the connection tracking fwsnort chains
+    if (defined $save_format_conntrack_jumps{$chain}) {
+        for my $jump_rule (@{$save_format_conntrack_jumps{$chain}}) {
+            push @fwsnort_save_lines, "$jump_rule \n";
+        }
+    }
+
+    $save_format_prereqs{$chain} = '';
+
     return;
 }
 
@@ -2359,12 +2467,20 @@ sub ipt_whitelist() {
             next unless $process_chains{$chain};
 
             if ($chain eq 'INPUT' or $chain eq 'FORWARD') {
-                push @ipt_script_lines, "\$${ipt_var_str} -A " .
-                    qq|$config{"FWSNORT_$chain"} -s $addr -j RETURN|;
+                my $rule_str = qq|-A $config{"FWSNORT_$chain"} | .
+                    "-s $addr -j RETURN";
+                push @ipt_script_lines, "\$${ipt_var_str} $rule_str";
+
+                push @{$save_format_whitelist{$config{"FWSNORT_$chain"}}},
+                    $rule_str;
             }
             if ($chain eq 'OUTPUT' or $chain eq 'FORWARD') {
-                push @ipt_script_lines, "\$${ipt_var_str} -A " .
-                    qq|$config{"FWSNORT_$chain"} -d $addr -j RETURN|;
+                my $rule_str = qq|-A $config{"FWSNORT_$chain"} | .
+                    "-d $addr -j RETURN";
+                push @ipt_script_lines, "\$${ipt_var_str} $rule_str";
+
+                push @{$save_format_whitelist{$config{"FWSNORT_$chain"}}},
+                    $rule_str;
             }
         }
     }
@@ -2402,35 +2518,67 @@ sub ipt_blacklist() {
 
                 if ($target eq 'DROP') {
                     if ($chain eq 'INPUT' or $chain eq 'FORWARD') {
-                        push @ipt_script_lines, "\$${ipt_var_str} -A " .
-                            qq|$config{"FWSNORT_$chain"} -s $addr -j DROP|;
+
+                        my $rule_str = qq|-A $config{"FWSNORT_$chain"} | .
+                            "-s $addr -j DROP";
+
+                        push @ipt_script_lines, "\$${ipt_var_str} $rule_str";
+                        push @{$save_format_blacklist{$config{"FWSNORT_$chain"}}},
+                            $rule_str;
                     }
+
                     if ($chain eq 'OUTPUT' or $chain eq 'FORWARD') {
-                        push @ipt_script_lines, "\$${ipt_var_str} -A " .
-                            qq|$config{"FWSNORT_$chain"} -d $addr -j DROP|;
+
+                        my $rule_str = qq|-A $config{"FWSNORT_$chain"} | .
+                            "-d $addr -j DROP";
+                        push @ipt_script_lines, "\$${ipt_var_str} $rule_str";
+                        push @{$save_format_blacklist{$config{"FWSNORT_$chain"}}},
+                            $rule_str;
                     }
                 } else {
                     if ($chain eq 'INPUT' or $chain eq 'FORWARD') {
-                        push @ipt_script_lines, "\$${ipt_var_str} -A " .
-                            qq|$config{"FWSNORT_$chain"} -s $addr -p tcp | .
-                            qq|-j REJECT --reject-with tcp-reset|;
-                        push @ipt_script_lines, "\$${ipt_var_str} -A " .
-                            qq|$config{"FWSNORT_$chain"} -s $addr -p udp | .
-                            qq|-j REJECT --reject-with icmp-port-unreachable|;
-                        push @ipt_script_lines, "\$${ipt_var_str} -A " .
-                            qq|$config{"FWSNORT_$chain"} -s $addr -p icmp | .
-                            qq|-j REJECT --reject-with icmp-host-unreachable|;
+                        my $rule_str = qq|-A $config{"FWSNORT_$chain"} -s $addr | .
+                            "-p tcp -j REJECT --reject-with tcp-reset";
+
+                        push @ipt_script_lines, "\$${ipt_var_str} $rule_str";
+                        push @{$save_format_blacklist{$config{"FWSNORT_$chain"}}},
+                            $rule_str;
+
+                        $rule_str = qq|-A $config{"FWSNORT_$chain"} -s $addr | .
+                            "-p udp -j REJECT --reject-with icmp-port-unreachable";
+
+                        push @ipt_script_lines, "\$${ipt_var_str} $rule_str";
+                        push @{$save_format_blacklist{$config{"FWSNORT_$chain"}}},
+                            $rule_str;
+
+                        $rule_str = qq|-A $config{"FWSNORT_$chain"} -s $addr | .
+                            "-p icmp -j REJECT --reject-with icmp-host-unreachable";
+
+                        push @ipt_script_lines, "\$${ipt_var_str} $rule_str";
+                        push @{$save_format_blacklist{$config{"FWSNORT_$chain"}}},
+                            $rule_str;
                     }
                     if ($chain eq 'OUTPUT' or $chain eq 'FORWARD') {
-                        push @ipt_script_lines, "\$${ipt_var_str} -A " .
-                            qq|$config{"FWSNORT_$chain"} -d $addr -p tcp | .
-                            qq|-j REJECT --reject-with tcp-reset|;
-                        push @ipt_script_lines, "\$${ipt_var_str} -A " .
-                            qq|$config{"FWSNORT_$chain"} -d $addr -p udp | .
-                            qq|-j REJECT --reject-with icmp-port-unreachable|;
-                        push @ipt_script_lines, "\$${ipt_var_str} -A " .
-                            qq|$config{"FWSNORT_$chain"} -d $addr -p icmp | .
-                            qq|-j REJECT --reject-with icmp-host-unreachable|;
+                        my $rule_str = qq|-A $config{"FWSNORT_$chain"} -d $addr | .
+                            "-p tcp -j REJECT --reject-with tcp-reset";
+
+                        push @ipt_script_lines, "\$${ipt_var_str} $rule_str";
+                        push @{$save_format_blacklist{$config{"FWSNORT_$chain"}}},
+                            $rule_str;
+
+                        $rule_str = qq|-A $config{"FWSNORT_$chain"} -d $addr | .
+                            "-p udp -j REJECT --reject-with icmp-port-unreachable";
+
+                        push @ipt_script_lines, "\$${ipt_var_str} $rule_str";
+                        push @{$save_format_blacklist{$config{"FWSNORT_$chain"}}},
+                            $rule_str;
+
+                        $rule_str = qq|-A $config{"FWSNORT_$chain"} -d $addr | .
+                            "-p icmp -j REJECT --reject-with icmp-host-unreachable";
+
+                        push @ipt_script_lines, "\$${ipt_var_str} $rule_str";
+                        push @{$save_format_blacklist{$config{"FWSNORT_$chain"}}},
+                            $rule_str;
                     }
                 }
             }
@@ -2440,10 +2588,48 @@ sub ipt_blacklist() {
 }
 
 sub ipt_add_chains() {
+
+    ### save format
+    my %ipt_save_built_in_chains = ();
+    my $look_for_chains = 0;
+    for (@ipt_save_lines) {
+        unless ($look_for_chains) {
+            push @fwsnort_save_lines, $_;
+        }
+        if (/^\*filter/) {
+            $look_for_chains = 1;
+        } elsif ($look_for_chains and $_ =~ /^:(\S+)/) {
+            my $chain = $1;
+            if ($chain eq 'INPUT'
+                    or $chain eq 'OUTPUT'
+                    or $chain eq 'FORWARD') {
+                $ipt_save_built_in_chains{$chain} = $_;
+            } else {
+                ### don't preserve any old fwsnort chains, but preserve
+                ### any other existing custom chains
+                unless (&is_fwsnort_chain($chain, $MATCH_EQUIV)) {
+                    $ipt_save_existing_chains{$chain} = $_;
+                }
+            }
+        } elsif ($look_for_chains and $_ !~ /^:(\S+)/) {
+            last;
+        }
+        $ipt_save_index++;
+    }
+
+    ### save format - add the built-in chains first
+    for my $chain qw/INPUT FORWARD OUTPUT/ {
+        push @fwsnort_save_lines, $ipt_save_built_in_chains{$chain};
+    }
+
+    ### add the fwsnort chains
     push @ipt_script_lines, "\n###\n############ Create " .
         "fwsnort iptables chains. ############\n###";
 
-    for my $built_in_chain (keys %process_chains) {
+    for my $built_in_chain qw/INPUT FORWARD OUTPUT/ {
+
+        ### see if any of the "FWSNORT_<built-in-chain>" chains need to be
+        ### excluded
         next unless $process_chains{$built_in_chain};
 
         for my $chain ($config{"FWSNORT_$built_in_chain"},
@@ -2455,9 +2641,146 @@ sub ipt_add_chains() {
             push @ipt_script_lines,
                 "\$${ipt_var_str} -N $chain 2> /dev/null",
                 "\$${ipt_var_str} -F $chain\n";
+
+            ### save format
+            $ipt_save_existing_chains{$chain} = ":$chain - [0:0]\n";
         }
     }
+
+    ### save format - add the custom chains
+    for my $chain (sort keys %ipt_save_existing_chains) {
+        push @fwsnort_save_lines, $ipt_save_existing_chains{$chain};
+    }
+
+    ### save format - add in the jump rules from the
+    ### built-in chains here
+    &save_format_add_jump_rules();
+
+    ### add in any rules from custom chains that alphabetically come
+    ### before the first fwsnort chain
+    &save_format_add_early_custom_chains();
+
     return;
+}
+
+sub save_format_add_jump_rules() {
+
+    ### add the jump rule for each built-in chain
+    for my $built_in_chain qw/INPUT FORWARD OUTPUT/ {
+
+        next unless defined $process_chains{$built_in_chain}
+            and $process_chains{$built_in_chain};
+
+        ### get the current $chain rules (if any), and then see where to add
+        ### the fwsnort jump rule
+
+        my @existing_chain_rules = ();
+
+        for (my $i = $ipt_save_index; $i < $#ipt_save_lines; $i++) {
+
+            ### delete any existing fwsnort jump rules
+            if ($ipt_save_lines[$i] =~ /^\-A\s$built_in_chain\s/) {
+                if ($ipt_save_lines[$i] !~ /\-j\sFWSNORT_/) {
+                    push @existing_chain_rules, $ipt_save_lines[$i];
+                }
+            } else {
+                last;
+            }
+            $ipt_save_index++;
+        }
+
+        my $ctr = 1;
+        my $added_jump_rule = 0;
+        for my $existing_rule (@existing_chain_rules) {
+            if ($ctr == $config{"FWSNORT_${built_in_chain}_JUMP"}) {
+                &save_format_add_chain_jump_rule($built_in_chain);
+                $added_jump_rule = 1;
+            }
+
+            push @fwsnort_save_lines, $existing_rule;
+            $ctr++;
+        }
+
+        ### the chain may have been empty
+        unless ($added_jump_rule) {
+            &save_format_add_chain_jump_rule($built_in_chain);
+        }
+    }
+
+    return;
+}
+
+sub save_format_add_chain_jump_rule() {
+    my $built_in_chain = shift;
+    my $fwsnort_chain = "FWSNORT_${built_in_chain}";
+    if (%restrict_interfaces) {
+        for my $intf (keys %restrict_interfaces) {
+            if ($built_in_chain eq 'INPUT' or $built_in_chain eq 'FORWARD') {
+                push @fwsnort_save_lines, "-A $built_in_chain -i $intf " .
+                    "-j $fwsnort_chain \n";
+            } elsif ($built_in_chain eq 'OUTPUT') {
+                push @fwsnort_save_lines, "-A $built_in_chain -o $intf " .
+                    "-j $fwsnort_chain \n";
+            }
+        }
+    } else {
+        if ($no_exclude_loopback) {
+            push @fwsnort_save_lines, "-A $built_in_chain " .
+                "-j $fwsnort_chain \n";
+        } else {
+            if ($built_in_chain eq 'INPUT' or $built_in_chain eq 'FORWARD') {
+                push @fwsnort_save_lines, "-A $built_in_chain ! -i lo " .
+                    "-j $fwsnort_chain \n";
+            } elsif ($built_in_chain eq 'OUTPUT') {
+                push @fwsnort_save_lines, "-A $built_in_chain ! -o lo " .
+                    "-j $fwsnort_chain \n";
+            }
+        }
+    }
+
+    return;
+}
+
+sub save_format_add_early_custom_chains() {
+
+    for my $chain (sort keys %ipt_save_existing_chains) {
+        last if &is_fwsnort_chain($chain, $MATCH_EQUIV);
+
+        for (my $i = $ipt_save_index; $i <= $#ipt_save_lines; $i++) {
+            last if &is_fwsnort_chain($ipt_save_lines[$i], $MATCH_SUBSTR);
+            push @fwsnort_save_lines, $ipt_save_lines[$i];
+            $ipt_save_index++;
+        }
+    }
+
+    return;
+}
+
+sub is_fwsnort_chain() {
+    my ($str, $match_style) = @_;
+    my $rv = 0;
+
+    for my $fwsnort_chain ($config{'FWSNORT_INPUT'},
+            $config{'FWSNORT_INPUT_ESTAB'},
+            $config{'FWSNORT_FORWARD'},
+            $config{'FWSNORT_FORWARD_ESTAB'},
+            $config{'FWSNORT_OUTPUT'},
+            $config{'FWSNORT_OUTPUT_ESTAB'}) {
+
+        if ($match_style eq $MATCH_SUBSTR) {
+            if ($str =~ /$fwsnort_chain/) {
+                $rv = 1;
+                last;
+            }
+        } elsif ($match_style eq $MATCH_EQUIV) {
+            if ($str eq $fwsnort_chain) {
+                $rv = 1;
+                last;
+            }
+        }
+    }
+
+    return $rv;
 }
 
 sub ipt_add_conntrack_jumps() {
@@ -2469,9 +2792,12 @@ sub ipt_add_conntrack_jumps() {
     for my $chain (keys %process_chains) {
         next unless $process_chains{$chain};
 
-        push @ipt_script_lines, qq|\$${ipt_var_str} -A $config{"FWSNORT_$chain"} | .
-            "-p tcp -m state --state ESTABLISHED -j " .
-            $config{"FWSNORT_${chain}_ESTAB"};
+        my $rule_str = qq|-A $config{"FWSNORT_$chain"} -p tcp -m state | .
+            qq|--state ESTABLISHED -j $config{"FWSNORT_${chain}_ESTAB"}|;
+
+        push @ipt_script_lines, qq|\$${ipt_var_str} $rule_str|;
+        push @{$save_format_conntrack_jumps{$config{"FWSNORT_$chain"}}},
+            $rule_str;
     }
     return;
 }
@@ -2633,7 +2959,7 @@ sub import_config() {
         chomp $line;
         next if $line =~ /^\s*#/;
         next unless $line =~ /\S/;
-        if ($line =~ /^\s*(\w+)Cmd\s+(\S+);/) {  ### e.g. "iptablesCmd"
+        if ($line =~ /^\s*(\S+)Cmd\s+(\S+);/) {  ### e.g. "iptablesCmd"
             $cmds{$1} = $2;
         } elsif ($line =~ /^\s*(\S+)\s+(.*?);/) {
             my $var = $1;
@@ -2705,6 +3031,16 @@ sub ipt_flush() {
         }
     }
     exit 0;
+}
+
+sub cache_ipt_save_policy() {
+    open IPT, "$cmds{'iptables-save'} |" or
+        die "[*] Could not execute $cmds{'iptables-save'}";
+    while (<IPT>) {
+        push @ipt_save_lines, $_;
+    }
+    close IPT;
+    return;
 }
 
 sub del_jump_rule() {
@@ -3502,6 +3838,13 @@ sub truncate_logfile() {
     open L, "> $config{'LOG_FILE'}" or
         die "[*] Could not open $config{'LOG_FILE'}: $!";
     close L;
+    return;
+}
+
+sub is_root() {
+    if ($< == 0 and $> == 0) {
+        $is_root = 1;
+    }
     return;
 }
 
