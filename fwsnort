@@ -4,7 +4,7 @@
 #
 # File: fwsnort
 #
-# URL: http://www.cipherdyne.org/fwsnort
+# URL: http://www.cipherdyne.org/fwsnort/
 #
 # Purpose: To translate snort rules into equivalent iptables rules.
 #          fwsnort is based on the original snort2iptables shell script
@@ -305,6 +305,7 @@ my $NON_HOST = '127.0.0.2';
 
 my $IPT_SUCCESS = 1;
 my $IPT_FAILURE = 0;
+my $IPT_TEST_RULE_NUM = 1;
 
 my $MATCH_EQUIV  = 1;
 my $MATCH_SUBSTR = 2;
@@ -358,6 +359,7 @@ my $print_ver  = 0;
 my $cmdl_homedir   = '';
 my $update_rules   = 0;  ### used to download latest snort rules
 my $ipt_print_type = 0;
+my $ipt_check_capabilities = 0;
 my $ipt_rule_ctr   = 1;
 my $ipt_sync       = 1;
 my $ipt_flush      = 0;
@@ -411,6 +413,7 @@ my %process_chains = (
     'FORWARD' => 1,
     'OUTPUT'  => 1,
 );
+my $TEST_CHAIN = 'FWS_CAP_TEST';
 
 my %chain_ctr = ();
 
@@ -428,6 +431,8 @@ die "[*] Use --help for usage information.\n" unless (GetOptions(
                                         # generated iptables script.
     'ipt-log-tcp-seq' => \$ipt_log_tcp_seq, # Log TCP seq/ack values.
     'ipt-flush'      => \$ipt_flush,    # Flush any existing fwsnort chains.
+    'ipt-check-capabilities' =>\$ipt_check_capabilities, # Check capabilities
+                                                         # and exit.
     'Flush'          => \$ipt_flush,    # Synonym for --ipt-flush
     'ipt-list'       => \$ipt_list,     # List any existing fwsnort chains.
     'List'           => \$ipt_list,     # Synonym for --ipt-list
@@ -539,7 +544,7 @@ die "[*] Use --help for usage information.\n" unless (GetOptions(
 
 ### check to make sure iptables has various functionality available
 ### such as the LOG target, --hex-strings, the comment match, etc.
-&ipt_test() unless $no_ipt_test;
+&ipt_capabilities() unless $no_ipt_test;
 
 ### cache the running iptables policy in iptables-save format
 &cache_ipt_save_policy();
@@ -3354,13 +3359,20 @@ sub required_vars() {
     return;
 }
 
-sub ipt_test() {
+sub ipt_capabilities() {
 
     my $test_rule_rv = -1;
 
+    ### create test chain
+    &create_test_chain();
+
     ### test for the LOG target.
-    unless (&ipt_rule_test("-I INPUT 1 -s " .
+    if (&ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s " .
             "$NON_HOST -j LOG") == $IPT_SUCCESS) {
+        print "[+] iptables has 'LOG' target support...\n"
+            if $verbose or $ipt_check_capabilities;
+    } else {
+        &delete_test_chain();
         die "[*] iptables has not been compiled with logging support.  ",
             "If you want to\n    have fwsnort generate an iptables script ",
             "    anyway then specify the\n    --no-ipt-test option. ",
@@ -3369,9 +3381,12 @@ sub ipt_test() {
     }
 
     ### test for the comment match (where Snort msg fields are placed)
-    unless (&ipt_rule_test("-I INPUT 1 -s " .
+    if (&ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s " .
             qq|$NON_HOST -m comment --comment "testing the comment match" | .
             qq|-j LOG|) == $IPT_SUCCESS) {
+        print "[+] iptables has 'comment' match support...\n"
+            if $verbose or $ipt_check_capabilities;
+    } else {
         unless ($no_ipt_comments) {
             print"[-] It looks like the iptables 'comment' match is not ",
                 "available, disabling.\n";
@@ -3380,8 +3395,11 @@ sub ipt_test() {
     }
 
     ### test for the ipv4options extension.
-    unless (&ipt_rule_test("-I INPUT 1 -p icmp -m " .
-        "ipv4options --rr -s $NON_HOST -j LOG") == $IPT_SUCCESS) {
+    if (&ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -p icmp -m " .
+            "ipv4options --rr -s $NON_HOST -j LOG") == $IPT_SUCCESS) {
+        print "[+] iptables has the 'ipv4options' extension...\n"
+            if $verbose or $ipt_check_capabilities;
+    } else {
 
         &logr("[-] iptables ipv4options extension not available, " .
             "disabling ipopts translation.");
@@ -3393,11 +3411,16 @@ sub ipt_test() {
         } else {
             $snort_opts{'unsupported'}{'ipopts'} = '[\s;]ipopts:\s*(\w+)\s*;';
         }
+        print "[-] iptables does not have the 'ipv4options' extension, " .
+            "disabling...\n" if $verbose or $ipt_check_capabilities;
     }
 
     ### test for the ttl match.
-    unless (&ipt_rule_test("-I INPUT 1 -p icmp -s $NON_HOST " .
-            "-m ttl --ttl-eq 1 -j LOG") == $IPT_SUCCESS) {
+    if (&ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -p icmp " .
+            "-s $NON_HOST -m ttl --ttl-eq 1 -j LOG") == $IPT_SUCCESS) {
+        print "[+] iptables has the 'ttl' match...\n"
+            if $verbose or $ipt_check_capabilities;
+    } else {
         ### put ttl in the unsupported list
         &logr("[-] iptables TTL match not available, " .
             "disabling ttl translation.");
@@ -3408,11 +3431,16 @@ sub ipt_test() {
         } else {
             $snort_opts{'unsupported'}{'ttl'} = '[\s;]ttl:\s*(.*?)\s*;';
         }
+        print "[+] iptables does not have the 'ttl' match, " .
+            "disabling...\n" if $verbose or $ipt_check_capabilities;
     }
 
     ### test for the TOS match.
-    unless (&ipt_rule_test("-I INPUT 1 -p icmp -s $NON_HOST " .
-            "-m tos --tos 8 -j LOG") == $IPT_SUCCESS) {
+    if (&ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -p icmp " .
+            "-s $NON_HOST -m tos --tos 8 -j LOG") == $IPT_SUCCESS) {
+        print "[+] iptables has the 'tos' match...\n"
+            if $verbose or $ipt_check_capabilities;
+    } else {
         ### put tos in the unsupported list
         &logr("[-] iptables TOS match not available, " .
             "disabling tos translation.");
@@ -3423,12 +3451,16 @@ sub ipt_test() {
         } else {
             $snort_opts{'unsupported'}{'tos'} = '[\s;]tos:\s*(.*?)\s*;';
         }
+        print "[+] iptables does not have the 'tos' match, " .
+            "disabling...\n" if $verbose or $ipt_check_capabilities;
     }
 
     ### test for the length match.
-    unless (&ipt_rule_test("-I INPUT 1 -p icmp -s $NON_HOST " .
-            "-m length --length 256 -j LOG") == $IPT_SUCCESS) {
-
+    if (&ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -p icmp " .
+            "-s $NON_HOST -m length --length 256 -j LOG") == $IPT_SUCCESS) {
+        print "[+] iptables has the 'length' match...\n"
+            if $verbose or $ipt_check_capabilities;
+    } else {
         ### put length in the unsupported list
         &logr("[-] iptables length match not available, " .
             "disabling length translation.");
@@ -3439,25 +3471,31 @@ sub ipt_test() {
         } else {
             $snort_opts{'unsupported'}{'dsize'} = '[\s;]dsize:\s*(.*?)\s*;';
         }
+        print "[+] iptables does not have the 'length' match, " .
+            "disabling...\n" if $verbose or $ipt_check_capabilities;
     }
 
     ### test for string match support.
     if ($kernel_ver ne '2.4') {
 
         ### default to include "--algo bm"
-        $test_rule_rv = &ipt_rule_test("-I INPUT 1 -s " .
+        $test_rule_rv = &ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s " .
             qq|$NON_HOST -m string --string "test" | .
-            qq|--algo bm -j LOG 2> /dev/null|);
+            qq|--algo bm -j LOG|);
     } else {
-        $test_rule_rv = &ipt_rule_test("-I INPUT 1 -s " .
-            qq|$NON_HOST -m string --string "test" -j LOG 2> /dev/null|);
+        $test_rule_rv = &ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s " .
+            qq|$NON_HOST -m string --string "test" -j LOG|);
     }
+
     if ($test_rule_rv == $IPT_SUCCESS) {
+
+        print "[+] iptables has the 'string' match...\n"
+            if $verbose or $ipt_check_capabilities;
 
         ### test for --replace-string support (only available for 2.4 kernels
         ### if the replace-string patch has been applied).
         if ($kernel_ver eq '2.4') {
-            unless (&ipt_rule_test("-I INPUT 1 -s " .
+            unless (&ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s " .
                     qq|$NON_HOST -m string --string "test" --replace-string | .
                     qq|"repl" -j LOG|) == $IPT_SUCCESS) {
                 if (defined $snort_opts{'filter'}{'replace'}) {
@@ -3474,6 +3512,7 @@ sub ipt_test() {
                 = '[\s;]replace:\s*(.*?)\s*;';
         }
     } else {
+        &delete_test_chain();
         die
 "[*] It does not appear that string match support has been compiled into\n",
 "    the kernel.  Fwsnort will not be of very much use without this.\n",
@@ -3483,33 +3522,45 @@ sub ipt_test() {
 
     ### test for --hex-string
     if ($kernel_ver ne '2.4') {
-        $test_rule_rv = &ipt_rule_test("-I INPUT 1 -s $NON_HOST " .
+        $test_rule_rv = &ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM " .
+            "-s $NON_HOST " .
             qq{-m string --hex-string "|0a 5d|" --algo bm -j LOG});
     } else {
-        $test_rule_rv = &ipt_rule_test("-I INPUT 1 -s $NON_HOST " .
-            qq{-m string --hex-string \"|0a 5d|\" -j LOG});
+        $test_rule_rv = &ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM " .
+            "-s $NON_HOST " .
+            qq{-m string --hex-string "|0a 5d|" -j LOG});
     }
-    unless ($test_rule_rv == $IPT_SUCCESS) {
+
+    if ($test_rule_rv == $IPT_SUCCESS) {
+        print "[+] iptables has --hex-string support...\n"
+            if $verbose or $ipt_check_capabilities;
+    } else {
+        &delete_test_chain();
         die
 "[*] It does not appear that the --hex-string patch has been applied.\n",
 "    fwsnort will not be of very much use without this. ** NOTE: If you\n",
-"    want to have fwsnort generate an iptables policy anyway, then",
+"    want to have fwsnort generate an iptables policy anyway, then\n",
 "    use the --no-ipt-test option.  Exiting.\n";
     }
 
     ### test for the --payload option
     if ($kernel_ver ne '2.4'
-            and &ipt_rule_test("-I INPUT 1 -s $NON_HOST -m string --string " .
+            and &ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM " .
+            "-s $NON_HOST -m string --string " .
             qq|"test" --algo bm --to 50 --payload -j LOG|) == $IPT_SUCCESS) {
         $ipt_has_string_payload_offset_opt = 1;
     }
 
     unless ($no_ipt_conntrack) {
         ### test for tcp connection tracking support
-        unless (&ipt_rule_test("-I INPUT 1 -s $NON_HOST -p tcp " .
-                "--dport 3001 -m state --state ESTABLISHED -j LOG")
-                == $IPT_SUCCESS) {
-        die
+        if (&ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s $NON_HOST " .
+                "-p tcp --dport 3001 -m state --state ESTABLISHED -j LOG")
+                    == $IPT_SUCCESS) {
+            print "[+] iptables has connection tracking support...\n"
+                if $verbose or $ipt_check_capabilities;
+        } else {
+            &delete_test_chain();
+            die
 "[*] It does not appear that iptables has been compiled with connection\n",
 "    tracking support.  If you want fwsnort to generate a policy anyway\n",
 "    and just use a tcp flags check for established tcp connections, then\n",
@@ -3522,20 +3573,29 @@ sub ipt_test() {
     if ($ipt_reject) {
         ### we are going to generate a policy that drops icmp and udp
         ### packets, and kills tcp sessions with tcp-reset.
-        unless (&ipt_rule_test("-I INPUT 1 -p tcp -s $NON_HOST " .
+        unless (&ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -p tcp " .
+            "-s $NON_HOST " .
             "-j REJECT --reject-with tcp-reset") == $IPT_SUCCESS) {
 
             ### in newer versions of iptables (> 1.3.5?) the "tcp-reset"
             ### command line arg has been changed to "tcp-rst"
-            unless (&ipt_rule_test("-I INPUT 1 -p tcp -s $NON_HOST " .
-                "-j REJECT --reject-with tcp-rst") == $IPT_SUCCESS) {
+            unless (&ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -p tcp " .
+                    "-s $NON_HOST " .
+                    "-j REJECT --reject-with tcp-rst") == $IPT_SUCCESS) {
+                &delete_test_chain();
                 die
 "[*] It does not appear that the REJECT target has been compiled into\n",
 "    the kernel.  The --ipt-reject option requires this option so that tcp\n",
 "    sessions can be killed.  Exiting.\n";
             }
         }
+        print "[+] iptables has the 'REJECT' target support...\n"
+            if $verbose or $ipt_check_capabilities;
     }
+
+    &delete_test_chain();
+
+    exit 0 if $ipt_check_capabilities;
 
     ### more tests should be added
     return;
@@ -3678,11 +3738,15 @@ sub ipt_rule_test() {
     my $rule = shift;
     my $chain = '';
 
+    print "    CMD: $rule\n" if $verbose;
+
     if ($rule =~ m/\-I\s+(\w+)\s/) {
         $chain = $1;
     }
+
     die qq{[*] Could not extract iptables chain from: "$rule"}
         unless $chain;
+
     my $rv = (system "$cmds{'iptables'} $rule 2> /dev/null") >> 8;
     if ($rv == 0) {
         ### rule success, make sure to delete it.  We force that
@@ -3690,10 +3754,22 @@ sub ipt_rule_test() {
         ### first rule in the chain.  We could just delete the
         ### rule using $rule, but it is unlikely that the first
         ### rule in the chain isn't the one we just added
-        system "$cmds{'iptables'} -D $chain 1";
+        system "$cmds{'iptables'} -D $chain $IPT_TEST_RULE_NUM";
         return $IPT_SUCCESS;
     }
     return $IPT_FAILURE;
+}
+
+sub create_test_chain() {
+    system "$cmds{'iptables'} -F $TEST_CHAIN 2> /dev/null";
+    system "$cmds{'iptables'} -N $TEST_CHAIN 2> /dev/null";
+    return;
+}
+
+sub delete_test_chain() {
+    system "$cmds{'iptables'} -F $TEST_CHAIN 2> /dev/null";
+    system "$cmds{'iptables'} -X $TEST_CHAIN 2> /dev/null";
+    return;
 }
 
 sub chk_commands() {
@@ -3901,6 +3977,7 @@ Options:
                                 by commas.
     --snort-rfile=<file>      - Translate a single rules file (or a set of
                                 them separated by commas).
+    --ipt-check-capabilities  - Check iptables capabilities and exit.
     --no-ipt-comments         - Do not add Snort "msg" fields to iptables
                                 rules with the iptables comment match.
     --no-ipt-sync             - Add iptables rules for signatures that

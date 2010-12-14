@@ -1,3 +1,11 @@
+fwsnort-1.5 (12//2011):
+    - Updated the iptables capabilities testing routines to add and delete
+      testing rules to/from the custom chain 'FWS_CAP_TEST'.  This maintains a
+      a cleaner separation between fwsnort and any existing iptables policy
+      even during the capabilities testing phase.
+    - Added the --ipt-check-capabilities argument to have fwsnort test the
+      capabilities of the local iptables firewall and exit.
+
 fwsnort-1.1 (01/05/2010):
     - Added the ability to build an fwsnort policy that utilizes ip6tables
       instead of iptables.  This allows fwsnort filtering and altering
