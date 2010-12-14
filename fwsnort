@@ -403,6 +403,7 @@ my $no_ipt_log_tcp_opts = 0;
 my $ipt_log_tcp_seq     = 0;
 my $include_perl_triggers = 0;
 my $duplicate_last_build  = 0;
+my $ipt_max_str_len = 1;
 
 ### to be added to the string match extension
 my $ipt_has_string_payload_offset_opt = 0;
@@ -2062,7 +2063,8 @@ sub build_content_matches() {
 
         ### handles length of hex blocks
         my $content_len = &get_content_len($content_str);
-        if ($content_len >= $config{'MAX_STRING_LEN'}) {
+        if ($content_len >= $ipt_max_str_len
+                or $content_len >= $config{'MAX_STRING_LEN'}) {
             $ipt_content_criteria = '';
             last;
         }
@@ -3492,6 +3494,9 @@ sub ipt_capabilities() {
         print "[+] iptables has the 'string' match...\n"
             if $verbose or $ipt_check_capabilities;
 
+        ### now find the maximum string length that is supported by iptables
+        &ipt_find_max_string_len();
+
         ### test for --replace-string support (only available for 2.4 kernels
         ### if the replace-string patch has been applied).
         if ($kernel_ver eq '2.4') {
@@ -3598,6 +3603,38 @@ sub ipt_capabilities() {
     exit 0 if $ipt_check_capabilities;
 
     ### more tests should be added
+    return;
+}
+
+sub ipt_find_max_string_len() {
+
+    my $test_pattern = '';
+
+    for (;;) {
+
+        $test_pattern = 'A'x$ipt_max_str_len;
+        my $test_rule_rv = 0;
+
+        if ($kernel_ver ne '2.4') {
+            $test_rule_rv = &ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s " .
+                qq|$NON_HOST -m string --string "$test_pattern" | .
+                qq|--algo bm -j LOG|);
+        } else {
+            $test_rule_rv = &ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s " .
+                qq|$NON_HOST -m string --string "$test_pattern" -j LOG|);
+        }
+
+        last if $test_rule_rv != $IPT_SUCCESS;
+
+        $ipt_max_str_len++;
+
+        last if $ipt_max_str_len == 1025; ### unlikely we'll ever get here
+    }
+    $ipt_max_str_len--;
+
+    print "    Max supported string length: $ipt_max_str_len\n"
+        if $verbose or $ipt_check_capabilities;
+
     return;
 }
 

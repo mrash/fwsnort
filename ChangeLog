@@ -1,4 +1,7 @@
 fwsnort-1.5 (12//2011):
+    - Updated to automatically check for the maximum length string that the
+      string match supports, and this is used to through out any Snort rules
+      with content matches longer than this length.
     - Updated the iptables capabilities testing routines to add and delete
       testing rules to/from the custom chain 'FWS_CAP_TEST'.  This maintains a
       a cleaner separation between fwsnort and any existing iptables policy
