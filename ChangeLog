@@ -9,6 +9,12 @@ fwsnort-1.5 (12//2011):
       All fwsnort rules are now placed in the /etc/fwsnort/fwsnort.save file,
       but the older fwsnort.sh output (for the individual commands version)
       is still available at /etc/fwsnort/fwsnort_iptcmds.sh.
+    - Added the --rules-url argument so that the URL for updating the
+      Emerging Threats rule set can be specified from the command line.  The
+      default is:
+
+        http://rules.emergingthreats.net/open/snort-2.9.0/emerging-all.rules
+
     - Updated to automatically check for the maximum length string that the
       string match supports, and this is used to through out any Snort rules
       with content matches longer than this length.

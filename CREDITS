@@ -57,3 +57,7 @@ Guillermo Gomez
     - Suggested a default logging location of /var/log/fwsnort/fwsnort.log
       instead of /var/log/fwsnort.log.  The result was the addition of the
       LOG_DIR and associated variables in the fwsnort.conf file.
+
+Andy Rowland
+    - Found a bug where fwsnort would attempt to use an invalid URL when
+      updating the Emerging Threats rule set via --update-rules.

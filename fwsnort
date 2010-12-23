@@ -264,6 +264,9 @@ my %snort_opts = (
     }
 );
 
+### rules update link
+my $rules_url = 'http://rules.emergingthreats.net/open/snort-2.9.0/emerging-all.rules';
+
 ### config vars that may span multiple lines
 my %multi_line_vars = (
     'WHITELIST' => '',
@@ -493,6 +496,7 @@ die "[*] Use --help for usage information.\n" unless (GetOptions(
                                         # individual interface (supports a
                                         # comma separate list).
     'update-rules'   => \$update_rules, # Download latest snort rules.
+    'rules-url=s'    => \$rules_url,    # Specify rules URL.
     'add-deleted'    => \$add_deleted,  # Add deleted rules.
     'strict'         => \$strict,       # Strict mode.
     'debug'          => \$debug,        # Debug mode.
@@ -3771,8 +3775,7 @@ sub setup() {
 }
 
 sub update_rules() {
-    my $url = 'http://www.emergingthreats.net/rules/emerging-all.rules';
-    print "[+] Downloading latest rules into $config{'RULES_DIR'}/\n    $url\n";
+    print "[+] Downloading latest rules into $config{'RULES_DIR'}/\n    $rules_url\n";
     my $dir = $config{'RULES_DIR'};
     $dir =~ s/\,.*//;
     chdir $dir or die "[*] Could not chdir $dir: $!";
@@ -3781,7 +3784,7 @@ sub update_rules() {
             or die "[*] Could not move emerging-all.rules -> ",
             "emerging-all.rules.tmp";
     }
-    system "$cmds{'wget'} $url";
+    system "$cmds{'wget'} $rules_url";
     if (-e 'emerging-all.rules') {  ### successful download
         unlink 'emerging-all.rules.tmp';
     } else {
@@ -4121,6 +4124,9 @@ Options:
                                 (CIDR or standard notation).
     --update-rules            - Download latest rules from Emerging Threats
                                 (http://www.emergingthreats.net).
+    --rules-url <url>         - Specify the URL to use for updating the
+                                Emerging Threats rule set - the default is:
+                                $rules_url
     --include-perl-triggers   - Include 'perl -e "print ..."' commands that
                                 build payload data that matches snort
                                 rules.  By combining these commands with
