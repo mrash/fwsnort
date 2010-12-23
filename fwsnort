@@ -622,8 +622,8 @@ if ($ipt_rule_ctr > 1) {
         print "[+] Snort rule set directory for rules to be queued ",
             "to userspace:\n        $config{'QUEUE_RULES_DIR'}\n";
     }
-    print "[+] iptables script (individual commands):\n" .
-        "        $config{'FWSNORT_SCRIPT'}\n";
+    print "[+] iptables script (individual commands): " .
+        "$config{'FWSNORT_SCRIPT'}\n";
 
 } else {
     die "[-] No Snort rules could be translated, exiting\n";
@@ -633,8 +633,8 @@ if ($ipt_rule_ctr > 1) {
 
 &write_save_file();
 
-print "\n    Main fwsnort iptables-save file:\n",
-    "        $config{'FWSNORT_SAVE_FILE'}\n\n",
+print "\n    Main fwsnort iptables-save file: ",
+    "$config{'FWSNORT_SAVE_FILE'}\n\n",
     "    You can instantiate the fwsnort policy with the ",
     "following command:\n\n",
     "    $cmds{'iptables-restore'} < $config{'FWSNORT_SAVE_FILE'}\n\n",
