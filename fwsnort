@@ -280,6 +280,7 @@ my @ipt_script_lines = ();
 my @fwsnort_save_lines = ();
 my @ipt_save_lines     = ();
 my $ipt_save_index     = 0;
+my @ipt_save_script_lines = ();
 
 ### contains a cache of the iptables policy
 my %ipt_policy = ();
@@ -608,33 +609,36 @@ if ($include_sids) {
 &ipt_jump_chain() unless $no_ipt_jumps;
 
 push @ipt_script_lines, qq|\n\$ECHO "[+] Finished."|, '### EOF ###';
+push @ipt_save_script_lines, $ipt_script_lines[$#ipt_script_lines];
 
 print "\n[+] Logfile: $config{'LOG_FILE'}\n";
 
 if ($ipt_rule_ctr > 1) {
 
-    ### archive any existing ipt_script file
-    &archive($config{'FWSNORT_SCRIPT'});
-
     ### write the iptables script out to disk
     &write_ipt_script();
 
-    chmod 0500, $config{'FWSNORT_SCRIPT'};
-
     if ($queue_mode or $nfqueue_mode) {
         print "[+] Snort rule set directory for rules to be queued ",
-            "to userspace:\n    $config{'QUEUE_RULES_DIR'}\n";
+            "to userspace:\n        $config{'QUEUE_RULES_DIR'}\n";
     }
-    print "[+] iptables script: $config{'FWSNORT_SCRIPT'}\n";
+    print "[+] iptables script (individual commands):\n" .
+        "        $config{'FWSNORT_SCRIPT'}\n";
+
 } else {
-    print "[-] No Snort rules could be translated.\n";
+    die "[-] No Snort rules could be translated, exiting\n";
 }
 
 &save_args() unless $run_last;
 
-open T, "> fws_ipt.save" or die $!;
-print T for @fwsnort_save_lines;
-close T;
+&write_save_file();
+
+print "\n    Main fwsnort iptables-save file:\n",
+    "        $config{'FWSNORT_SAVE_FILE'}\n\n",
+    "    You can instantiate the fwsnort policy with the ",
+    "following command:\n\n",
+    "    $cmds{'iptables-restore'} < $config{'FWSNORT_SAVE_FILE'}\n\n",
+    "    Or just execute: $config{'FWSNORT_SAVE_EXEC_FILE'}\n\n";
 
 exit 0;
 #===================== end main ======================
@@ -1776,8 +1780,13 @@ sub ipt_build_rule() {
             ### ports with anything other than tcp or udp
             $hdr_hr->{'proto'} = 'tcp';
         }
-        $rule .= " $ipt_hdr_opts{'proto'} $hdr_hr->{'proto'} " .
-            "-m $hdr_hr->{'proto'}";
+
+        if ($hdr_hr->{'proto'} =~ /ip/) {
+            $rule .= " $ipt_hdr_opts{'proto'} $hdr_hr->{'proto'}";
+        } else {
+            $rule .= " $ipt_hdr_opts{'proto'} $hdr_hr->{'proto'} " .
+                "-m $hdr_hr->{'proto'}";
+        }
     }
 
     ### append the source port
@@ -2881,8 +2890,8 @@ sub ipt_jump_chain() {
     return;
 }
 
-sub ipt_hdr() {
-    push @ipt_script_lines,
+sub hdr_lines() {
+    return
         "#!$cmds{'sh'}\n#", '#'x76,
         "#\n# File:  $config{'FWSNORT_SCRIPT'}",
         "#\n# Purpose:  This script was auto-" .
@@ -2899,6 +2908,11 @@ sub ipt_hdr() {
         "#\n# Author:  Michael Rash <mbr\@cipherdyne.org>",
         "#\n# Version: $version (file revision: $rev_num)",
         "#", '#'x76, "#\n";
+}
+
+sub ipt_hdr() {
+    push @ipt_script_lines, &hdr_lines();
+    push @ipt_save_script_lines, $ipt_script_lines[$#ipt_script_lines];
 
     ### add paths to system binaries (iptables included)
     &ipt_config_section();
@@ -2916,6 +2930,7 @@ sub ipt_config_section() {
         "ECHO=$cmds{'echo'}",
         "${ipt_var_str}=$ipt_cmd",
         "#================== end config ==================\n";
+    push @ipt_save_script_lines, $ipt_script_lines[$#ipt_script_lines];
     return;
 }
 
@@ -3047,6 +3062,16 @@ sub cache_ipt_save_policy() {
         push @ipt_save_lines, $_;
     }
     close IPT;
+
+    ### also write out the current iptables policy so that we can
+    ### revert to it if necessary (iptables does a good job of not committing
+    ### a policy via iptables-save if there is a problem with a rule though).
+    &archive($config{'IPT_BACKUP_SAVE_FILE'});
+    open F, "> $config{'IPT_BACKUP_SAVE_FILE'}" or die "[*] Could not " .
+        "open $config{'IPT_BACKUP_SAVE_FILE'}: $!";
+    print F for @ipt_save_lines;
+    close F;
+
     return;
 }
 
@@ -3353,6 +3378,7 @@ sub required_vars() {
         FWSNORT_FORWARD_ESTAB FWSNORT_INPUT_JUMP FWSNORT_OUTPUT_JUMP
         FWSNORT_FORWARD_JUMP MAX_STRING_LEN CONF_DIR RULES_DIR ARCHIVE_DIR
         QUEUE_RULES_DIR LOG_DIR LIBS_DIR CONF_FILE FWSNORT_SCRIPT LOG_FILE
+        FWSNORT_SAVE_FILE FWSNORT_SAVE_EXEC_FILE IPT_BACKUP_SAVE_FILE
     );
     for my $var (@required_vars) {
         die "[*] Variable $var not defined in $fwsnort_conf. Exiting.\n"
@@ -3858,10 +3884,17 @@ sub archive() {
 }
 
 sub write_ipt_script() {
+
+    ### archive any existing ipt_script file
+    &archive($config{'FWSNORT_SCRIPT'});
+
     open F, "> $config{'FWSNORT_SCRIPT'}" or
         die "[*] Could not open $config{'FWSNORT_SCRIPT'}: $!";
     print F "$_\n" for @ipt_script_lines;
     close F;
+
+    chmod 0500, $config{'FWSNORT_SCRIPT'};
+
     return;
 }
 
@@ -3951,6 +3984,41 @@ sub truncate_logfile() {
     open L, "> $config{'LOG_FILE'}" or
         die "[*] Could not open $config{'LOG_FILE'}: $!";
     close L;
+    return;
+}
+
+sub write_save_file() {
+
+    ### write out the iptables-save formatted fwsnort rules
+    &archive($config{'FWSNORT_SAVE_FILE'});
+
+    open T, "> $config{'FWSNORT_SAVE_FILE'}" or die $!;
+    print T for @fwsnort_save_lines;
+    close T;
+
+    chmod 0600, $config{'FWSNORT_SAVE_FILE'};
+
+    ### write out the script that will exec iptables-restore against
+    ### save file - this is what splices the fwsnort policy into the
+    ### running iptables policy
+    &archive($config{'FWSNORT_SAVE_EXEC_FILE'});
+
+    my @fws_exec_lines = ();
+    push @fws_exec_lines, &hdr_lines();
+
+    push @fws_exec_lines, qq|echo " "|, qq|echo "[+] Splicing fwsnort rules | .
+        qq|into the iptables policy..."|,
+        "$cmds{'iptables-restore'} < $config{'FWSNORT_SAVE_FILE'}",
+        qq|echo "    Done."\n|,
+        qq|echo " "|,
+        "exit\n";
+
+    open T, "> $config{'FWSNORT_SAVE_EXEC_FILE'}" or die $!;
+    print T "$_\n" for @fws_exec_lines;
+    close T;
+
+    chmod 0500, $config{'FWSNORT_SAVE_EXEC_FILE'};
+
     return;
 }
 
