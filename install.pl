@@ -64,6 +64,9 @@ my %required_perl_modules = (
     }
 );
 
+### rules update link
+my $rules_url = 'http://rules.emergingthreats.net/open/snort-2.9.0/emerging-all.rules';
+
 ### establish some defaults
 my $uninstall = 0;
 my $skip_module_install   = 0;
@@ -93,6 +96,7 @@ Getopt::Long::Configure('no_ignore_case');
     'Force-mod-regex=s' => \$force_mod_re, ### force specific mod install with regex
     'Exclude-mod-regex=s' => \$exclude_mod_re, ### exclude a particular perl module
     'Skip-mod-install'  => \$skip_module_install,
+    'rules-url=s' => \$rules_url,
     'uninstall' => \$uninstall, ### uninstall fwsnort
     'LC_ALL=s'  => \$locale,
     'no-LC_ALL' => \$no_locale,
@@ -158,7 +162,7 @@ sub install() {
                 or die "[*] Could not move emerging-all.rules -> ",
                 "emerging-all.rules.tmp";
         }
-        system "$cmds{'wget'} http://$update_website/rules/emerging-all.rules";
+        system "$cmds{'wget'} $rules_url";
         if (-e 'emerging-all.rules') {  ### successful download
             unlink 'emerging-all.rules.tmp';
         } else {
@@ -566,6 +570,10 @@ install.pl: [options]
                                      specific regular expression.
     -E, --Exclude-mod-regex <re>   - Exclude a perl module that matches this
                                      regular expression.
+    -S, --Skip-mod-install         - Skip installation of modules.
+    -r, --rules-url <url>          - Specify the URL to use for updating the
+                                     Emerging Threats rule set - the default is:
+                                     $rules_url
     -u, --uninstall   - uninstall fwsnort
     -h, --help        - print help and exit
 _HELP_
