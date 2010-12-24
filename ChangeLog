@@ -24,6 +24,8 @@ fwsnort-1.5 (12//2011):
       even during the capabilities testing phase.
     - Added the --ipt-check-capabilities argument to have fwsnort test the
       capabilities of the local iptables firewall and exit.
+    - Updated to the latest complete rule set from Emerging Threats (see
+      http://www.emergingthreats.net/).
 
 fwsnort-1.1 (01/05/2010):
     - Added the ability to build an fwsnort policy that utilizes ip6tables
