@@ -284,6 +284,7 @@ my @fwsnort_save_lines = ();
 my @ipt_save_lines     = ();
 my $ipt_save_index     = 0;
 my @ipt_save_script_lines = ();
+my $ipt_save_completed_line = '';
 
 ### contains a cache of the iptables policy
 my %ipt_policy = ();
@@ -2423,6 +2424,7 @@ sub save_format_append_rules() {
         &save_format_add_prereqs($chain);
 
         for my $rule (@{$save_format_rules{$chain}}) {
+
             push @fwsnort_save_lines, $rule;
         }
     }
@@ -3075,6 +3077,12 @@ sub cache_ipt_save_policy() {
         "open $config{'IPT_BACKUP_SAVE_FILE'}: $!";
     print F for @ipt_save_lines;
     close F;
+
+    ### remove the last two lines (the 'COMMIT' and '# Completed ...' lines
+    ### so they can be added later).
+    $ipt_save_completed_line = $ipt_save_lines[$#ipt_save_lines];
+    pop @ipt_save_lines;
+    pop @ipt_save_lines;
 
     return;
 }
@@ -3991,6 +3999,10 @@ sub truncate_logfile() {
 }
 
 sub write_save_file() {
+
+    ### append the final 'COMMIT' and 'Completed' lines
+    push @fwsnort_save_lines, "COMMIT\n";
+    push @fwsnort_save_lines, $ipt_save_completed_line;
 
     ### write out the iptables-save formatted fwsnort rules
     &archive($config{'FWSNORT_SAVE_FILE'});
