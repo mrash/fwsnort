@@ -3749,6 +3749,11 @@ sub setup() {
     $config{'QUEUE_RULES_DIR'} = $queue_rules_dir if $queue_rules_dir;
     $config{'LOG_FILE'}        = $logfile if $logfile;
 
+    if ($is_root) {
+        chdir $config{'RULES_DIR'} or
+            die "[*] Could not chdir $config{'RULES_DIR'}: $!";
+    }
+
     if ($rules_file) {
         for my $file (split /\,/, $rules_file) {
             die "[*] Snort rules file $file does not exist." unless -e $file;
