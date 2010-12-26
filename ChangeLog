@@ -24,6 +24,10 @@ fwsnort-1.5 (12//2011):
       even during the capabilities testing phase.
     - Added the --ipt-check-capabilities argument to have fwsnort test the
       capabilities of the local iptables firewall and exit.
+    - Added the --string-match-alg argument to allow the string matching
+      algorithm used by fwsnort to be specified from the command line.  The
+      default algorithm is 'bm' for 'Boyer-Moore', but 'kmp' may also be
+      specified (short for the 'Knuth–Morris–Pratt' algorithm).
     - Updated to the latest complete rule set from Emerging Threats (see
       http://www.emergingthreats.net/).
 

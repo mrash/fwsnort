@@ -359,6 +359,7 @@ my $run_last   = 0;
 my $queue_rules_dir = '';
 my $dump_conf  = 0;
 my $kernel_ver = '2.6';  ### default
+my $string_match_alg = 'bm';
 my $verbose    = 0;
 my $print_ver  = 0;
 my $cmdl_homedir   = '';
@@ -451,6 +452,7 @@ die "[*] Use --help for usage information.\n" unless (GetOptions(
     'External-net=s' => \$ext_net,      # Manually specify external network.
     'snort-sid=s'    => \$include_sids, # Parse only these particular snort rules.
     'snort-sids=s'   => \$include_sids, # Synonum for --snort-sid
+    'string-match-alg=s' => \$string_match_alg,
     'exclude-sid=s'  => \$exclude_sids, # Exclude these particular snort rules.
     'snort-conf=s'   => \$snort_conf_file, # Get HOME_NET, etc. vars from
                                         # existing Snort config file.
@@ -2119,7 +2121,7 @@ sub build_content_matches() {
             }
         }
         if ($kernel_ver ne '2.4') {
-            $ipt_content_criteria .= ' --algo bm';
+            $ipt_content_criteria .= " --algo $string_match_alg";
 
             ### see if we have any offset, depth, distance, or within
             ### criteria
@@ -3521,7 +3523,7 @@ sub ipt_capabilities() {
         ### default to include "--algo bm"
         $test_rule_rv = &ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s " .
             qq|$NON_HOST -m string --string "test" | .
-            qq|--algo bm -j LOG|);
+            qq|--algo $string_match_alg -j LOG|);
     } else {
         $test_rule_rv = &ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s " .
             qq|$NON_HOST -m string --string "test" -j LOG|);
@@ -3567,7 +3569,7 @@ sub ipt_capabilities() {
     if ($kernel_ver ne '2.4') {
         $test_rule_rv = &ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM " .
             "-s $NON_HOST " .
-            qq{-m string --hex-string "|0a 5d|" --algo bm -j LOG});
+            qq{-m string --hex-string "|0a 5d|" --algo $string_match_alg -j LOG});
     } else {
         $test_rule_rv = &ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM " .
             "-s $NON_HOST " .
@@ -3590,7 +3592,7 @@ sub ipt_capabilities() {
     if ($kernel_ver ne '2.4'
             and &ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM " .
             "-s $NON_HOST -m string --string " .
-            qq|"test" --algo bm --to 50 --payload -j LOG|) == $IPT_SUCCESS) {
+            qq|"test" --algo $string_match_alg --to 50 --payload -j LOG|) == $IPT_SUCCESS) {
         $ipt_has_string_payload_offset_opt = 1;
     }
 
@@ -3656,7 +3658,7 @@ sub ipt_find_max_string_len() {
         if ($kernel_ver ne '2.4') {
             $test_rule_rv = &ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s " .
                 qq|$NON_HOST -m string --string "$test_pattern" | .
-                qq|--algo bm -j LOG|);
+                qq|--algo $string_match_alg -j LOG|);
         } else {
             $test_rule_rv = &ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s " .
                 qq|$NON_HOST -m string --string "$test_pattern" -j LOG|);
@@ -4135,13 +4137,13 @@ Options:
                                 interface (e.g. "eth0").
     -6, --ip6tables           - Enable ip6tables mode to build an fwsnort
                                 policy via ip6tables instead of iptables.
-    --Home-net <net/mask>     - Manually specify the Home network
+    --Home-net=<net/mask>     - Manually specify the Home network
                                 (CIDR or standard notation).
-    --External-net <net/mask> - Manually specify the external network
+    --External-net=<net/mask> - Manually specify the external network
                                 (CIDR or standard notation).
     --update-rules            - Download latest rules from Emerging Threats
                                 (http://www.emergingthreats.net).
-    --rules-url <url>         - Specify the URL to use for updating the
+    --rules-url=<url>         - Specify the URL to use for updating the
                                 Emerging Threats rule set - the default is:
                                 $rules_url
     --include-perl-triggers   - Include 'perl -e "print ..."' commands that
@@ -4183,6 +4185,9 @@ Options:
                                 default is /etc/fwsnort/snort_rules_queue/.
     -Q   --QUEUE              - Same as the --NFQUEUE option, except use the
                                 older iptables QUEUE target.
+    --string-match-alg=<alg>  - Specify the string match algorithm to use
+                                within the kernel; the default is '$string_match_alg',
+                                but 'kmp' may also be chosen.
     -U   --Ulog               - Force ULOG target for all log generation.
     --ulog-nlgroup=<groupnum> - Specify a ULOG netlink group (the default
                                 is 1).  This gets used in -U mode, or for
@@ -4198,7 +4203,7 @@ Options:
     --add-deleted             - Added Snort "deleted" rules.
     --Last-cmd                - Rebuild fwsnort.sh with the same command
                                 line args as the previous execution.
-    --lib-dir <path>          - Specify path to lib directory.
+    --lib-dir=<path>          - Specify path to lib directory.
     --debug                   - Run in debug mode.
     -v   --verbose            - Run in verbose mode.
     -V   --Version            - Print fwsnort version number and exit.
