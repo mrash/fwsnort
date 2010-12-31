@@ -8,7 +8,8 @@ fwsnort-1.5 (12//2011):
 
       All fwsnort rules are now placed in the /etc/fwsnort/fwsnort.save file,
       but the older fwsnort.sh output (for the individual commands version)
-      is still available at /etc/fwsnort/fwsnort_iptcmds.sh.
+      is still available at /etc/fwsnort/fwsnort_iptcmds.sh.  This
+      functionality extends to ip6tables policies as well.
     - Added the --rules-url argument so that the URL for updating the
       Emerging Threats rule set can be specified from the command line.  The
       default is:
