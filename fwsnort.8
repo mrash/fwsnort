@@ -9,7 +9,7 @@
 .B fwsnort [options]
 .SH DESCRIPTION
 .B fwsnort
-translates SNORT rules into iptables rules and generates a
+translates SNORT rules into iptables rules on Linux systems and generates a
 shell script that implements the resulting iptables commands.
 This ruleset allows network traffic that matches Snort signatures (i.e.
 attacks and other suspicious network behavior) to
@@ -29,15 +29,31 @@ reassembly and signature comparisons against a reassembled buffer do not
 take place (the stream preprocessor - stream4, stream5, etc. - should be
 disabled).
 
+As of
+.B fwsnort-1.5
+all iptables rules built by fwsnort are written out to the
+.I /etc/fwsnort/fwsnort.save
+file in iptables-save format.  This allows a long fwsnort policy (which may
+contain thousands of iptables rules translated from a large Snort signature
+set) to be quickly instantiated via the "iptables-restore" command.  A wrapper
+script
+.I /etc/fwsnort/fwsnort.sh
+is also written out to make this easy.  Hence, the typical work flow for
+fwsnort is to: 1) run fwsnort, 2) note the Snort rules that fwsnort was able
+to successfully translate (the number of such rules is printed to stdout),
+and then 3) execute the
+.I /etc/fwsnort/fwsnort.sh
+wrapper script to instantiate the policy in the running kernel.
+
 .B fwsnort
 (optionally) uses the IPTables::Parse module to parse
 the iptables ruleset on the machine to determine which Snort rules are
 applicable to the specific iptables policy.  After all, if iptables is
-blocking all inbound http traffic from external addresses, it is probably
-not of much use to try detecting inbound attacks against against tcp/80.
-By default fwsnort generates iptables rules that log Snort sid's within
-a \-\-log-prefix to syslog where the messages can be analyzed with a log
-analyzer such as
+blocking all inbound http traffic from external addresses for example, it
+is probably not of much use to try detecting inbound attacks against against
+tcp/80.  By default fwsnort generates iptables rules that log Snort sid's
+within a \-\-log-prefix to syslog where the messages can be analyzed with a
+log analyzer such as
 .B psad
 (see http://www.cipherdyne.org/psad/).
 .B fwsnort
@@ -55,6 +71,10 @@ translation strategy as well as advantages/disadvantages of the method
 used by fwsnort to obtain intrusion detection data, see the README
 included with the fwsnort sources or browse to:
 http://www.cipherdyne.org/fwsnort/
+
+.B fwsnort
+is able to apply Snort rules to IPv6 traffic by building an ip6tables policy
+(see the "\-\-ip6tables" command line argument).
 .SH OPTIONS
 .TP
 .BR \-c ", " \-\^\-config\ \<configuration\ file>
