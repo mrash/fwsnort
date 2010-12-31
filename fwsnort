@@ -285,6 +285,11 @@ my @ipt_save_lines     = ();
 my $ipt_save_index     = 0;
 my @ipt_save_script_lines = ();
 my $ipt_save_completed_line = '';
+my $save_str    = 'iptables-save';
+my $ipt_str     = 'iptables';
+my $save_bin    = '';
+my $restore_bin = '';
+my $ipt_bin     = '';
 
 ### contains a cache of the iptables policy
 my %ipt_policy = ();
@@ -305,8 +310,10 @@ my $ip_re = qr|(?:[0-2]?\d{1,2}\.){3}[0-2]?\d{1,2}|;
 my %snort_dump_cache = ();
 my %ipt_dump_cache = ();
 
-### for iptables rule tests
-my $NON_HOST = '127.0.0.2';
+### for iptables capabilities testing
+my $NON_HOST     = '127.0.0.2';
+my $NON_IP6_HOST = '::2/128';
+my $non_host     = '';
 
 my $IPT_SUCCESS = 1;
 my $IPT_FAILURE = 0;
@@ -629,7 +636,7 @@ if ($ipt_rule_ctr > 1) {
         print "[+] Snort rule set directory for rules to be queued ",
             "to userspace:\n        $config{'QUEUE_RULES_DIR'}\n";
     }
-    print "[+] iptables script (individual commands): " .
+    print "[+] $ipt_str script (individual commands): " .
         "$config{'FWSNORT_SCRIPT'}\n";
 
 } else {
@@ -640,11 +647,11 @@ if ($ipt_rule_ctr > 1) {
 
 &write_save_file();
 
-print "\n    Main fwsnort iptables-save file: ",
+print "\n    Main fwsnort $save_str file: ",
     "$config{'FWSNORT_SAVE_FILE'}\n\n",
     "    You can instantiate the fwsnort policy with the ",
     "following command:\n\n",
-    "    $cmds{'iptables-restore'} < $config{'FWSNORT_SAVE_FILE'}\n\n",
+    "    $restore_bin < $config{'FWSNORT_SAVE_FILE'}\n\n",
     "    Or just execute: $config{'FWSNORT_SAVE_EXEC_FILE'}\n\n";
 
 exit 0;
@@ -884,7 +891,7 @@ sub parse_snort_rules() {
         }
         print "\n";
         if ($abs_num) {  ### we parsed at least one rule
-            print "[+] Generated iptables rules for $abs_num out of ",
+            print "[+] Generated $ipt_str rules for $abs_num out of ",
                 "$sabs_num signatures: ",
                 sprintf("%.2f", $abs_num/$sabs_num*100), "%\n";
         } else {
@@ -892,7 +899,7 @@ sub parse_snort_rules() {
         }
         if ($ipt_sync) {
             print "[+] Found $tot_ipt_apply applicable snort rules to your " .
-                "current iptables\n    policy.\n";
+                "current $ipt_str\n    policy.\n";
         }
     }
     return;
@@ -1104,6 +1111,22 @@ sub parse_rule_hdr() {
             return {};
         }
 
+        ### in --ip6tables mode make sure we're not looking at IPv4 addresses
+        if ($enable_ip6tables
+                and ($src =~ /\b$ip_re\b/ or $dst =~ /\b$ip_re\b/)) {
+            &logr("[-] --ip6tables mode enabled but IPv4 " .
+                "address in rule variable at line: $line_num.");
+            return {};
+        }
+
+        ### in --ip6tables mode exclude the icmp protocol - maybe should
+        ### change to icmp6 in the future
+        if ($enable_ip6tables and $proto eq 'icmp') {
+            &logr("[-] --ip6tables mode enabled, so excluding " .
+                "icmp (non-icmp6) siganture at line: $line_num.");
+            return {};
+        }
+
         my $bidir_flag = 0;
         $bidir_flag = 1 if $bidir eq '<>';
 
@@ -1150,7 +1173,7 @@ sub parse_rule_hdr() {
         for my $var qw(sport dport) {
             next unless $hsh{$var} =~ /,/;
             &logr("[-] Warning: taking the first port in the list " .
-                "$hsh{$var} until the iptables multiport match is supported " .
+                "$hsh{$var} until the $ipt_str multiport match is supported " .
                 "at line: $line_num.");
             $hsh{$var} =~ s/,.*//;
             $hsh{$var} =~ s/\[//;
@@ -1259,7 +1282,7 @@ sub ipt_allow_traffic() {
                 Dumper($rule_hr);
         }
         if ($dump_ipt) {
-            print "[+] iptables rule: $rule_hr->{'raw'}\n"
+            print "[+] $ipt_str rule: $rule_hr->{'raw'}\n"
                 unless defined $ipt_dump_cache{$rule_hr->{'raw'}};
             $ipt_dump_cache{$rule_hr->{'raw'}} = '';
         }
@@ -1335,8 +1358,8 @@ sub ipt_allow_traffic() {
         if ($rule_hr->{'target'} eq 'DROP'
                 or $rule_hr->{'target'} eq 'REJECT') {
 
-            print "[-] Matching iptables rule has DROP or REJECT target; ",
-                "iptables policy does not allow this Snort rule.\n"
+            print "[-] Matching $ipt_str rule has DROP or REJECT target; ",
+                "$ipt_str policy does not allow this Snort rule.\n"
                 if $debug;
             if ($dumper) {
                 print "\n[-] RULE $chain DROP:\n",
@@ -1354,8 +1377,8 @@ sub ipt_allow_traffic() {
                     Dumper($rule_hr),
                     "\n";
             }
-            print "[-] Matching iptables rule has ACCEPT target; ",
-                "iptables policy allows this Snort rule.\n" if $debug;
+            print "[-] Matching $ipt_str rule has ACCEPT target; ",
+                "$ipt_str policy allows this Snort rule.\n" if $debug;
             return 1;
         }  ### we don't support other targets besides DROP, REJECT,
            ### or ACCEPT for now.
@@ -1380,7 +1403,7 @@ sub ipt_allow_traffic() {
                 }
             }
             if ($dumper) {
-                print "\nACCEPT $chain, no iptables matching rule\n",
+                print "\nACCEPT $chain, no $ipt_str matching rule\n",
                     Dumper($hdr_hr),
                     Dumper($opts_hr),
                     "\n";
@@ -1389,7 +1412,7 @@ sub ipt_allow_traffic() {
         }
     }
     if ($dumper) {
-        print "\nDROP $chain, no iptables matching rule\n",
+        print "\nDROP $chain, no $ipt_str matching rule\n",
             Dumper($hdr_hr),
             Dumper($opts_hr),
             "\n";
@@ -2648,7 +2671,7 @@ sub ipt_add_chains() {
 
     ### add the fwsnort chains
     push @ipt_script_lines, "\n###\n############ Create " .
-        "fwsnort iptables chains. ############\n###";
+        "fwsnort $ipt_str chains. ############\n###";
 
     for my $built_in_chain qw/INPUT FORWARD OUTPUT/ {
 
@@ -2904,7 +2927,7 @@ sub hdr_lines() {
         "#\n# File:  $config{'FWSNORT_SCRIPT'}",
         "#\n# Purpose:  This script was auto-" .
         "generated by fwsnort, and implements",
-        "#           an iptables ruleset based upon " .
+        "#           an $ipt_str ruleset based upon " .
         "Snort rules.  For more",
         "#           information see the fwsnort man " .
         "page or the documentation",
@@ -2929,14 +2952,10 @@ sub ipt_hdr() {
 
 sub ipt_config_section() {
     ### build the config section of the iptables script
-    my $ipt_cmd = $cmds{'iptables'};
-    if ($enable_ip6tables) {
-        $ipt_cmd = $cmds{'ip6tables'};
-    }
     push @ipt_script_lines,
         '#==================== config ====================',
         "ECHO=$cmds{'echo'}",
-        "${ipt_var_str}=$ipt_cmd",
+        "${ipt_var_str}=$ipt_bin",
         "#================== end config ==================\n";
     push @ipt_save_script_lines, $ipt_script_lines[$#ipt_script_lines];
     return;
@@ -3021,11 +3040,11 @@ sub ipt_list() {
         $config{'FWSNORT_FORWARD'},
         $config{'FWSNORT_FORWARD_ESTAB'}
     ) {
-        my $exists = (system "$cmds{'iptables'} -n -L " .
+        my $exists = (system "$ipt_bin -n -L " .
             "$chain > /dev/null 2>&1") >> 8;
         if ($exists == 0) {
             print "[+] Listing $chain chain...\n";
-            system "$cmds{'iptables'} -v -n -L $chain";
+            system "$ipt_bin -v -n -L $chain";
             print "\n";
         } else {
             print "[-] Chain $chain does not exist...\n";
@@ -3043,18 +3062,18 @@ sub ipt_flush() {
         $config{'FWSNORT_FORWARD'},
         $config{'FWSNORT_FORWARD_ESTAB'}
     ) {
-        my $exists = (system "$cmds{'iptables'} -n -L " .
+        my $exists = (system "$ipt_bin -n -L " .
             "$chain > /dev/null 2>&1") >> 8;
         if ($exists == 0) {
             print "[+] Flushing $chain chain...\n";
-            system "$cmds{'iptables'} -F $chain";
+            system "$ipt_bin -F $chain";
             if ($ipt_del_chains) {
                 ### must remove any jump rules from the built-in
                 ### chains
                 &del_jump_rule($chain);
 
                 print "    Deleting $chain chain...\n";
-                system "$cmds{'iptables'} -X $chain";
+                system "$ipt_bin -X $chain";
             }
         } else {
             print "[-] Chain $chain does not exist...\n";
@@ -3064,8 +3083,8 @@ sub ipt_flush() {
 }
 
 sub cache_ipt_save_policy() {
-    open IPT, "$cmds{'iptables-save'} |" or
-        die "[*] Could not execute $cmds{'iptables-save'}";
+
+    open IPT, "$save_bin |" or die "[*] Could not execute $save_bin";
     while (<IPT>) {
         push @ipt_save_lines, $_;
     }
@@ -3101,7 +3120,7 @@ sub del_jump_rule() {
         for (my $i=0; $i <= $#$rules_ar; $i++) {
             my $rule_num = $i+1;
             if ($rules_ar->[$i]->{'target'} eq $chain) {
-                system "$cmds{'iptables'} -D $built_in_chain $rule_num";
+                system "$ipt_bin -D $built_in_chain $rule_num";
                 last;
             }
         }
@@ -3154,12 +3173,23 @@ sub fwsnort_init() {
 
     &get_local_addrs() unless $no_addr_check;
 
+    $non_host    = $NON_HOST;
+    $ipt_bin     = $cmds{'iptables'};
+    $restore_bin = $cmds{'iptables-restore'};
+    $save_bin    = $cmds{'iptables-save'};
+
     if ($enable_ip6tables) {
         for my $opt qw/itype icode ttl tos ipopts/ {
             $snort_opts{'unsupported'}{$opt}
                 = $snort_opts{'filter'}{$opt};
             delete $snort_opts{'filter'}{$opt};
         }
+        $non_host    = $NON_IP6_HOST;
+        $save_str    = 'ip6tables-save';
+        $ipt_str     = 'ip6tables';
+        $ipt_bin     = $cmds{'ip6tables'};
+        $restore_bin = $cmds{'ip6tables-restore'};
+        $save_bin    = $cmds{'ip6tables-save'};
     }
 
     if ($strict) {
@@ -3410,13 +3440,13 @@ sub ipt_capabilities() {
 
     ### test for the LOG target.
     if (&ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s " .
-            "$NON_HOST -j LOG") == $IPT_SUCCESS) {
-        print "[+] iptables has 'LOG' target support...\n"
+            "$non_host -j LOG") == $IPT_SUCCESS) {
+        print "[+] $ipt_str has 'LOG' target support...\n"
             if $verbose or $ipt_check_capabilities;
     } else {
         &delete_test_chain();
-        die "[*] iptables has not been compiled with logging support.  ",
-            "If you want to\n    have fwsnort generate an iptables script ",
+        die "[*] $ipt_str has not been compiled with logging support.  ",
+            "If you want to\n    have fwsnort generate an $ipt_str script ",
             "    anyway then specify the\n    --no-ipt-test option. ",
             "Exiting.\n"
             unless $no_ipt_log;
@@ -3424,13 +3454,13 @@ sub ipt_capabilities() {
 
     ### test for the comment match (where Snort msg fields are placed)
     if (&ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s " .
-            qq|$NON_HOST -m comment --comment "testing the comment match" | .
+            qq|$non_host -m comment --comment "testing the comment match" | .
             qq|-j LOG|) == $IPT_SUCCESS) {
-        print "[+] iptables has 'comment' match support...\n"
+        print "[+] $ipt_str has 'comment' match support...\n"
             if $verbose or $ipt_check_capabilities;
     } else {
         unless ($no_ipt_comments) {
-            print"[-] It looks like the iptables 'comment' match is not ",
+            print"[-] It looks like the $ipt_str 'comment' match is not ",
                 "available, disabling.\n";
             $no_ipt_comments = 1;
         }
@@ -3438,12 +3468,12 @@ sub ipt_capabilities() {
 
     ### test for the ipv4options extension.
     if (&ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -p icmp -m " .
-            "ipv4options --rr -s $NON_HOST -j LOG") == $IPT_SUCCESS) {
-        print "[+] iptables has the 'ipv4options' extension...\n"
+            "ipv4options --rr -s $non_host -j LOG") == $IPT_SUCCESS) {
+        print "[+] $ipt_str has the 'ipv4options' extension...\n"
             if $verbose or $ipt_check_capabilities;
     } else {
 
-        &logr("[-] iptables ipv4options extension not available, " .
+        &logr("[-] $ipt_str ipv4options extension not available, " .
             "disabling ipopts translation.");
         ### put ipopts in the unsupported list
         if (defined $snort_opts{'filter'}{'ipopts'}) {
@@ -3453,18 +3483,18 @@ sub ipt_capabilities() {
         } else {
             $snort_opts{'unsupported'}{'ipopts'} = '[\s;]ipopts:\s*(\w+)\s*;';
         }
-        print "[-] iptables does not have the 'ipv4options' extension, " .
+        print "[-] $ipt_str does not have the 'ipv4options' extension, " .
             "disabling...\n" if $verbose or $ipt_check_capabilities;
     }
 
     ### test for the ttl match.
     if (&ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -p icmp " .
-            "-s $NON_HOST -m ttl --ttl-eq 1 -j LOG") == $IPT_SUCCESS) {
-        print "[+] iptables has the 'ttl' match...\n"
+            "-s $non_host -m ttl --ttl-eq 1 -j LOG") == $IPT_SUCCESS) {
+        print "[+] $ipt_str has the 'ttl' match...\n"
             if $verbose or $ipt_check_capabilities;
     } else {
         ### put ttl in the unsupported list
-        &logr("[-] iptables TTL match not available, " .
+        &logr("[-] $ipt_str TTL match not available, " .
             "disabling ttl translation.");
         if (defined $snort_opts{'filter'}{'ttl'}) {
             $snort_opts{'unsupported'}{'ttl'} =
@@ -3473,18 +3503,18 @@ sub ipt_capabilities() {
         } else {
             $snort_opts{'unsupported'}{'ttl'} = '[\s;]ttl:\s*(.*?)\s*;';
         }
-        print "[+] iptables does not have the 'ttl' match, " .
+        print "[+] $ipt_str does not have the 'ttl' match, " .
             "disabling...\n" if $verbose or $ipt_check_capabilities;
     }
 
     ### test for the TOS match.
     if (&ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -p icmp " .
-            "-s $NON_HOST -m tos --tos 8 -j LOG") == $IPT_SUCCESS) {
-        print "[+] iptables has the 'tos' match...\n"
+            "-s $non_host -m tos --tos 8 -j LOG") == $IPT_SUCCESS) {
+        print "[+] $ipt_str has the 'tos' match...\n"
             if $verbose or $ipt_check_capabilities;
     } else {
         ### put tos in the unsupported list
-        &logr("[-] iptables TOS match not available, " .
+        &logr("[-] $ipt_str TOS match not available, " .
             "disabling tos translation.");
         if (defined $snort_opts{'filter'}{'tos'}) {
             $snort_opts{'unsupported'}{'tos'} =
@@ -3493,18 +3523,18 @@ sub ipt_capabilities() {
         } else {
             $snort_opts{'unsupported'}{'tos'} = '[\s;]tos:\s*(.*?)\s*;';
         }
-        print "[+] iptables does not have the 'tos' match, " .
+        print "[+] $ipt_str does not have the 'tos' match, " .
             "disabling...\n" if $verbose or $ipt_check_capabilities;
     }
 
     ### test for the length match.
     if (&ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -p icmp " .
-            "-s $NON_HOST -m length --length 256 -j LOG") == $IPT_SUCCESS) {
-        print "[+] iptables has the 'length' match...\n"
+            "-s $non_host -m length --length 256 -j LOG") == $IPT_SUCCESS) {
+        print "[+] $ipt_str has the 'length' match...\n"
             if $verbose or $ipt_check_capabilities;
     } else {
         ### put length in the unsupported list
-        &logr("[-] iptables length match not available, " .
+        &logr("[-] $ipt_str length match not available, " .
             "disabling length translation.");
         if (defined $snort_opts{'filter'}{'dsize'}) {
             $snort_opts{'unsupported'}{'dsize'} =
@@ -3513,7 +3543,7 @@ sub ipt_capabilities() {
         } else {
             $snort_opts{'unsupported'}{'dsize'} = '[\s;]dsize:\s*(.*?)\s*;';
         }
-        print "[+] iptables does not have the 'length' match, " .
+        print "[+] $ipt_str does not have the 'length' match, " .
             "disabling...\n" if $verbose or $ipt_check_capabilities;
     }
 
@@ -3522,16 +3552,16 @@ sub ipt_capabilities() {
 
         ### default to include "--algo bm"
         $test_rule_rv = &ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s " .
-            qq|$NON_HOST -m string --string "test" | .
+            qq|$non_host -m string --string "test" | .
             qq|--algo $string_match_alg -j LOG|);
     } else {
         $test_rule_rv = &ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s " .
-            qq|$NON_HOST -m string --string "test" -j LOG|);
+            qq|$non_host -m string --string "test" -j LOG|);
     }
 
     if ($test_rule_rv == $IPT_SUCCESS) {
 
-        print "[+] iptables has the 'string' match...\n"
+        print "[+] $ipt_str has the 'string' match...\n"
             if $verbose or $ipt_check_capabilities;
 
         ### now find the maximum string length that is supported by iptables
@@ -3541,7 +3571,7 @@ sub ipt_capabilities() {
         ### if the replace-string patch has been applied).
         if ($kernel_ver eq '2.4') {
             unless (&ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s " .
-                    qq|$NON_HOST -m string --string "test" --replace-string | .
+                    qq|$non_host -m string --string "test" --replace-string | .
                     qq|"repl" -j LOG|) == $IPT_SUCCESS) {
                 if (defined $snort_opts{'filter'}{'replace'}) {
                     $snort_opts{'unsupported'}{'replace'} =
@@ -3561,56 +3591,56 @@ sub ipt_capabilities() {
         die
 "[*] It does not appear that string match support has been compiled into\n",
 "    the kernel.  Fwsnort will not be of very much use without this.\n",
-"    ** NOTE: If you want to have fwsnort generate an iptables policy\n",
+"    ** NOTE: If you want to have fwsnort generate an $ipt_str policy\n",
 "    anyway, use the --no-ipt-test option.  Exiting.\n";
     }
 
     ### test for --hex-string
     if ($kernel_ver ne '2.4') {
         $test_rule_rv = &ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM " .
-            "-s $NON_HOST " .
+            "-s $non_host " .
             qq{-m string --hex-string "|0a 5d|" --algo $string_match_alg -j LOG});
     } else {
         $test_rule_rv = &ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM " .
-            "-s $NON_HOST " .
+            "-s $non_host " .
             qq{-m string --hex-string "|0a 5d|" -j LOG});
     }
 
     if ($test_rule_rv == $IPT_SUCCESS) {
-        print "[+] iptables has --hex-string support...\n"
+        print "[+] $ipt_str has --hex-string support...\n"
             if $verbose or $ipt_check_capabilities;
     } else {
         &delete_test_chain();
         die
 "[*] It does not appear that the --hex-string patch has been applied.\n",
 "    fwsnort will not be of very much use without this. ** NOTE: If you\n",
-"    want to have fwsnort generate an iptables policy anyway, then\n",
+"    want to have fwsnort generate an $ipt_str policy anyway, then\n",
 "    use the --no-ipt-test option.  Exiting.\n";
     }
 
     ### test for the --payload option
     if ($kernel_ver ne '2.4'
             and &ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM " .
-            "-s $NON_HOST -m string --string " .
+            "-s $non_host -m string --string " .
             qq|"test" --algo $string_match_alg --to 50 --payload -j LOG|) == $IPT_SUCCESS) {
         $ipt_has_string_payload_offset_opt = 1;
     }
 
     unless ($no_ipt_conntrack) {
         ### test for tcp connection tracking support
-        if (&ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s $NON_HOST " .
+        if (&ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s $non_host " .
                 "-p tcp --dport 3001 -m state --state ESTABLISHED -j LOG")
                     == $IPT_SUCCESS) {
-            print "[+] iptables has connection tracking support...\n"
+            print "[+] $ipt_str has connection tracking support...\n"
                 if $verbose or $ipt_check_capabilities;
         } else {
             &delete_test_chain();
             die
-"[*] It does not appear that iptables has been compiled with connection\n",
+"[*] It does not appear that $ipt_str has been compiled with connection\n",
 "    tracking support.  If you want fwsnort to generate a policy anyway\n",
 "    and just use a tcp flags check for established tcp connections, then\n",
 "    use the --no-ipt-conntrack option.  **NOTE: The resulting fwsnort\n",
-"    iptables policy will be susceptible to a stick or snot-style attack.\n",
+"    $ipt_str policy will be susceptible to a stick or snot-style attack.\n",
 "    Exiting.\n";
         }
     }
@@ -3619,13 +3649,13 @@ sub ipt_capabilities() {
         ### we are going to generate a policy that drops icmp and udp
         ### packets, and kills tcp sessions with tcp-reset.
         unless (&ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -p tcp " .
-            "-s $NON_HOST " .
+            "-s $non_host " .
             "-j REJECT --reject-with tcp-reset") == $IPT_SUCCESS) {
 
             ### in newer versions of iptables (> 1.3.5?) the "tcp-reset"
             ### command line arg has been changed to "tcp-rst"
             unless (&ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -p tcp " .
-                    "-s $NON_HOST " .
+                    "-s $non_host " .
                     "-j REJECT --reject-with tcp-rst") == $IPT_SUCCESS) {
                 &delete_test_chain();
                 die
@@ -3634,7 +3664,7 @@ sub ipt_capabilities() {
 "    sessions can be killed.  Exiting.\n";
             }
         }
-        print "[+] iptables has the 'REJECT' target support...\n"
+        print "[+] $ipt_str has the 'REJECT' target support...\n"
             if $verbose or $ipt_check_capabilities;
     }
 
@@ -3657,11 +3687,11 @@ sub ipt_find_max_string_len() {
 
         if ($kernel_ver ne '2.4') {
             $test_rule_rv = &ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s " .
-                qq|$NON_HOST -m string --string "$test_pattern" | .
+                qq|$non_host -m string --string "$test_pattern" | .
                 qq|--algo $string_match_alg -j LOG|);
         } else {
             $test_rule_rv = &ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s " .
-                qq|$NON_HOST -m string --string "$test_pattern" -j LOG|);
+                qq|$non_host -m string --string "$test_pattern" -j LOG|);
         }
 
         last if $test_rule_rv != $IPT_SUCCESS;
@@ -3819,37 +3849,37 @@ sub ipt_rule_test() {
     my $rule = shift;
     my $chain = '';
 
-    print "    CMD: $rule\n" if $verbose;
+    print "    CMD: $ipt_bin $rule\n" if $verbose;
 
     if ($rule =~ m/\-I\s+(\w+)\s/) {
         $chain = $1;
     }
 
-    die qq{[*] Could not extract iptables chain from: "$rule"}
+    die qq{[*] Could not extract $ipt_str chain from: "$rule"}
         unless $chain;
 
-    my $rv = (system "$cmds{'iptables'} $rule 2> /dev/null") >> 8;
+    my $rv = (system "$ipt_bin $rule 2> /dev/null") >> 8;
     if ($rv == 0) {
         ### rule success, make sure to delete it.  We force that
         ### the rule has just been inserted, so just delete the
         ### first rule in the chain.  We could just delete the
         ### rule using $rule, but it is unlikely that the first
         ### rule in the chain isn't the one we just added
-        system "$cmds{'iptables'} -D $chain $IPT_TEST_RULE_NUM";
+        system "$ipt_bin -D $chain $IPT_TEST_RULE_NUM";
         return $IPT_SUCCESS;
     }
     return $IPT_FAILURE;
 }
 
 sub create_test_chain() {
-    system "$cmds{'iptables'} -F $TEST_CHAIN 2> /dev/null";
-    system "$cmds{'iptables'} -N $TEST_CHAIN 2> /dev/null";
+    system "$ipt_bin -F $TEST_CHAIN 2> /dev/null";
+    system "$ipt_bin -N $TEST_CHAIN 2> /dev/null";
     return;
 }
 
 sub delete_test_chain() {
-    system "$cmds{'iptables'} -F $TEST_CHAIN 2> /dev/null";
-    system "$cmds{'iptables'} -X $TEST_CHAIN 2> /dev/null";
+    system "$ipt_bin -F $TEST_CHAIN 2> /dev/null";
+    system "$ipt_bin -X $TEST_CHAIN 2> /dev/null";
     return;
 }
 
@@ -4029,8 +4059,8 @@ sub write_save_file() {
     push @fws_exec_lines, &hdr_lines();
 
     push @fws_exec_lines, qq|echo " "|, qq|echo "[+] Splicing fwsnort rules | .
-        qq|into the iptables policy..."|,
-        "$cmds{'iptables-restore'} < $config{'FWSNORT_SAVE_FILE'}",
+        qq|into the $ipt_str policy..."|,
+        "$restore_bin < $config{'FWSNORT_SAVE_FILE'}",
         qq|echo "    Done."\n|,
         qq|echo " "|,
         "exit\n";
