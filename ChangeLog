@@ -1,15 +1,29 @@
 fwsnort-1.5 (01/08/2011):
-    - Major update to being moving to using the iptables-save format instead
-      of the older strategy to always just execute iptables commands
-      directly (which was very flow for large fwsnort policies).  The
-      /etc/fwsnort/fwsnort.sh script now just executes:
+    - Major update to use the iptables-save format instead of the older
+      strategy of always just executing iptables commands directly (which was
+      very flow for large fwsnort policies).  The /etc/fwsnort/fwsnort.sh
+      script now just executes:
 
         /sbin/iptables-restore < /etc/fwsnort/fwsnort.save
 
       All fwsnort rules are now placed in the /etc/fwsnort/fwsnort.save file,
       but the older fwsnort.sh output (for the individual commands version)
       is still available at /etc/fwsnort/fwsnort_iptcmds.sh.  This
-      functionality extends to ip6tables policies as well.
+      functionality extends to ip6tables policies as well.  The fwsnort man
+      page explain this in better detail:
+
+      "As of fwsnort-1.5 all iptables rules built by fwsnort are written out
+      to the /etc/fwsnort/fwsnort.save file in iptables-save format.  This
+      allows a long fwsnort policy (which may contain thousands of iptables
+      rules translated from a large Snort signature set) to be quickly
+      instantiated via the "iptables-restore" command.  A wrapper script
+      /etc/fwsnort/fwsnort.sh is also written out to make this easy.  Hence,
+      the typical work flow for fwsnort is to: 1) run fwsnort, 2) note the
+      Snort rules that fwsnort was able to successfully translate (the number
+      of such rules is printed to stdout), and then 3) execute the
+      /etc/fwsnort/fwsnort.sh wrapper script to instantiate the policy in the
+      running kernel."
+
     - Added the --rules-url argument so that the URL for updating the
       Emerging Threats rule set can be specified from the command line.  The
       default is:
