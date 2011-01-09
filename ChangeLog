@@ -1,4 +1,4 @@
-fwsnort-1.5 (01//2011):
+fwsnort-1.5 (01/08/2011):
     - Major update to being moving to using the iptables-save format instead
       of the older strategy to always just execute iptables commands
       directly (which was very flow for large fwsnort policies).  The

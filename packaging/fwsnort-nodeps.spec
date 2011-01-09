@@ -1,5 +1,5 @@
 %define name fwsnort
-%define version 1.1
+%define version 1.5
 %define release 1
 %define fwsnortlogdir /var/log/fwsnort
 
@@ -85,6 +85,9 @@ install -m 644 fwsnort.8 $RPM_BUILD_ROOT%{_mandir}/man8/
 %config(noreplace) %_sysconfdir/%name/fwsnort.conf
 
 %changelog
+* Sat Jan 08 2010 Michael Rash <mbr@cipherydne.org>
+- fwsnort-1.5 release
+
 * Tue Jan 05 2010 Michael Rash <mbr@cipherydne.org>
 - fwsnort-1.1 release
 

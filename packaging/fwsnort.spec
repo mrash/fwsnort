@@ -1,5 +1,5 @@
 %define name fwsnort
-%define version 1.1
+%define version 1.5
 %define release 1
 %define fwsnortlibdir %_libdir/%name
 %define fwsnortlogdir /var/log/fwsnort
@@ -123,7 +123,10 @@ cp -r deps/snort_rules $RPM_BUILD_ROOT%_sysconfdir/%name
 %_libdir/%name
 
 %changelog
-* Tue Jan 05 1020 Michael Rash <mbr@cipherydne.org>
+* Sat Jan 08 2011 Michael Rash <mbr@cipherydne.org>
+- fwsnort-1.5 release
+
+* Tue Jan 05 2010 Michael Rash <mbr@cipherydne.org>
 - fwsnort-1.1 release
 
 * Sat May 29 2009 Michael Rash <mbr@cipherydne.org>
