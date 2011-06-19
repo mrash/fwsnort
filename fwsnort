@@ -102,9 +102,6 @@ my $fwsnort_conf = "/etc/fwsnort/fwsnort.conf";
 
 ### version number
 my $version = '1.5';
-my $revision_svn = '$Revision$';
-my $rev_num = '1';
-($rev_num) = $revision_svn =~ m|\$Rev.*:\s+(\S+)|;
 
 my %ipt_hdr_opts = (
     'src'      => '-s',
@@ -2935,7 +2932,7 @@ sub hdr_lines() {
         "# Generated on host:  " . hostname(),
         "# Time stamp:         " . localtime(),
         "#\n# Author:  Michael Rash <mbr\@cipherdyne.org>",
-        "#\n# Version: $version (file revision: $rev_num)",
+        "#\n# Version: $version",
         "#", '#'x76, "#\n";
 }
 
@@ -3239,8 +3236,7 @@ sub handle_cmd_line() {
 
     ### Print the version number and exit if -V given on the command line.
     if ($print_ver) {
-        print "[+] fwsnort v$version (file revision: $rev_num)\n",
-            "      by Michael Rash <mbr\@cipherdyne.org>\n";
+        print "[+] fwsnort v$version by Michael Rash <mbr\@cipherdyne.org>\n";
         exit 0;
     }
 
@@ -4096,7 +4092,7 @@ sub usage() {
     my $exit = shift;
     print <<_USAGE_;
 
-fwsnort v$version (file revision: $rev_num)
+fwsnort v$version
 [+] By Michael Rash <mbr\@cipherdyne.org>, http://www.cipherdyne.org/
 
 Usage: fwsnort [options]
