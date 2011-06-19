@@ -1,3 +1,9 @@
+fwsnort-1.6 (11//2011):
+    - Bugfix to ensure the iptables log prefixes built by fwsnort are not
+      longer than those allowed by the running iptables firewall.  This is
+      usually a total of 29 characters, but fwsnort now dynamically figures out
+      this value.
+
 fwsnort-1.5 (01/08/2011):
     - Major update to use the iptables-save format instead of the older
       strategy of always just executing iptables commands directly (which was

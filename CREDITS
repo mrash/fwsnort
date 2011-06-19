@@ -61,3 +61,7 @@ Guillermo Gomez
 Andy Rowland
     - Found a bug where fwsnort would attempt to use an invalid URL when
       updating the Emerging Threats rule set via --update-rules.
+
+Yves Pagani
+    - Found a bug where fwnsort could build iptables --log-prefix strings that
+      are longer than the underlying iptables firewall would allow.

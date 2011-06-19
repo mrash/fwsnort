@@ -412,6 +412,7 @@ my $ipt_log_tcp_seq     = 0;
 my $include_perl_triggers = 0;
 my $duplicate_last_build  = 0;
 my $ipt_max_str_len = 1;
+my $ipt_max_log_prefix_len = 1;
 
 ### to be added to the string match extension
 my $ipt_has_string_payload_offset_opt = 0;
@@ -2019,30 +2020,42 @@ sub ipt_build_opts() {
                     $target_str .= '--log-tcp-options ' unless $no_ipt_log_tcp_opts;
                     $target_str .= '--log-tcp-sequence ' if $ipt_log_tcp_seq;
                 }
-                $target_str .= qq|--log-prefix "|;
+                $target_str .= qq|--log-prefix |;
             }
 
+
+            ### build up the LOG prefix string
+            my $prefix_str = '';
+
             unless ($no_ipt_rule_nums) {
-                $target_str .= "[$chain_ctr{$chain}] ";
+                $prefix_str .= "[$chain_ctr{$chain}] ";
             }
 
             if ($ipt_drop) {
-                $target_str .= 'DRP ';
+                $prefix_str .= 'DRP ';
             } elsif ($ipt_reject) {
-                $target_str .= 'REJ ';
+                $prefix_str .= 'REJ ';
             }
+
             ### always add the sid
-            $target_str .= qq|SID$opts_hr->{'sid'} |;
+            $prefix_str .= qq|SID$opts_hr->{'sid'} |;
             if ($flow_logging_prefix) {
-                $target_str .= 'ESTAB ';
+                $prefix_str .= 'ESTAB ';
             }
-            ### ending quote
-            $target_str .= qq|"|;
+
+            if (length($prefix_str) >= $ipt_max_log_prefix_len) {
+                $prefix_str = qq|SID$opts_hr->{'sid'} |;
+                if (length($prefix_str) >= $ipt_max_log_prefix_len) {
+                    return 0 unless $ipt_content_criteria;
+                }
+            }
+
+            $target_str .= qq|"| . $prefix_str . qq|"|;
         }
     }
 
     ### print the snort rules type header to the fwsnort.sh script
-    if (! $ipt_print_type) {
+    unless ($ipt_print_type) {
         &ipt_type($snort_type);
         $ipt_print_type = 1;
     }
@@ -3437,6 +3450,10 @@ sub ipt_capabilities() {
             "$non_host -j LOG") == $IPT_SUCCESS) {
         print "[+] $ipt_str has 'LOG' target support...\n"
             if $verbose or $ipt_check_capabilities;
+
+        ### check for the max --log-prefix string length
+        &ipt_find_max_log_prefix_len();
+
     } else {
         &delete_test_chain();
         die "[*] $ipt_str has not been compiled with logging support.  ",
@@ -3697,6 +3714,32 @@ sub ipt_find_max_string_len() {
     $ipt_max_str_len--;
 
     print "    Max supported string length: $ipt_max_str_len\n"
+        if $verbose or $ipt_check_capabilities;
+
+    return;
+}
+
+sub ipt_find_max_log_prefix_len() {
+
+    my $test_pattern = '';
+
+    for (;;) {
+
+        $test_pattern = 'A'x$ipt_max_log_prefix_len;
+        my $test_rule_rv = 0;
+
+        $test_rule_rv = &ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s " .
+            qq|$non_host -p tcp --dport 1234 -j LOG --log-prefix "$test_pattern"|);
+
+        last if $test_rule_rv != $IPT_SUCCESS;
+
+        $ipt_max_log_prefix_len++;
+
+        last if $ipt_max_log_prefix_len == 1025; ### unlikely we'll ever get here
+    }
+    $ipt_max_log_prefix_len--;
+
+    print "    Max supported LOG prefix length: $ipt_max_log_prefix_len\n"
         if $verbose or $ipt_check_capabilities;
 
     return;
