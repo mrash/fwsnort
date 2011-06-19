@@ -3048,11 +3048,11 @@ sub ipt_list() {
         $config{'FWSNORT_FORWARD'},
         $config{'FWSNORT_FORWARD_ESTAB'}
     ) {
-        my $exists = (system "$ipt_bin -n -L " .
-            "$chain > /dev/null 2>&1") >> 8;
+        my $cmd = "$ipt_bin -v -n -L $chain";
+        my $exists = (system "$cmd > /dev/null 2>&1") >> 8;
         if ($exists == 0) {
             print "[+] Listing $chain chain...\n";
-            system "$ipt_bin -v -n -L $chain";
+            system $cmd;
             print "\n";
         } else {
             print "[-] Chain $chain does not exist...\n";
@@ -3156,6 +3156,25 @@ sub fwsnort_init() {
     ### in the config file
     &required_vars();
 
+    $non_host    = $NON_HOST;
+    $ipt_bin     = $cmds{'iptables'};
+    $restore_bin = $cmds{'iptables-restore'};
+    $save_bin    = $cmds{'iptables-save'};
+
+    if ($enable_ip6tables) {
+        for my $opt qw/itype icode ttl tos ipopts/ {
+            $snort_opts{'unsupported'}{$opt}
+                = $snort_opts{'filter'}{$opt};
+            delete $snort_opts{'filter'}{$opt};
+        }
+        $non_host    = $NON_IP6_HOST;
+        $save_str    = 'ip6tables-save';
+        $ipt_str     = 'ip6tables';
+        $ipt_bin     = $cmds{'ip6tables'};
+        $restore_bin = $cmds{'ip6tables-restore'};
+        $save_bin    = $cmds{'ip6tables-save'};
+    }
+
     ### flush all fwsnort chains.
     &ipt_flush() if $ipt_flush or $ipt_del_chains;
 
@@ -3180,25 +3199,6 @@ sub fwsnort_init() {
     $ext_net  = $config{'EXTERNAL_NET'} unless $ext_net;
 
     &get_local_addrs() unless $no_addr_check;
-
-    $non_host    = $NON_HOST;
-    $ipt_bin     = $cmds{'iptables'};
-    $restore_bin = $cmds{'iptables-restore'};
-    $save_bin    = $cmds{'iptables-save'};
-
-    if ($enable_ip6tables) {
-        for my $opt qw/itype icode ttl tos ipopts/ {
-            $snort_opts{'unsupported'}{$opt}
-                = $snort_opts{'filter'}{$opt};
-            delete $snort_opts{'filter'}{$opt};
-        }
-        $non_host    = $NON_IP6_HOST;
-        $save_str    = 'ip6tables-save';
-        $ipt_str     = 'ip6tables';
-        $ipt_bin     = $cmds{'ip6tables'};
-        $restore_bin = $cmds{'ip6tables-restore'};
-        $save_bin    = $cmds{'ip6tables-save'};
-    }
 
     if ($strict) {
         ### make the snort options parser very strict

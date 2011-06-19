@@ -3,6 +3,9 @@ fwsnort-1.6 (11//2011):
       longer than those allowed by the running iptables firewall.  This is
       usually a total of 29 characters, but fwsnort now dynamically figures out
       this value.
+    - Bugfix for --ipt-list and --ipt-flush to ensure that the proper iptables
+      binary path is chosen.  These args failed without this because the
+      iptables binary was not set.
 
 fwsnort-1.5 (01/08/2011):
     - Major update to use the iptables-save format instead of the older
