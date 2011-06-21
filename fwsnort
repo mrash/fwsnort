@@ -3638,11 +3638,21 @@ sub ipt_capabilities() {
     }
 
     unless ($no_ipt_conntrack) {
-        ### test for tcp connection tracking support
-        if (&ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s $non_host " .
-                "-p tcp --dport 3001 -m state --state ESTABLISHED -j LOG")
+
+        ### test for connection tracking support (conntrack
+        ### match first then state match if not available)
+        if (&ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s " .
+                "$non_host -p tcp --dport 3001 -m conntrack " .
+                "--ctstate ESTABLISHED -j LOG")
                     == $IPT_SUCCESS) {
-            print "[+] $ipt_str has connection tracking support...\n"
+            print "[+] $ipt_str has conntrack state tracking support...\n"
+                if $verbose or $ipt_check_capabilities;
+
+        } elsif (&ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s " .
+                "$non_host -p tcp --dport 3001 -m state " .
+                "--state ESTABLISHED -j LOG")
+                    == $IPT_SUCCESS) {
+            print "[+] $ipt_str has state tracking support...\n"
                 if $verbose or $ipt_check_capabilities;
         } else {
             &delete_test_chain();
