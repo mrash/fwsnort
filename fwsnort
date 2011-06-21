@@ -98,7 +98,7 @@ use Getopt::Long;
 use strict;
 
 ### config file
-my $fwsnort_conf = "/etc/fwsnort/fwsnort.conf";
+my $fwsnort_conf = '/etc/fwsnort/fwsnort.conf';
 
 ### version number
 my $version = '1.5';
@@ -401,6 +401,9 @@ my $exclude_re_caseless = 0;
 my $enable_ip6tables  = 0;
 my $ipt_var_str       = 'IPTABLES';
 my $no_ipt_conntrack  = 0;
+my $conntrack_state   = 'ESTABLISHED';
+my $have_conntrack    = 0;
+my $have_state        = 0;
 my $snort_conf_file   = '';
 my $ipt_restrict_intf = '';
 my $no_ipt_comments  = 0;
@@ -485,6 +488,9 @@ die "[*] Use --help for usage information.\n" unless (GetOptions(
                                         # FORWARD chains.
     'no-ipt-conntrack' => \$no_ipt_conntrack, # Don't use iptables connection
                                         # tracking (falls back to ACK flag test).
+    'Conntrack-state=s' => \$conntrack_state, ### Specify conntrack state for
+                                              ### 'flow' keyword emulation
+                                              ### (default is ESTABLISHED).
     'no-ipt-INPUT'   => \$no_ipt_input, # Disable fwsnort rules processed via
                                         # the INPUT chain.
     'no-ipt-OUTPUT'  => \$no_ipt_output, # Disable fwsnort rules processed via
@@ -2839,16 +2845,25 @@ sub is_fwsnort_chain() {
 }
 
 sub ipt_add_conntrack_jumps() {
-    ### jump ESTABLISHED tcp traffic to each of the "estab"
+    ### jump ESTABLISHED tcp traffic to each of the _ESTAB
     ### chains
-    push @ipt_script_lines, "\n###\n############ Inspect ESTABLISHED " .
+    push @ipt_script_lines, "\n###\n############ Inspect $conntrack_state " .
         "tcp connections. ############\n###";
 
     for my $chain (keys %process_chains) {
         next unless $process_chains{$chain};
 
-        my $rule_str = qq|-A $config{"FWSNORT_$chain"} -p tcp -m state | .
-            qq|--state ESTABLISHED -j $config{"FWSNORT_${chain}_ESTAB"}|;
+        my $rule_str = '';
+
+        if ($have_conntrack) {
+            $rule_str = qq|-A $config{"FWSNORT_$chain"} -p tcp -m conntrack | .
+                qq|--ctstate $conntrack_state -j | .
+                qq|$config{"FWSNORT_${chain}_ESTAB"}|;
+        } elsif ($have_state) {
+            $rule_str = qq|-A $config{"FWSNORT_$chain"} -p tcp -m state | .
+                qq|--state $conntrack_state -j | .
+                qq|$config{"FWSNORT_${chain}_ESTAB"}|;
+        }
 
         push @ipt_script_lines, qq|\$${ipt_var_str} $rule_str|;
         push @{$save_format_conntrack_jumps{$config{"FWSNORT_$chain"}}},
@@ -3648,12 +3663,40 @@ sub ipt_capabilities() {
             print "[+] $ipt_str has conntrack state tracking support...\n"
                 if $verbose or $ipt_check_capabilities;
 
+            if ($conntrack_state ne 'ESTABLISHED') {
+
+                ### check to make sure the specified state is supported
+                if (&ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s " .
+                        "$non_host -p tcp --dport 3001 -m conntrack " .
+                        "--ctstate $conntrack_state -j LOG")
+                            != $IPT_SUCCESS) {
+                     die "[*] The connection state $conntrack_state does not ",
+                        "appear to be supported by iptables.\n";
+                }
+            }
+
+            $have_conntrack = 1;
+
         } elsif (&ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s " .
                 "$non_host -p tcp --dport 3001 -m state " .
                 "--state ESTABLISHED -j LOG")
                     == $IPT_SUCCESS) {
             print "[+] $ipt_str has state tracking support...\n"
                 if $verbose or $ipt_check_capabilities;
+
+            if ($conntrack_state ne 'ESTABLISHED') {
+
+                ### check to make sure the specified state is supported
+                if (&ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s " .
+                        "$non_host -p tcp --dport 3001 -m state " .
+                        "--state ESTABLISHED -j LOG")
+                            != $IPT_SUCCESS) {
+                    die "[*] The connection state $conntrack_state does not ",
+                        "appear to be supported by iptables.\n";
+                }
+            }
+
+            $have_state = 1;
         } else {
             &delete_test_chain();
             die

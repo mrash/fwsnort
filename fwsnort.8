@@ -239,6 +239,14 @@ the "\-\-reject-with tcp-reset" option, and ICMP port unreachable messages will
 be generated for UDP packets through the use of the
 "\-\-reject-with icmp-port-unreachable" option.
 .TP
+.BR \-C ", " \-\^\-Conntrack-state\ \<state>
+Specify a conntrack state in place of the "established" state that commonly
+accompanies the Snort "flow" keyword.  By default, fwsnort uses the conntrack
+state of "ESTABLISHED" for this.  In certain corner cases, it might be useful
+to use "ESTABLISHED,RELATED" instead to apply application layer inspection to
+things like ICMP port unreachable messages that are responses to real attempted
+communications.
+.TP
 .BR \-\^\-no-ipt-log
 By default fwsnort generates an iptables script that implements a logging
 rule for each successfully translated snort rule.  This can be disabled
