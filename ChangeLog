@@ -1,4 +1,18 @@
 fwsnort-1.6 (11//2011):
+    - Fixed the --ipt-apply functionality - the variable that held the
+      fwsnort.sh path was not initialized properly prior to this change.
+    - Added the --Conntrack-state argument to specify a conntrack state
+      in place of the "established" state that commonly accompanies the Snort
+      "flow" keyword.  By default, fwsnort uses the conntrack state of
+      "ESTABLISHED" for this.  In certain corner cases, it might be useful to
+      use "ESTABLISHED,RELATED" instead to apply application layer inspection
+      to things like ICMP port unreachable messages that are responses to real
+      attempted communications.  (Need to add UDP tracking for the _ESTAB
+      chains for this too - coming soon.)
+    - Recent releases of iptables and the Linux kernel support matching on
+      connection state via the conntrack modules and the --ctstate switch.
+      Added a capabilities test for this, and will fall back to using the state
+      match if the conntrack module is not available.
     - Bugfix to ensure the iptables log prefixes built by fwsnort are not
       longer than those allowed by the running iptables firewall.  This is
       usually a total of 29 characters, but fwsnort now dynamically figures out
