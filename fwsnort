@@ -340,7 +340,7 @@ my %restrict_interfaces = ();
 ### establish some default behavior
 my $home_net   = '';  ### normally comes from fwsnort.conf
 my $ext_net    = '';  ### normally comes from fwsnort.conf
-my $ipt_apply  = 0;
+my $ipt_exec   = 0;
 my $ipt_drop   = 0;
 my $ipt_reject = 0;
 my $help       = 0;
@@ -437,7 +437,7 @@ my @argv_cp = @ARGV;
 Getopt::Long::Configure('no_ignore_case');
 
 die "[*] Use --help for usage information.\n" unless (GetOptions(
-    'ipt-apply'      => \$ipt_apply,    # Apply the generated ruleset.
+    'ipt-apply'      => \$ipt_exec,     # Apply the generated ruleset.
     'ipt-drop'       => \$ipt_drop,     # Add iptables DROP rules.
     'ipt-reject'     => \$ipt_reject,   # Add iptables REJECT rules.
     'ipt-script=s'   => \$ipt_script,   # Manually specify the path to the
@@ -721,8 +721,8 @@ sub parse_snort_rules() {
         my $rule_num   = 0;
         my $parsed_ctr = 0;
         my $unsup_ctr  = 0;
-        my $ipt_apply  = 0;
-        my $ipt_num_rules = 0;
+        my $ipt_apply_ctr = 0;
+        my $ipt_rules_ctr = 0;
 
         RULE: for my $rule (@lines) {
             chomp $rule;
@@ -837,10 +837,10 @@ sub parse_snort_rules() {
                     $opts_hr, $content_ar, $offsets_hr, $rule);
 
             if ($ipt_rv) {
-                $ipt_apply++;
+                $ipt_apply_ctr++;
                 $tot_ipt_apply++;
                 ### may have the rule in several chains
-                $ipt_num_rules += $num_rules;
+                $ipt_rules_ctr += $num_rules;
                 if ($include_sids) {
                     print "    Successful translation.\n";
                 }
@@ -862,17 +862,17 @@ sub parse_snort_rules() {
             close F;
         }
 
-        if ($ipt_num_rules) {
-            $ipt_num_rules *= 2 if $ipt_drop;
-            $ipt_num_rules *= 2 if $ipt_reject;
+        if ($ipt_rules_ctr) {
+            $ipt_rules_ctr *= 2 if $ipt_drop;
+            $ipt_rules_ctr *= 2 if $ipt_reject;
             push @ipt_script_lines,
-                qq|\$ECHO "    Rules added: $ipt_num_rules"|;
+                qq|\$ECHO "    Rules added: $ipt_rules_ctr"|;
         }
 
         unless ($include_sids) {
             if ($ipt_sync) {
                 printf("%-10s%-10s%-10s%-10s\n", $parsed_ctr, $unsup_ctr,
-                    $ipt_apply, $rule_num);
+                    $ipt_apply_ctr, $rule_num);
             } else {
                 printf("%-10s%-10s%-10s\n", $parsed_ctr, $unsup_ctr,
                     $rule_num);
@@ -3190,6 +3190,90 @@ sub fwsnort_init() {
         $save_bin    = $cmds{'ip6tables-save'};
     }
 
+    unless ($is_root) {
+        $no_ipt_sync = 1;
+        $no_ipt_test = 1;
+        $config{'LOG_FILE'} = './fwsnort.log';  ### local file
+        unlink $config{'LOG_FILE'} if -e $config{'LOG_FILE'};
+        $config{'FWSNORT_SCRIPT'} = './fwsnort.sh';  ### local file
+        unlink $config{'FWSNORT_SCRIPT'} if -e $config{'FWSNORT_SCRIPT'};
+    }
+
+    if ($ipt_exec) {
+        die "[*] You need to be root for --ipt-apply" unless $is_root;
+        if (-e $config{'FWSNORT_SAVE_EXEC_FILE'}) {
+            print "[+] Executing $config{'FWSNORT_SAVE_EXEC_FILE'}\n";
+            system $config{'FWSNORT_SAVE_EXEC_FILE'};
+            exit 0;
+        } else {
+            die "[*] $config{'FWSNORT_SAVE_EXEC_FILE'} does not exist.";
+        }
+    }
+
+    $ipt_sync = 0 if $no_ipt_sync;
+
+    if ($enable_ip6tables) {
+        ### switch to ip6tables
+        $ipt_var_str = 'IP6TABLES';
+    }
+
+    $process_chains{'INPUT'}   = 0 if $no_ipt_input;
+    $process_chains{'FORWARD'} = 0 if $no_ipt_forward;
+    $process_chains{'OUTPUT'}  = 0 if $no_ipt_output;
+
+    ### import HOME_NET, etc. from existing Snort config file.
+    &import_snort_conf() if $snort_conf_file;
+
+    if ($rules_types) {
+        my @types = split /\,/, $rules_types;
+        for my $type (@types) {
+            $include_types{$type} = '';
+        }
+    }
+    if ($exclude_types) {
+        my @types = split /\,/, $exclude_types;
+        for my $type (@types) {
+            $exclude_types{$type} = '';
+        }
+    }
+    if ($include_sids) {
+        ### disable iptables policy parsing if we are translating a
+        ### specific set of Snort sids.
+        $ipt_sync = 0;
+
+        my @sids = split /\,/, $include_sids;
+        for my $sid (@sids) {
+            $include_sids{$sid} = '';
+        }
+    }
+    if ($exclude_sids) {
+        my @sids = split /\,/, $exclude_sids;
+        for my $sid (@sids) {
+            $exclude_sids{$sid} = '';
+        }
+    }
+    if ($ipt_restrict_intf) {
+        my @interfaces = split /\,/, $ipt_restrict_intf;
+        for my $intf (@interfaces) {
+            $restrict_interfaces{$intf} = '';
+        }
+    }
+
+    if ($include_re) {
+        if ($include_re_caseless) {
+            $include_re = qr|$include_re|i;
+        } else {
+            $include_re = qr|$include_re|;
+        }
+    }
+    if ($exclude_re) {
+        if ($exclude_re_caseless) {
+            $exclude_re = qr|$exclude_re|i;
+        } else {
+            $exclude_re = qr|$exclude_re|;
+        }
+    }
+
     ### flush all fwsnort chains.
     &ipt_flush() if $ipt_flush or $ipt_del_chains;
 
@@ -3294,90 +3378,6 @@ sub handle_cmd_line() {
 
     if ($ipt_drop and $ipt_reject) {
         die "[*] Cannot specify both --ipt-drop and --ipt-reject";
-    }
-
-    unless ($is_root) {
-        $no_ipt_sync = 1;
-        $no_ipt_test = 1;
-        $config{'LOG_FILE'} = './fwsnort.log';  ### local file
-        unlink $config{'LOG_FILE'} if -e $config{'LOG_FILE'};
-        $config{'FWSNORT_SCRIPT'} = './fwsnort.sh';  ### local file
-        unlink $config{'FWSNORT_SCRIPT'} if -e $config{'FWSNORT_SCRIPT'};
-    }
-
-    if ($ipt_apply) {
-        die "[*] You need to be root for --ipt-apply" unless $is_root;
-        if (-e $config{'FWSNORT_SCRIPT'}) {
-            print "[+] Executing $config{'FWSNORT_SCRIPT'}\n";
-            system $config{'FWSNORT_SCRIPT'};
-            exit 0;
-        } else {
-            die "[*] $config{'FWSNORT_SCRIPT'} does not exist.";
-        }
-    }
-
-    $ipt_sync = 0 if $no_ipt_sync;
-
-    if ($enable_ip6tables) {
-        ### switch to ip6tables
-        $ipt_var_str = 'IP6TABLES';
-    }
-
-    $process_chains{'INPUT'}   = 0 if $no_ipt_input;
-    $process_chains{'FORWARD'} = 0 if $no_ipt_forward;
-    $process_chains{'OUTPUT'}  = 0 if $no_ipt_output;
-
-    ### import HOME_NET, etc. from existing Snort config file.
-    &import_snort_conf() if $snort_conf_file;
-
-    if ($rules_types) {
-        my @types = split /\,/, $rules_types;
-        for my $type (@types) {
-            $include_types{$type} = '';
-        }
-    }
-    if ($exclude_types) {
-        my @types = split /\,/, $exclude_types;
-        for my $type (@types) {
-            $exclude_types{$type} = '';
-        }
-    }
-    if ($include_sids) {
-        ### disable iptables policy parsing if we are translating a
-        ### specific set of Snort sids.
-        $ipt_sync = 0;
-
-        my @sids = split /\,/, $include_sids;
-        for my $sid (@sids) {
-            $include_sids{$sid} = '';
-        }
-    }
-    if ($exclude_sids) {
-        my @sids = split /\,/, $exclude_sids;
-        for my $sid (@sids) {
-            $exclude_sids{$sid} = '';
-        }
-    }
-    if ($ipt_restrict_intf) {
-        my @interfaces = split /\,/, $ipt_restrict_intf;
-        for my $intf (@interfaces) {
-            $restrict_interfaces{$intf} = '';
-        }
-    }
-
-    if ($include_re) {
-        if ($include_re_caseless) {
-            $include_re = qr|$include_re|i;
-        } else {
-            $include_re = qr|$include_re|;
-        }
-    }
-    if ($exclude_re) {
-        if ($exclude_re_caseless) {
-            $exclude_re = qr|$exclude_re|i;
-        } else {
-            $exclude_re = qr|$exclude_re|;
-        }
     }
 
     return;
