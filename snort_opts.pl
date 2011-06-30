@@ -53,18 +53,23 @@ my %options = (
     'within'       => 0,
     'byte_jump'    => 0,
     'byte_test'    => 0,
-    'pcre'         => 0
+    'pcre'         => 0,
+    'http_header'  => 0,
+    'http_uri'     => 0,
+    'http_method'  => 0,
+    'fast_pattern' => 0,
+    'metadata'     => 0,
 );
 
 
-my $dir   = 'snort_rules';
+my $dir   = 'deps/snort_rules';
 my $total_rules = 0;
 
-opendir D, $dir or die " ** Could not open $dir: $!";
+opendir D, $dir or die "[*] Could not open $dir: $!";
 my @rfiles = readdir D;
 closedir D;
 
-print " .. Calculating snort rule keyword percentages:\n";
+print "[+] Calculating snort rule keyword percentages:\n";
 for my $rfile (@rfiles) {
     next unless $rfile =~ /\.rules/;
     open R, "< $dir/$rfile" or die $!;
