@@ -56,11 +56,13 @@ my %options = (
     'pcre'         => 0,
     'http_header'  => 0,
     'http_uri'     => 0,
+    'urilen'       => 0,
     'http_method'  => 0,
     'fast_pattern' => 0,
     'metadata'     => 0,
+    'threshold'    => 0,
+    'detection_filter' => 0,
 );
-
 
 my $dir   = 'deps/snort_rules';
 my $total_rules = 0;
@@ -94,8 +96,14 @@ for my $rfile (@rfiles) {
         }
     }
 }
+
+my $max_opt_len = 0;
+for my $opt (keys %options) {
+    $max_opt_len = length($opt) if length($opt) > $max_opt_len;
+}
+
 for my $opt (sort {$options{$b} <=> $options{$a}} keys %options) {
-    printf("%13s %13s", $opt, "$options{$opt}/$total_rules  ");
+    printf("%${max_opt_len}s %13s", $opt, "$options{$opt}/$total_rules  ");
     print sprintf("%.1f", $options{$opt} / $total_rules * 100) . "%\n";
 }
 
