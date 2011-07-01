@@ -46,7 +46,7 @@ and then 3) execute the
 wrapper script to instantiate the policy in the running kernel.
 
 .B fwsnort
-(optionally) uses the IPTables::Parse module to parse
+(optionally) uses the IPTables::Parse CPAN module to parse
 the iptables ruleset on the machine to determine which Snort rules are
 applicable to the specific iptables policy.  After all, if iptables is
 blocking all inbound http traffic from external addresses for example, it
@@ -429,8 +429,9 @@ the \-\-no-opt-test option can be specified to have fwsnort generate an
 iptables script even if the string match module is not compiled in.
 .PP
 .B fwsnort
-also requires the IPTables::Parse module in order to parse
-iptables policies.
+also requires the IPTables::Parse CPAN module in order to parse
+iptables policies.  This module is bundled with the fwsnort sources in
+the deps/ directory for convenience.
 .SH DIAGNOSTICS
 The \-\-debug option can be used to display on STDOUT any errors that
 are generated as fwsnort parses each snort rule.  Normally these
