@@ -919,7 +919,7 @@ sub parse_rule_options() {
     my %opts    = ();
     my @content = ();
     my %offsets = ();
-    my $fast_pattern = 0;
+    my $fast_pattern = -1;
 
     ### get the sid here for logging purposes
     if ($rule_options =~ /$snort_opts{'logprefix'}{'sid'}/) {
@@ -2093,6 +2093,7 @@ sub build_content_matches() {
     my ($opts_hr, $content_ar, $fast_pattern,
         $offsets_hr, $avg_hdr_len) = @_;
 
+    my $fast_pattern_index = 0;
     my $ipt_content_criteria = '';
     my $perl_trigger_command = '';
 
@@ -2100,9 +2101,26 @@ sub build_content_matches() {
 
     my @content_fast_pattern_order = ();
 
-    $content_fast_pattern_order[0] = $content_ar->[$fast_pattern];
+    if ($fast_pattern == -1) {
+        ### in this case, the 'fast_pattern' option was not used, so pick the
+        ### longest pattern to match first (this should help with performance
+        ### of signature matches on average)
+        my $max_len = 0;
+        my $max_len_index = 0;
+        for (my $index=0; $index <= $#$content_ar; $index++) {
+            if (length($content_ar->[$index]) > $max_len) {
+                $max_len = &get_content_len($content_ar->[$index]);
+                $max_len_index = $index;
+            }
+        }
+        $fast_pattern_index = $max_len_index;
+    } else {
+        $fast_pattern_index = $fast_pattern;
+    }
+
+    $content_fast_pattern_order[0] = $content_ar->[$fast_pattern_index];
     for (my $i=0; $i <= $#$content_ar; $i++) {
-        next if $i == $fast_pattern;
+        next if $i == $fast_pattern_index;
         push @content_fast_pattern_order, $content_ar->[$i];
     }
 
@@ -2294,6 +2312,7 @@ sub build_content_matches() {
     return $ipt_content_criteria, $perl_trigger_command;
 }
 
+### handles length of hex blocks
 sub get_content_len() {
     my $str = shift;
     my $len = 0;
