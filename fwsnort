@@ -127,6 +127,11 @@ my %snort_opts = (
             'iptopt' => '-m string',
             'regex'  => '[\s;]content:\s*\"(.*?)\"\s*;'
         },
+        'fast_pattern' => {
+            'iptopt' => '',  ### fast_pattern just governs ordering of
+                             ### content matches
+            'regex'  => '[\s;]fast_pattern(?::\s*.*?\s*)?;',
+        },
         'pcre' => {
             ### only basic PCRE's that just have strings separated
             ### by ".*" or ".+" are supported.
@@ -148,7 +153,7 @@ my %snort_opts = (
         ### is made based on the on length of the previous pattern an
         ### any "depth" or "offset" criteria for the previous pattern.
         ### To disable signatures with "distance" and "within", just
-        ### use 
+        ### use the --strict option.
         'distance'  => {
             'iptopt' => '--from',
             'regex'  => '[\s;]distance:\s*(\d+)\s*;'
@@ -777,7 +782,7 @@ sub parse_snort_rules() {
             }
 
             ### parse options portion of Snort rule
-            my ($parse_rv, $opts_hr, $content_ar, $offsets_hr)
+            my ($parse_rv, $opts_hr, $content_ar, $fast_pattern, $offsets_hr)
                             = &parse_rule_options($rule_options, $line_num);
 
             unless ($parse_rv) {
@@ -834,7 +839,7 @@ sub parse_snort_rules() {
             ### construct the equivalent iptables rule and add it
             ### to $config{'FWSNORT_SCRIPT'}
             my ($ipt_rv, $num_rules) = &ipt_build($hdr_hr,
-                    $opts_hr, $content_ar, $offsets_hr, $rule);
+                    $opts_hr, $content_ar, $fast_pattern, $offsets_hr, $rule);
 
             if ($ipt_rv) {
                 $ipt_apply_ctr++;
@@ -914,23 +919,24 @@ sub parse_rule_options() {
     my %opts    = ();
     my @content = ();
     my %offsets = ();
+    my $fast_pattern = 0;
 
     ### get the sid here for logging purposes
     if ($rule_options =~ /$snort_opts{'logprefix'}{'sid'}/) {
         $sid = $1;
     } else {
-        return 0, \%opts, \@content, \%offsets;
+        return 0, \%opts, \@content, $fast_pattern, \%offsets;
     }
 
     if (%exclude_sids) {
-        return 0, \%opts, \@content, \%offsets
+        return 0, \%opts, \@content, $fast_pattern, \%offsets
             if defined $exclude_sids{$sid};
     }
     if (%include_sids) {
         if (defined $include_sids{$sid}) {
             &logr("[+] matched sid:$sid: $rule_options");
         } else {
-            return 0, \%opts, \@content, \%offsets;
+            return 0, \%opts, \@content, $fast_pattern, \%offsets;
         }
     }
 
@@ -943,7 +949,7 @@ sub parse_rule_options() {
             my $opt = $1;
             my $val = $2;
             if ($opt eq 'content' or $opt eq 'uricontent') {
-                return 0, \%opts, \@content, \%offsets
+                return 0, \%opts, \@content, $fast_pattern, \%offsets
                     unless $val =~ /"$/;
                 $val =~ s/^"//;
                 $val =~ s/"$//;
@@ -966,7 +972,7 @@ sub parse_rule_options() {
                 print "[-] SID: $sid does not contain 'content' ",
                     "or 'uricontent'\n";
             }
-            return 0, \%opts, \@content, \%offsets;
+            return 0, \%opts, \@content, $fast_pattern, \%offsets;
         }
 
     } else {
@@ -986,36 +992,37 @@ sub parse_rule_options() {
                 print "[-] SID: $sid contain the unsupported option(s): ",
                     "$found_unsupported at line: $line_num\n";
             }
-            return 0, \%opts, \@content, \%offsets;
+            return 0, \%opts, \@content, $fast_pattern, \%offsets;
         }
     }
 
     if ($rule_options =~ /ip_proto\s*:.*ip_proto\s*:/) {
         &logr("[-] SID: $sid, unsupported multiple ip_proto fields at " .
             "line: $line_num, skipping.");
-        return 0, \%opts, \@content, \%offsets;
+        return 0, \%opts, \@content, $fast_pattern, \%offsets;
     }
 
     for my $opt (keys %{$snort_opts{'filter'}}) {
         ### see if we match the option regex
         if ($rule_options =~ /$snort_opts{'filter'}{$opt}{'regex'}/) {
-            $opts{$opt} = $1;
+            $opts{$opt} = 1;
+            $opts{$opt} = $1 if defined $1;  ### some keywords may not have an option
         }
     }
 
-    while ($rule_options =~ /(\w+):\s*(.*?[^\x5c]);/g) {
+    while ($rule_options =~ /(\w+):?((?:\s*.*?[^\x5c]?));/g) {
         my $opt = $1;
-        my $val = $2;
+        my $val = 1;
+        $val = $2 if defined $2;  ### some keywords may not have an argument
         if ($opt eq 'content' or $opt eq 'uricontent') {
-            return 0, \%opts, \@content, \%offsets
+            return 0, \%opts, \@content, $fast_pattern, \%offsets
                 unless $val =~ /"$/;
-            $val =~ s/^"//;
-            $val =~ s/"$//;
+            $val =~ s/^\s*"//;
+            $val =~ s/"\s*$//;
             push @content, $val;
-        }
-        if ($opt eq 'pcre') {
+        } elsif ($opt eq 'pcre') {
 
-            $val =~ s|^"/||;
+            $val =~ s|^\s*"/||;
             $val =~ s|/\w{0,3}"$||;
 
             ### see if this pcre only has strings separated with ".*" or ".+"
@@ -1027,12 +1034,15 @@ sub parse_rule_options() {
                 }
             } else {
                 &logr("[-] SID: $sid, unsupported complex pcre: $val");
-                return 0, \%opts, \@content, \%offsets;
+                return 0, \%opts, \@content, $fast_pattern, \%offsets;
             }
-        }
-        for my $key qw/offset depth within distance/ {
-            if ($opt eq $key) {
-                $offsets{$#content}{$key} = $val;
+        } elsif ($opt eq 'fast_pattern') {
+            $fast_pattern = $#content;
+        } else {
+            for my $key qw/offset depth within distance/ {
+                if ($opt eq $key) {
+                    $offsets{$#content}{$key} = $val;
+                }
             }
         }
     }
@@ -1050,7 +1060,7 @@ sub parse_rule_options() {
                     and not defined $snort_opts{'ignore'}{$option}) {
                 &logr("[-] SID: $sid bad option: \"$option\" at line: $line_num " .
                     "-- $rule_options");
-                return 0, \%opts, \@content, \%offsets;
+                return 0, \%opts, \@content, $fast_pattern, \%offsets;
             }
         }
 
@@ -1062,31 +1072,31 @@ sub parse_rule_options() {
                 and $opts{'ipopts'} ne 'any') {
             &logr("[-] SID: $sid, unsupported ipopts field at " .
                 "line: $line_num, skipping.");
-            return 0, \%opts, \@content, \%offsets;
+            return 0, \%opts, \@content, $fast_pattern, \%offsets;
         }
 
         if (defined $opts{'itype'}
                 and ($opts{'itype'} =~ m|<| or $opts{'itype'} =~ m|>|)) {
             &logr("[-] SID: $sid, unsupported range operator in itype field " .
                 "line: $line_num, skipping.");
-            return 0, \%opts, \@content, \%offsets;
+            return 0, \%opts, \@content, $fast_pattern, \%offsets;
         }
         if (defined $opts{'icode'}
                 and ($opts{'icode'} =~ m|<| or $opts{'icode'} =~ m|>|)) {
             &logr("[-] SID: $sid, unsupported range operator in icode field " .
                 "line: $line_num, skipping.");
-            return 0, \%opts, \@content, \%offsets;
+            return 0, \%opts, \@content, $fast_pattern, \%offsets;
         }
         if (defined $opts{'ip_proto'}
                 and ($opts{'ip_proto'} =~ m|<| or $opts{'ip_proto'} =~ m|>|)) {
             &logr("[-] SID: $sid, unsupported range operator in ip_proto field " .
                 "line: $line_num, skipping.");
-            return 0, \%opts, \@content, \%offsets;
+            return 0, \%opts, \@content, $fast_pattern, \%offsets;
         }
     }
 
     ### success
-    return 1, \%opts, \@content, \%offsets;
+    return 1, \%opts, \@content, $fast_pattern, \%offsets;
 }
 
 sub parse_rule_hdr() {
@@ -1555,7 +1565,7 @@ sub cache_ipt_policy() {
 
 sub ipt_build() {
     my ($snort_hdr_hr, $snort_opts_hr,
-            $content_ar, $offsets_hr, $orig_snort_rule) = @_;
+            $content_ar, $fast_pattern, $offsets_hr, $orig_snort_rule) = @_;
 
     my $found_rule = 0;
     my $num_rules  = 0;
@@ -1717,6 +1727,7 @@ sub ipt_build() {
                 $snort_hdr_hr,
                 $snort_opts_hr,
                 $content_ar,
+                $fast_pattern,
                 $offsets_hr,
                 $orig_snort_rule,
                 $flow_established,
@@ -1785,7 +1796,7 @@ sub get_local_addrs() {
 
 sub ipt_build_rule() {
     my ($chain, $fwsnort_chain, $rule, $hdr_hr, $opts_hr, $content_ar,
-            $offsets_hr, $orig_snort_rule, $flow_logging_prefix,
+            $fast_pattern, $offsets_hr, $orig_snort_rule, $flow_logging_prefix,
             $add_snort_comment, $add_perl_trigger) = @_;
 
     ### $chain is used only to see whether or not we need to add the
@@ -1840,14 +1851,14 @@ sub ipt_build_rule() {
     }
 
     my $rv = &ipt_build_opts($rule, $hdr_hr, $opts_hr, $content_ar,
-        $offsets_hr, $orig_snort_rule, $flow_logging_prefix,
+        $fast_pattern, $offsets_hr, $orig_snort_rule, $flow_logging_prefix,
         $chain, $fwsnort_chain, $add_snort_comment, $add_perl_trigger);
 
     return $rv;
 }
 
 sub ipt_build_opts() {
-    my ($rule, $hdr_hr, $opts_hr, $content_ar,
+    my ($rule, $hdr_hr, $opts_hr, $content_ar, $fast_pattern,
             $offsets_hr, $orig_snort_rule, $flow_logging_prefix,
             $chain, $fwsnort_chain, $add_snort_comment, $add_perl_trigger) = @_;
 
@@ -1970,12 +1981,17 @@ sub ipt_build_opts() {
     }
 
     ### append snort content options
-    my ($ipt_content_criteria, $perl_trigger_str)
-        = &build_content_matches($opts_hr, $content_ar, $offsets_hr,
-                $avg_hdr_len);
+    my $ipt_content_criteria = 0;
+    my $perl_trigger_str = '';
 
-    return 0 unless $ipt_content_criteria;
-    $rule .= $ipt_content_criteria;
+    if ($#$content_ar > -1) {
+        ($ipt_content_criteria, $perl_trigger_str)
+            = &build_content_matches($opts_hr, $content_ar, $fast_pattern,
+                    $offsets_hr, $avg_hdr_len);
+
+        return 0 unless $ipt_content_criteria;
+        $rule .= $ipt_content_criteria;
+    }
 
     ### print the rest of the logprefix snort options in a comment
     ### one line above the rule
@@ -2074,16 +2090,25 @@ sub ipt_build_opts() {
 }
 
 sub build_content_matches() {
-    my ($opts_hr, $content_ar, $offsets_hr, $avg_hdr_len) = @_;
+    my ($opts_hr, $content_ar, $fast_pattern,
+        $offsets_hr, $avg_hdr_len) = @_;
 
     my $ipt_content_criteria = '';
     my $perl_trigger_command = '';
 
     $perl_trigger_command = q|perl -e 'print "| if $include_perl_triggers;
 
-    for (my $i=0; $i <= $#$content_ar; $i++) {
+    my @content_fast_pattern_order = ();
 
-        my $content_str = $content_ar->[$i];
+    $content_fast_pattern_order[0] = $content_ar->[$fast_pattern];
+    for (my $i=0; $i <= $#$content_ar; $i++) {
+        next if $i == $fast_pattern;
+        push @content_fast_pattern_order, $content_ar->[$i];
+    }
+
+    for (my $i=0; $i <= $#content_fast_pattern_order; $i++) {
+
+        my $content_str = $content_fast_pattern_order[$i];
 
         my $neg_match = 0;
         if ($content_str =~ /\s*\!\s*"/) {
@@ -2204,7 +2229,7 @@ sub build_content_matches() {
                     ### length of the previous pattern match and offset
                     if ($i > 0) {
                         my $prev = $i-1;
-                        $distance += &get_content_len($content_ar->[$prev]);
+                        $distance += &get_content_len($content_fast_pattern_order[$prev]);
                         if (defined $offsets_hr->{$prev}
                                 and defined $offsets_hr->{$i}->{'offset'}) {
                             $distance += $offsets_hr->{$i}->{'offset'};
@@ -2234,7 +2259,7 @@ sub build_content_matches() {
                     ### the current pattern as well as the previous one
                     my $min_within = $content_len;
                     if ($i > 0) {
-                        $min_within += &get_content_len($content_ar->[$i-1]);
+                        $min_within += &get_content_len($content_fast_pattern_order[$i-1]);
                     }
                     $min_within += $offset if $offset > -1;
                     $within = $min_within if $within < $min_within;
