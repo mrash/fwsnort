@@ -250,7 +250,8 @@ my %snort_opts = (
         'sameip'    => '[\s;]sameip\s*;',
         'regex'     => '[\s;]regex:\s*(.*?)\s*;',
         'isdataat'  => '[\s;]isdataat:\s*(.*?)\s*;',
-        'threshold' => '[\s;]threshold:\s*.*?\s*;'  ### FIXME --limit
+        'threshold' => '[\s;]threshold:\s*.*?\s*;'                ### FIXME --limit
+        'detection_filter' => '[\s;]detection_filter:\s*.*?\s*;'  ### FIXME --limit
     },
 
     ### snort options that fwsnort will ignore
