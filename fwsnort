@@ -439,115 +439,6 @@ my %chain_ctr = ();
 ### save a copy of the command line args
 my @argv_cp = @ARGV;
 
-### make Getopts case sensitive
-Getopt::Long::Configure('no_ignore_case');
-
-die "[*] Use --help for usage information.\n" unless (GetOptions(
-    'ipt-apply'      => \$ipt_exec,     # Apply the generated ruleset.
-    'ipt-drop'       => \$ipt_drop,     # Add iptables DROP rules.
-    'ipt-reject'     => \$ipt_reject,   # Add iptables REJECT rules.
-    'ipt-script=s'   => \$ipt_script,   # Manually specify the path to the
-                                        # generated iptables script.
-    'ipt-log-tcp-seq' => \$ipt_log_tcp_seq, # Log TCP seq/ack values.
-    'ipt-flush'      => \$ipt_flush,    # Flush any existing fwsnort chains.
-    'ipt-check-capabilities' =>\$ipt_check_capabilities, # Check capabilities
-                                                         # and exit.
-    'Flush'          => \$ipt_flush,    # Synonym for --ipt-flush
-    'ipt-list'       => \$ipt_list,     # List any existing fwsnort chains.
-    'List'           => \$ipt_list,     # Synonym for --ipt-list
-    'ipt-del'        => \$ipt_del_chains, # Delete fwsnort chains.
-    'ip6tables'      => \$enable_ip6tables, # Turn on ip6tables mode.
-    '6'              => \$enable_ip6tables, # Synonym for --ip6tables.
-    'X'              => \$ipt_del_chains, # Synonym for --ipt-del.
-    'ipt-file=s'     => \$ipt_file,     # Read iptables policy from a file.
-    'Home-net=s'     => \$home_net,     # Manually specify home network.
-    'External-net=s' => \$ext_net,      # Manually specify external network.
-    'snort-sid=s'    => \$include_sids, # Parse only these particular snort rules.
-    'snort-sids=s'   => \$include_sids, # Synonum for --snort-sid
-    'string-match-alg=s' => \$string_match_alg,
-    'exclude-sid=s'  => \$exclude_sids, # Exclude these particular snort rules.
-    'snort-conf=s'   => \$snort_conf_file, # Get HOME_NET, etc. vars from
-                                        # existing Snort config file.
-    'include-perl-triggers' => \$include_perl_triggers, # perl commands to
-                                        # trigger signature matches.
-    'include-type=s' => \$rules_types,  # Process only this type of snort rule
-                                        # (e.g. "ddos")
-    'exclude-type=s' => \$exclude_types,# Exclude specified types (e.g. "ddos").
-    'include-regex=s' => \$include_re,  # Include only those signatures that
-                                        # match the specified regex.
-    'include-re-caseless' => \$include_re_caseless, # make include regex case
-                                                    # insensitive
-    'exclude-regex=s' => \$exclude_re,  # Exclude those signatures that
-                                        # match the specified regex.
-    'exclude-re-caseless' => \$exclude_re_caseless, # make exclude regex case
-                                                    # insensitive
-    'snort-rdir=s'   => \$rules_dir,    # Manually specify the snort rules
-                                        # directory.
-    'snort-rfile=s'  => \$rules_file,   # Translate a single rules file.
-    'no-pcre'        => \$no_pcre,      # Make no attempt to translate PCRE's.
-    'no-addresses'   => \$no_addr_check, # Don't check local ifconfig output.
-    'no-ipt-sync'    => \$no_ipt_sync,  # Do not sync with the iptables policy.
-    'no-ipt-log'     => \$no_ipt_log,   # Do not generate iptables logging rules.
-    'no-ipt-test'    => \$no_ipt_test,  # Don't perform any checks against
-                                        # iptables.
-    'no-ipt-jumps'   => \$no_ipt_jumps, # Don't jump packets from the INPUT or
-                                        # FORWARD chains.
-    'no-ipt-conntrack' => \$no_ipt_conntrack, # Don't use iptables connection
-                                        # tracking (falls back to ACK flag test).
-    'Conntrack-state=s' => \$conntrack_state, ### Specify conntrack state for
-                                              ### 'flow' keyword emulation
-                                              ### (default is ESTABLISHED).
-    'no-ipt-INPUT'   => \$no_ipt_input, # Disable fwsnort rules processed via
-                                        # the INPUT chain.
-    'no-ipt-OUTPUT'  => \$no_ipt_output, # Disable fwsnort rules processed via
-                                         # the OUTPUT chain.
-    'no-ipt-FORWARD' => \$no_ipt_forward, # Disable fwsnort rules processed via
-                                          # the FORWARD chain.
-    'no-ipt-comments' => \$no_ipt_comments, # Don't include msg fields
-                                            # with the comment match
-    'no-ipt-rule-nums' => \$no_ipt_rule_nums, # Exclude rule numbers from
-                                              # logging prefixes.
-    'no-exclude-lo'  => \$no_exclude_loopback, # include loopback interface
-    'no-log-ip-opts' => \$no_ipt_log_ip_opts, # Don't log IP options
-    'no-log-tcp-opts' => \$no_ipt_log_tcp_opts, # Don't log TCP options
-    'restrict-intf=s' => \$ipt_restrict_intf, # Restrict iptables rules to an
-                                        # individual interface (supports a
-                                        # comma separate list).
-    'update-rules'   => \$update_rules, # Download latest snort rules.
-    'rules-url=s'    => \$rules_url,    # Specify rules URL.
-    'add-deleted'    => \$add_deleted,  # Add deleted rules.
-    'strict'         => \$strict,       # Strict mode.
-    'debug'          => \$debug,        # Debug mode.
-    'dumper'         => \$dumper,       # Dumper mode for IPTables::Parse
-                                        # hashes.
-    'Dump-conf'      => \$dump_conf,    # Display config variables
-    'Dump-ipt'       => \$dump_ipt,     # Dump iptables rules on STDOUT.
-    'Dump-snort'     => \$dump_snort,   # Dump snort rules on STDOUT.
-    'config=s'       => \$fwsnort_conf, # Manually specify the config file
-    'Ulog'           => \$ulog_mode,    # Force ULOG mode.
-    'ulog-nlgroup=i' => \$ulog_nlgroup, # Specify the ulogd nl group.
-    'QUEUE'          => \$queue_mode,   # Specify QUEUE mode; this pulls out
-                                        #  all kernel-matchable features from
-                                        #  original Snort rules and creates a
-                                        #  a modified rule set based on this.
-    'NFQUEUE'        => \$nfqueue_mode, # Same as QUEUE mode, except use the
-                                        #  updated NFQUEUE target.
-    'queue-rules-dir=s' => \$queue_rules_dir, # Change the path to the generated
-                                              # rules directory in --QUEUE or
-                                              # --NFQUEUE mode.
-    'queue-num=i'    => \$nfqueue_num,  # Specifies the NFQUEUE number.
-    'Home-dir=s'     => \$cmdl_homedir,
-    'Last-cmd'       => \$run_last,
-    'lib-dir=s'      => \$lib_dir,      # Specify path to lib directory.
-    'verbose'        => \$verbose,
-    'logfile=s'      => \$logfile,      # Specify the logfile path.
-    'stdout'         => \$stdout,       # Print log messages to stdout.
-    'Version'        => \$print_ver,
-    'help'           => \$help
-));
-
-&usage(0) if $help;
-
 ### see if we are running as root
 &is_root();
 
@@ -650,8 +541,6 @@ if ($ipt_rule_ctr > 1) {
 } else {
     die "[-] No Snort rules could be translated, exiting\n";
 }
-
-&save_args() unless $run_last;
 
 &write_save_file();
 
@@ -3477,7 +3366,118 @@ sub get_kernel_ver() {
 
 sub handle_cmd_line() {
 
+    ### make Getopts case sensitive
+    Getopt::Long::Configure('no_ignore_case');
+
+    die "[*] Use --help for usage information.\n" unless (GetOptions(
+        'ipt-apply'      => \$ipt_exec,     # Apply the generated ruleset.
+        'ipt-drop'       => \$ipt_drop,     # Add iptables DROP rules.
+        'ipt-reject'     => \$ipt_reject,   # Add iptables REJECT rules.
+        'ipt-script=s'   => \$ipt_script,   # Manually specify the path to the
+                                            # generated iptables script.
+        'ipt-log-tcp-seq' => \$ipt_log_tcp_seq, # Log TCP seq/ack values.
+        'ipt-flush'      => \$ipt_flush,    # Flush any existing fwsnort chains.
+        'ipt-check-capabilities' =>\$ipt_check_capabilities, # Check capabilities
+                                                             # and exit.
+        'Flush'          => \$ipt_flush,    # Synonym for --ipt-flush
+        'ipt-list'       => \$ipt_list,     # List any existing fwsnort chains.
+        'List'           => \$ipt_list,     # Synonym for --ipt-list
+        'ipt-del'        => \$ipt_del_chains, # Delete fwsnort chains.
+        'ip6tables'      => \$enable_ip6tables, # Turn on ip6tables mode.
+        '6'              => \$enable_ip6tables, # Synonym for --ip6tables.
+        'X'              => \$ipt_del_chains, # Synonym for --ipt-del.
+        'ipt-file=s'     => \$ipt_file,     # Read iptables policy from a file.
+        'Home-net=s'     => \$home_net,     # Manually specify home network.
+        'External-net=s' => \$ext_net,      # Manually specify external network.
+        'snort-sid=s'    => \$include_sids, # Parse only these particular snort rules.
+        'snort-sids=s'   => \$include_sids, # Synonum for --snort-sid
+        'string-match-alg=s' => \$string_match_alg,
+        'exclude-sid=s'  => \$exclude_sids, # Exclude these particular snort rules.
+        'snort-conf=s'   => \$snort_conf_file, # Get HOME_NET, etc. vars from
+                                            # existing Snort config file.
+        'include-perl-triggers' => \$include_perl_triggers, # perl commands to
+                                            # trigger signature matches.
+        'include-type=s' => \$rules_types,  # Process only this type of snort rule
+                                            # (e.g. "ddos")
+        'exclude-type=s' => \$exclude_types,# Exclude specified types (e.g. "ddos").
+        'include-regex=s' => \$include_re,  # Include only those signatures that
+                                            # match the specified regex.
+        'include-re-caseless' => \$include_re_caseless, # make include regex case
+                                                        # insensitive
+        'exclude-regex=s' => \$exclude_re,  # Exclude those signatures that
+                                            # match the specified regex.
+        'exclude-re-caseless' => \$exclude_re_caseless, # make exclude regex case
+                                                        # insensitive
+        'snort-rdir=s'   => \$rules_dir,    # Manually specify the snort rules
+                                            # directory.
+        'snort-rfile=s'  => \$rules_file,   # Translate a single rules file.
+        'no-pcre'        => \$no_pcre,      # Make no attempt to translate PCRE's.
+        'no-addresses'   => \$no_addr_check, # Don't check local ifconfig output.
+        'no-ipt-sync'    => \$no_ipt_sync,  # Do not sync with the iptables policy.
+        'no-ipt-log'     => \$no_ipt_log,   # Do not generate iptables logging rules.
+        'no-ipt-test'    => \$no_ipt_test,  # Don't perform any checks against
+                                            # iptables.
+        'no-ipt-jumps'   => \$no_ipt_jumps, # Don't jump packets from the INPUT or
+                                            # FORWARD chains.
+        'no-ipt-conntrack' => \$no_ipt_conntrack, # Don't use iptables connection
+                                            # tracking (falls back to ACK flag test).
+        'Conntrack-state=s' => \$conntrack_state, ### Specify conntrack state for
+                                                  ### 'flow' keyword emulation
+                                                  ### (default is ESTABLISHED).
+        'no-ipt-INPUT'   => \$no_ipt_input, # Disable fwsnort rules processed via
+                                            # the INPUT chain.
+        'no-ipt-OUTPUT'  => \$no_ipt_output, # Disable fwsnort rules processed via
+                                             # the OUTPUT chain.
+        'no-ipt-FORWARD' => \$no_ipt_forward, # Disable fwsnort rules processed via
+                                              # the FORWARD chain.
+        'no-ipt-comments' => \$no_ipt_comments, # Don't include msg fields
+                                                # with the comment match
+        'no-ipt-rule-nums' => \$no_ipt_rule_nums, # Exclude rule numbers from
+                                                  # logging prefixes.
+        'no-exclude-lo'  => \$no_exclude_loopback, # include loopback interface
+        'no-log-ip-opts' => \$no_ipt_log_ip_opts, # Don't log IP options
+        'no-log-tcp-opts' => \$no_ipt_log_tcp_opts, # Don't log TCP options
+        'restrict-intf=s' => \$ipt_restrict_intf, # Restrict iptables rules to an
+                                            # individual interface (supports a
+                                            # comma separate list).
+        'update-rules'   => \$update_rules, # Download latest snort rules.
+        'rules-url=s'    => \$rules_url,    # Specify rules URL.
+        'add-deleted'    => \$add_deleted,  # Add deleted rules.
+        'strict'         => \$strict,       # Strict mode.
+        'debug'          => \$debug,        # Debug mode.
+        'dumper'         => \$dumper,       # Dumper mode for IPTables::Parse
+                                            # hashes.
+        'Dump-conf'      => \$dump_conf,    # Display config variables
+        'Dump-ipt'       => \$dump_ipt,     # Dump iptables rules on STDOUT.
+        'Dump-snort'     => \$dump_snort,   # Dump snort rules on STDOUT.
+        'config=s'       => \$fwsnort_conf, # Manually specify the config file
+        'Ulog'           => \$ulog_mode,    # Force ULOG mode.
+        'ulog-nlgroup=i' => \$ulog_nlgroup, # Specify the ulogd nl group.
+        'QUEUE'          => \$queue_mode,   # Specify QUEUE mode; this pulls out
+                                            #  all kernel-matchable features from
+                                            #  original Snort rules and creates a
+                                            #  a modified rule set based on this.
+        'NFQUEUE'        => \$nfqueue_mode, # Same as QUEUE mode, except use the
+                                            #  updated NFQUEUE target.
+        'queue-rules-dir=s' => \$queue_rules_dir, # Change the path to the generated
+                                                  # rules directory in --QUEUE or
+                                                  # --NFQUEUE mode.
+        'queue-num=i'    => \$nfqueue_num,  # Specifies the NFQUEUE number.
+        'Home-dir=s'     => \$cmdl_homedir,
+        'Last-cmd'       => \$run_last,
+        'lib-dir=s'      => \$lib_dir,      # Specify path to lib directory.
+        'verbose'        => \$verbose,
+        'logfile=s'      => \$logfile,      # Specify the logfile path.
+        'stdout'         => \$stdout,       # Print log messages to stdout.
+        'Version'        => \$print_ver,
+        'help'           => \$help
+    ));
+
     &get_homedir();
+
+    &save_args() unless $run_last;
+
+    &usage(0) if $help;
 
     ### Print the version number and exit if -V given on the command line.
     if ($print_ver) {
