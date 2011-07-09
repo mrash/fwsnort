@@ -298,6 +298,14 @@ Do not jump packets from the iptables FORWARD chain to the
 .B fwsnort
 chains.
 .TP
+.BR \-\^\-no-fast-pattern-ordering
+Cause
+.B fwsnort
+to not try to reorder pattern matches to process the longest pattern first.
+The Snort
+.I fast_pattern
+keyword is also ignored if this option is specified.
+.TP
 .BR \-H ", " \-\^\-Home-net\ \<network/mask>
 Specify the internal network instead of having
 .B fwsnort

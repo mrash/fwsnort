@@ -422,6 +422,7 @@ my $include_perl_triggers = 0;
 my $duplicate_last_build  = 0;
 my $ipt_max_str_len = 1;
 my $ipt_max_log_prefix_len = 1;
+my $no_fast_pattern_ordering = 0;
 
 ### to be added to the string match extension
 my $ipt_has_string_payload_offset_opt = 0;
@@ -939,8 +940,13 @@ sub parse_rule_options() {
             }
 
         } elsif ($opt eq 'fast_pattern') {
-            $patterns[$#patterns]->{'fast_pattern'} = 1;
-
+            if ($no_fast_pattern_ordering) {
+                ### force it to be the first pattern so no reordering
+                ### will happen
+                $patterns[0]->{'fast_pattern'} = 1;
+            } else {
+                $patterns[$#patterns]->{'fast_pattern'} = 1;
+            }
         } else {
             for my $key qw/offset depth within distance/ {
                 if ($opt eq $key) {
@@ -2002,6 +2008,10 @@ sub build_content_matches() {
     my @content_fast_pattern_order = ();
 
     $perl_trigger_command = q|perl -e 'print "| if $include_perl_triggers;
+
+    if ($no_fast_pattern_ordering) {
+        $patterns_ar->[0]->{'fast_pattern'} = 1;
+    }
 
     for (my $index=0; $index <= $#$patterns_ar; $index++) {
         if ($patterns_ar->[$index]->{'fast_pattern'}) {
@@ -3437,6 +3447,10 @@ sub handle_cmd_line() {
         'no-exclude-lo'  => \$no_exclude_loopback, # include loopback interface
         'no-log-ip-opts' => \$no_ipt_log_ip_opts, # Don't log IP options
         'no-log-tcp-opts' => \$no_ipt_log_tcp_opts, # Don't log TCP options
+        'no-fast-pattern-ordering' => \$no_fast_pattern_ordering, ### Don't alter
+                                              # pattern match ordering based on
+                                              # pattern length, and ignore the
+                                              # explicit 'fast_pattern' keyword
         'restrict-intf=s' => \$ipt_restrict_intf, # Restrict iptables rules to an
                                             # individual interface (supports a
                                             # comma separate list).
