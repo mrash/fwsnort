@@ -422,7 +422,7 @@ my $include_perl_triggers = 0;
 my $duplicate_last_build  = 0;
 my $ipt_max_str_len = 1;
 my $ipt_max_log_prefix_len = 1;
-my $no_fast_pattern_ordering = 0;
+my $no_fast_pattern_order = 0;
 
 ### to be added to the string match extension
 my $ipt_has_string_payload_offset_opt = 0;
@@ -940,7 +940,7 @@ sub parse_rule_options() {
             }
 
         } elsif ($opt eq 'fast_pattern') {
-            if ($no_fast_pattern_ordering) {
+            if ($no_fast_pattern_order) {
                 ### force it to be the first pattern so no reordering
                 ### will happen
                 $patterns[0]->{'fast_pattern'} = 1;
@@ -2006,7 +2006,7 @@ sub build_content_matches() {
 
     $perl_trigger_command = q|perl -e 'print "| if $include_perl_triggers;
 
-    if ($no_fast_pattern_ordering) {
+    if ($no_fast_pattern_order) {
         $patterns_ar->[0]->{'fast_pattern'} = 1;
     }
 
@@ -3364,6 +3364,12 @@ sub fwsnort_init() {
             = $snort_opts{'filter'}{'pcre'};
         delete $snort_opts{'filter'}{'pcre'};
     }
+
+    if ($no_fast_pattern_order) {
+        $snort_opts{'ignore'}{'fast_pattern'}
+            = $snort_opts{'filter'}{'fast_pattern'}{'regex'};
+        delete $snort_opts{'filter'}{'fast_pattern'};
+    }
     return;
 }
 
@@ -3455,7 +3461,7 @@ sub handle_cmd_line() {
         'no-exclude-lo'  => \$no_exclude_loopback, # include loopback interface
         'no-log-ip-opts' => \$no_ipt_log_ip_opts, # Don't log IP options
         'no-log-tcp-opts' => \$no_ipt_log_tcp_opts, # Don't log TCP options
-        'no-fast-pattern-ordering' => \$no_fast_pattern_ordering, ### Don't alter
+        'no-fast-pattern-order' => \$no_fast_pattern_order, ### Don't alter
                                               # pattern match ordering based on
                                               # pattern length, and ignore the
                                               # explicit 'fast_pattern' keyword
@@ -4399,6 +4405,8 @@ Options:
     --no-ipt-INPUT            - Exclude INPUT chain processing.
     --no-ipt-OUTPUT           - Exclude OUTPUT chain processing.
     --no-ipt-FORWARD          - Exclude FORWARD chain processing.
+    --no-fast-pattern-order   - Do not reorder patterns based on length,
+                                and ignore the 'fast_pattern' keyword
     --no-log-ip-opts          - Do not add --log-ip-options to LOG
                                 rules.
     --no-log-tcp-opts         - Do not add --log-tcp-options to LOG
