@@ -250,7 +250,7 @@ my %snort_opts = (
         'sameip'    => '[\s;]sameip\s*;',
         'regex'     => '[\s;]regex:\s*(.*?)\s*;',
         'isdataat'  => '[\s;]isdataat:\s*(.*?)\s*;',
-        'threshold' => '[\s;]threshold:\s*.*?\s*;'                ### FIXME --limit
+        'threshold' => '[\s;]threshold:\s*.*?\s*;',               ### FIXME --limit
         'detection_filter' => '[\s;]detection_filter:\s*.*?\s*;'  ### FIXME --limit
     },
 
@@ -783,8 +783,10 @@ sub parse_snort_rules() {
             }
 
             ### parse options portion of Snort rule
-            my ($parse_rv, $opts_hr, $content_ar, $fast_pattern, $offsets_hr)
-                            = &parse_rule_options($rule_options, $line_num);
+            my ($parse_rv, $opts_hr, $patterns_ar)
+                            = &parse_rule_options($rule_options,
+                                    &get_avg_hdr_len($hdr_hr),
+                                    $line_num);
 
             unless ($parse_rv) {
                 $unsup_ctr++;
@@ -840,7 +842,7 @@ sub parse_snort_rules() {
             ### construct the equivalent iptables rule and add it
             ### to $config{'FWSNORT_SCRIPT'}
             my ($ipt_rv, $num_rules) = &ipt_build($hdr_hr,
-                    $opts_hr, $content_ar, $fast_pattern, $offsets_hr, $rule);
+                    $opts_hr, $patterns_ar, $rule);
 
             if ($ipt_rv) {
                 $ipt_apply_ctr++;
@@ -914,30 +916,27 @@ sub parse_snort_rules() {
 }
 
 sub parse_rule_options() {
-    my ($rule_options, $line_num) = @_;
+    my ($rule_options, $avg_hdr_len, $line_num) = @_;
 
-    my $sid;
-    my %opts    = ();
-    my @content = ();
-    my %offsets = ();
-    my $fast_pattern = -1;
+    my $sid      = -1;
+    my %opts     = ();
+    my @patterns = ();
 
     ### get the sid here for logging purposes
     if ($rule_options =~ /$snort_opts{'logprefix'}{'sid'}/) {
         $sid = $1;
     } else {
-        return 0, \%opts, \@content, $fast_pattern, \%offsets;
+        return 0, \%opts, \@patterns;
     }
 
     if (%exclude_sids) {
-        return 0, \%opts, \@content, $fast_pattern, \%offsets
-            if defined $exclude_sids{$sid};
+        return 0, \%opts, \@patterns if defined $exclude_sids{$sid};
     }
     if (%include_sids) {
         if (defined $include_sids{$sid}) {
             &logr("[+] matched sid:$sid: $rule_options");
         } else {
-            return 0, \%opts, \@content, $fast_pattern, \%offsets;
+            return 0, \%opts, \@patterns;
         }
     }
 
@@ -950,16 +949,15 @@ sub parse_rule_options() {
             my $opt = $1;
             my $val = $2;
             if ($opt eq 'content' or $opt eq 'uricontent') {
-                return 0, \%opts, \@content, $fast_pattern, \%offsets
-                    unless $val =~ /"$/;
+                return 0, \%opts, \@patterns unless $val =~ /"$/;
                 $val =~ s/^"//;
                 $val =~ s/"$//;
-                push @content, $val;
+                push @patterns, $val;
                 $found_content = 1;
             }
             for my $key qw/offset depth within distance/ {
                 if ($opt eq $key) {
-                    $offsets{$#content}{$key} = $val;
+#                    $offsets{$#content}{$key} = $val;
                 }
             }
         }
@@ -973,7 +971,7 @@ sub parse_rule_options() {
                 print "[-] SID: $sid does not contain 'content' ",
                     "or 'uricontent'\n";
             }
-            return 0, \%opts, \@content, $fast_pattern, \%offsets;
+            return 0, \%opts, \@patterns;
         }
 
     } else {
@@ -993,14 +991,14 @@ sub parse_rule_options() {
                 print "[-] SID: $sid contain the unsupported option(s): ",
                     "$found_unsupported at line: $line_num\n";
             }
-            return 0, \%opts, \@content, $fast_pattern, \%offsets;
+            return 0, \%opts, \@patterns;
         }
     }
 
     if ($rule_options =~ /ip_proto\s*:.*ip_proto\s*:/) {
         &logr("[-] SID: $sid, unsupported multiple ip_proto fields at " .
             "line: $line_num, skipping.");
-        return 0, \%opts, \@content, $fast_pattern, \%offsets;
+        return 0, \%opts, \@patterns;
     }
 
     for my $opt (keys %{$snort_opts{'filter'}}) {
@@ -1011,16 +1009,29 @@ sub parse_rule_options() {
         }
     }
 
-    while ($rule_options =~ /(\w+):?((?:\s*.*?[^\x5c]?));/g) {
+    while ($rule_options =~ /(\w+):?\s*((?:.*?[^\x5c]?))\s*;/g) {
         my $opt = $1;
         my $val = 1;
         $val = $2 if defined $2;  ### some keywords may not have an argument
+
         if ($opt eq 'content' or $opt eq 'uricontent') {
-            return 0, \%opts, \@content, $fast_pattern, \%offsets
-                unless $val =~ /"$/;
+            return 0, \%opts, \@patterns unless $val =~ /"$/;
             $val =~ s/^\s*"//;
             $val =~ s/"\s*$//;
-            push @content, $val;
+            return 0, \%opts, \@patterns unless $val =~ /\S/;
+
+            ### convert the string into a form that is more compatible
+            ### for iptables
+            my ($rv, $log_str, $ipt_pattern_hr)
+                    = &convert_pattern_for_iptables($val);
+
+            if ($rv) {
+                push @patterns, $ipt_pattern_hr;
+            } else {
+                &logr("[-] SID: $sid, $log_str");
+                return 0, \%opts, \@patterns;
+            }
+
         } elsif ($opt eq 'pcre') {
 
             $val =~ s|^\s*"/||;
@@ -1031,19 +1042,39 @@ sub parse_rule_options() {
             my ($pcre_rv, $pcre_strings_ar) = &parse_pcre($val);
             if ($pcre_rv) {
                 for my $str (@$pcre_strings_ar) {
-                    push @content, $str;
+                    push @patterns, $str;
                 }
             } else {
                 &logr("[-] SID: $sid, unsupported complex pcre: $val");
-                return 0, \%opts, \@content, $fast_pattern, \%offsets;
+                return 0, \%opts, \@patterns;
             }
+
         } elsif ($opt eq 'fast_pattern') {
-            $fast_pattern = $#content;
+            $patterns[$#patterns]->{'fast_pattern'} = 1;
+
         } else {
             for my $key qw/offset depth within distance/ {
                 if ($opt eq $key) {
-                    $offsets{$#content}{$key} = $val;
+                    my ($offsets_rv, $log_str)
+                            = &add_offsets_for_iptables(\@patterns,
+                                $avg_hdr_len, $key, $val);
+
+                    unless ($offsets_rv) {
+                        &logr("[-] SID: $sid, $log_str");
+                        return 0, \%opts, \@patterns;
+                    }
+                    last;
                 }
+            }
+        }
+    }
+
+    ### make sure no offset is past depth
+    for my $ar (@patterns) {
+        if (defined $ar->{'offset'} and defined $ar->{'depth'}) {
+            if ($ar->{'depth'} < $ar->{'offset'}) {
+                &logr("[-] SID: $sid, depth < offset");
+                return 0, \%opts, \@patterns;
             }
         }
     }
@@ -1061,7 +1092,7 @@ sub parse_rule_options() {
                     and not defined $snort_opts{'ignore'}{$option}) {
                 &logr("[-] SID: $sid bad option: \"$option\" at line: $line_num " .
                     "-- $rule_options");
-                return 0, \%opts, \@content, $fast_pattern, \%offsets;
+                return 0, \%opts, \@patterns;
             }
         }
 
@@ -1073,31 +1104,31 @@ sub parse_rule_options() {
                 and $opts{'ipopts'} ne 'any') {
             &logr("[-] SID: $sid, unsupported ipopts field at " .
                 "line: $line_num, skipping.");
-            return 0, \%opts, \@content, $fast_pattern, \%offsets;
+            return 0, \%opts, \@patterns;
         }
 
         if (defined $opts{'itype'}
                 and ($opts{'itype'} =~ m|<| or $opts{'itype'} =~ m|>|)) {
             &logr("[-] SID: $sid, unsupported range operator in itype field " .
                 "line: $line_num, skipping.");
-            return 0, \%opts, \@content, $fast_pattern, \%offsets;
+            return 0, \%opts, \@patterns;
         }
         if (defined $opts{'icode'}
                 and ($opts{'icode'} =~ m|<| or $opts{'icode'} =~ m|>|)) {
             &logr("[-] SID: $sid, unsupported range operator in icode field " .
                 "line: $line_num, skipping.");
-            return 0, \%opts, \@content, $fast_pattern, \%offsets;
+            return 0, \%opts, \@patterns;
         }
         if (defined $opts{'ip_proto'}
                 and ($opts{'ip_proto'} =~ m|<| or $opts{'ip_proto'} =~ m|>|)) {
             &logr("[-] SID: $sid, unsupported range operator in ip_proto field " .
                 "line: $line_num, skipping.");
-            return 0, \%opts, \@content, $fast_pattern, \%offsets;
+            return 0, \%opts, \@patterns;
         }
     }
 
     ### success
-    return 1, \%opts, \@content, $fast_pattern, \%offsets;
+    return 1, \%opts, \@patterns;
 }
 
 sub parse_rule_hdr() {
@@ -1201,16 +1232,16 @@ sub parse_rule_hdr() {
 sub parse_pcre() {
     my $pcre = shift;
     my $rv = 0;
-    my @strings = ();
+    my @patterns = ();
 
     if ($pcre =~ m|^\w+$|) {
-        push @strings, $pcre;
+        push @patterns, (&convert_pattern_for_iptables($pcre))[2];
         $rv = 1;
     } elsif ($pcre =~ m|UNION\x5c\x73\x2bSELECT|) {
         ### a bunch of Emerging Threats rules contain "UNION\s+SELECT"
         ### as a PCRE.  Sure, the translation below can be evaded, but
         ### it is better than nothing.
-        push @strings, 'UNION SELECT';
+        push @patterns, (&convert_pattern_for_iptables('UNION SELECT'))[2];
         $rv = 1;
     } else {
         my @ar = ();
@@ -1242,16 +1273,16 @@ sub parse_pcre() {
                 $basic =~ s/\|5c 3a\|//;
 
                 if ($basic =~ /^[\w\x20]+$/) {
-                    push @strings, $part;
+                    push @patterns, (&convert_pattern_for_iptables($part))[2];
                 } elsif ($basic eq 'User-Agent') {
-                    push @strings, $part;
+                    push @patterns, (&convert_pattern_for_iptables($part))[2];
                 } else {
                     $rv = 0;
                 }
             }
         }
     }
-    return $rv, \@strings;
+    return $rv, \@patterns;
 }
 
 sub queue_get_rule() {
@@ -1565,8 +1596,7 @@ sub cache_ipt_policy() {
 }
 
 sub ipt_build() {
-    my ($snort_hdr_hr, $snort_opts_hr,
-            $content_ar, $fast_pattern, $offsets_hr, $orig_snort_rule) = @_;
+    my ($snort_hdr_hr, $snort_opts_hr, $patterns_ar, $orig_snort_rule) = @_;
 
     my $found_rule = 0;
     my $num_rules  = 0;
@@ -1727,9 +1757,7 @@ sub ipt_build() {
                 $rule,
                 $snort_hdr_hr,
                 $snort_opts_hr,
-                $content_ar,
-                $fast_pattern,
-                $offsets_hr,
+                $patterns_ar,
                 $orig_snort_rule,
                 $flow_established,
                 $add_snort_comment,
@@ -1796,9 +1824,9 @@ sub get_local_addrs() {
 }
 
 sub ipt_build_rule() {
-    my ($chain, $fwsnort_chain, $rule, $hdr_hr, $opts_hr, $content_ar,
-            $fast_pattern, $offsets_hr, $orig_snort_rule, $flow_logging_prefix,
-            $add_snort_comment, $add_perl_trigger) = @_;
+    my ($chain, $fwsnort_chain, $rule, $hdr_hr, $opts_hr, $patterns_ar,
+            $orig_snort_rule, $flow_logging_prefix, $add_snort_comment,
+            $add_perl_trigger) = @_;
 
     ### $chain is used only to see whether or not we need to add the
     ### rule to the iptables script based on whether the built-in chain
@@ -1851,17 +1879,17 @@ sub ipt_build_rule() {
         $rule .= " $negate$ipt_hdr_opts{'dport'} $dport";
     }
 
-    my $rv = &ipt_build_opts($rule, $hdr_hr, $opts_hr, $content_ar,
-        $fast_pattern, $offsets_hr, $orig_snort_rule, $flow_logging_prefix,
-        $chain, $fwsnort_chain, $add_snort_comment, $add_perl_trigger);
+    my $rv = &ipt_build_opts($rule, $hdr_hr, $opts_hr, $patterns_ar,
+        $orig_snort_rule, $flow_logging_prefix, $chain, $fwsnort_chain,
+        $add_snort_comment, $add_perl_trigger);
 
     return $rv;
 }
 
 sub ipt_build_opts() {
-    my ($rule, $hdr_hr, $opts_hr, $content_ar, $fast_pattern,
-            $offsets_hr, $orig_snort_rule, $flow_logging_prefix,
-            $chain, $fwsnort_chain, $add_snort_comment, $add_perl_trigger) = @_;
+    my ($rule, $hdr_hr, $opts_hr, $patterns_ar, $orig_snort_rule,
+            $flow_logging_prefix, $chain, $fwsnort_chain, $add_snort_comment,
+            $add_perl_trigger) = @_;
 
     ### append tcp flags
     if (defined $opts_hr->{'flags'}) {
@@ -1937,21 +1965,7 @@ sub ipt_build_opts() {
         }
     }
 
-    my $avg_hdr_len = $config{'AVG_IP_HEADER_LEN'};
-    if (defined $hdr_hr->{'proto'}) {
-        if ($hdr_hr->{'proto'} =~ /udp/i) {
-            $avg_hdr_len += $UDP_HDR_LEN;  ### udp header is 8 bytes
-        } elsif ($hdr_hr->{'proto'} =~ /icmp/i) {
-            $avg_hdr_len += $ICMP_HDR_LEN;  ### icmp header is 8 bytes
-        } else {
-            ### default to TCP
-            $avg_hdr_len += $config{'AVG_TCP_HEADER_LEN'};
-        }
-    } else {
-        ### don't know what the average transport layer (if there
-        ### is one) length will be; add 10 bytes just to be safe
-        $avg_hdr_len += 10;
-    }
+    my $avg_hdr_len = &get_avg_hdr_len($hdr_hr);
 
     ### append dsize option (requires CONFIG_IP_NF_MATCH_LENGTH)
     if (defined $opts_hr->{'dsize'}) {
@@ -1985,10 +1999,9 @@ sub ipt_build_opts() {
     my $ipt_content_criteria = 0;
     my $perl_trigger_str = '';
 
-    if ($#$content_ar > -1) {
+    if ($#$patterns_ar > -1) {
         ($ipt_content_criteria, $perl_trigger_str)
-            = &build_content_matches($opts_hr, $content_ar, $fast_pattern,
-                    $offsets_hr, $avg_hdr_len);
+            = &build_content_matches($opts_hr, $patterns_ar);
 
         return 0 unless $ipt_content_criteria;
         $rule .= $ipt_content_criteria;
@@ -2091,84 +2104,53 @@ sub ipt_build_opts() {
 }
 
 sub build_content_matches() {
-    my ($opts_hr, $content_ar, $fast_pattern,
-        $offsets_hr, $avg_hdr_len) = @_;
+    my ($opts_hr, $patterns_ar) = @_;
 
-    my $fast_pattern_index = 0;
+    my $fast_pattern_index   = 0;
+    my $fast_pattern_is_set  = 0;
     my $ipt_content_criteria = '';
     my $perl_trigger_command = '';
+    my @content_fast_pattern_order = ();
 
     $perl_trigger_command = q|perl -e 'print "| if $include_perl_triggers;
 
-    my @content_fast_pattern_order = ();
+    for (my $index=0; $index <= $#$patterns_ar; $index++) {
+        if ($patterns_ar->[$index]->{'fast_pattern'}) {
+            $fast_pattern_index  = $index;
+            $fast_pattern_is_set = 1;
+            last;
+        }
+    }
 
-    if ($fast_pattern == -1) {
+    unless ($fast_pattern_is_set) {
         ### in this case, the 'fast_pattern' option was not used, so pick the
         ### longest pattern to match first (this should help with performance
         ### of signature matches on average)
         my $max_len = 0;
         my $max_len_index = 0;
-        for (my $index=0; $index <= $#$content_ar; $index++) {
-            if (length($content_ar->[$index]) > $max_len) {
-                $max_len = &get_content_len($content_ar->[$index]);
+        for (my $index=0; $index <= $#$patterns_ar; $index++) {
+            if ($patterns_ar->[$index]->{'length'} > $max_len) {
+                $max_len = $patterns_ar->[$index]->{'length'};
                 $max_len_index = $index;
             }
         }
         $fast_pattern_index = $max_len_index;
-    } else {
-        $fast_pattern_index = $fast_pattern;
     }
 
-    $content_fast_pattern_order[0] = $content_ar->[$fast_pattern_index];
-    for (my $i=0; $i <= $#$content_ar; $i++) {
+    $content_fast_pattern_order[0] = $patterns_ar->[$fast_pattern_index];
+    for (my $i=0; $i <= $#$patterns_ar; $i++) {
         next if $i == $fast_pattern_index;
-        push @content_fast_pattern_order, $content_ar->[$i];
+        push @content_fast_pattern_order, $patterns_ar->[$i];
     }
 
     for (my $i=0; $i <= $#content_fast_pattern_order; $i++) {
 
-        my $content_str = $content_fast_pattern_order[$i];
-
-        my $neg_match = 0;
-        if ($content_str =~ /\s*\!\s*"/) {
-            $content_str =~ s/\s*\!\s*"//;
-            $neg_match = 1;
-        }
-
-        $content_str =~ s/`/|60|/g;     ### ` -> |60|
-        $content_str =~ s/'/|27|/g;     ### ' -> |27|
-        $content_str =~ s/\x2d/|2d|/g;  ### - -> |2d|
-        $content_str =~ s/\x24/|24|/g;  ### $ -> |24|
-
-        ### convert all escaped chars to their hex equivalents
-        $content_str =~ s/\x5c(.)/sprintf "|%02x|", (ord($1))/eg;
-
-        my $ctr = 0;
-        while ($content_str =~ m/\|\|/) {
-            ### consolidate consecutive hex blocks
-            if ($content_str =~ /\|.+?\|\|.+?\|/) {
-                $content_str =~ s/\|(.+?)\|\|(.+?)\|/|$1 $2|/;
-            }
-            $ctr++;
-            last if $ctr > 10;
-        }
-
-        ### remove all spaces between hex codes (they simply waste space
-        ### on the command line, and they aren't part of the string to
-        ### search in network traffic anyway).
-        $content_str = &consolidate_hex_spaces($content_str);
-
-        ### handles length of hex blocks
-        my $content_len = &get_content_len($content_str);
-        if ($content_len >= $ipt_max_str_len
-                or $content_len >= $config{'MAX_STRING_LEN'}) {
-            $ipt_content_criteria = '';
-            last;
-        }
+        my $pattern_hr = $content_fast_pattern_order[$i];
+        my $content_str = $pattern_hr->{'ipt_pattern'};
 
         if ($content_str =~ /\|.+\|/) {
             ### there is hex data in the content
-            if ($neg_match) {
+            if ($pattern_hr->{'negative_match'}) {
                 $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
                     {'content'}{'iptopt'} . ' ' .
                     qq{! --hex-string "$content_str"};
@@ -2179,7 +2161,7 @@ sub build_content_matches() {
             }
         } else {
             ### there is no hex data in the content
-            if ($neg_match) {
+            if ($pattern_hr->{'negative_match'}) {
                 $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
                     {'content'}{'iptopt'} . ' ' .
                     qq{! --string "$content_str"};
@@ -2201,105 +2183,56 @@ sub build_content_matches() {
                         .= qq{ --replace-string "$replace_str"};
             }
         }
+
         if ($kernel_ver ne '2.4') {
             $ipt_content_criteria .= " --algo $string_match_alg";
 
             ### see if we have any offset, depth, distance, or within
             ### criteria
-            if (defined $offsets_hr->{$i}) {
 
-                my $offset   = -1;
-                my $depth    = -1;
-                my $distance = -1;
-                my $within   = -1;
+            if (defined $pattern_hr->{'offset'}) {
 
-                if ($ipt_has_string_payload_offset_opt) {
-                    $offset = $offsets_hr->{$i}->{'offset'}
-                        if defined $offsets_hr->{$i}->{'offset'};
-                    $depth = $offsets_hr->{$i}->{'depth'}
-                        if defined $offsets_hr->{$i}->{'depth'};
-                    $distance = $offsets_hr->{$i}->{'distance'}
-                        if defined $offsets_hr->{$i}->{'distance'};
-                    $within = $offsets_hr->{$i}->{'within'}
-                        if defined $offsets_hr->{$i}->{'within'};
-                } else {
-                    $offset = $offsets_hr->{$i}->{'offset'}
-                            + $avg_hdr_len + $MAC_HDR_LEN
-                        if defined $offsets_hr->{$i}->{'offset'};
-                    $depth = $offsets_hr->{$i}->{'depth'}
-                            + $avg_hdr_len + $MAC_HDR_LEN
-                        if defined $offsets_hr->{$i}->{'depth'};
-                    $distance = $offsets_hr->{$i}->{'distance'}
-                            + $avg_hdr_len + $MAC_HDR_LEN
-                        if defined $offsets_hr->{$i}->{'distance'};
-                    $within = $offsets_hr->{$i}->{'within'}
-                            + $avg_hdr_len + $MAC_HDR_LEN
-                        if defined $offsets_hr->{$i}->{'within'};
-                }
+                $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
+                    {'offset'}{'iptopt'} . " $pattern_hr->{'offset'}";
+                $perl_trigger_command .= 'A'x$pattern_hr->{'offset'}
+                    if $include_perl_triggers;
 
-                if ($offset > -1) {
-                    $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
-                        {'offset'}{'iptopt'} . " $offset";
-                    $perl_trigger_command .= 'A'x$offset
-                        if $include_perl_triggers;
+            } elsif (defined $pattern_hr->{'distance'}) {  ### offset trumps distance
 
-                } elsif ($distance > -1) {  ### offset always trumps distance
-                    ### see if we need to increase the distance based on the
-                    ### length of the previous pattern match and offset
-                    if ($i > 0) {
-                        my $prev = $i-1;
-                        $distance += &get_content_len($content_fast_pattern_order[$prev]);
-                        if (defined $offsets_hr->{$prev}
-                                and defined $offsets_hr->{$i}->{'offset'}) {
-                            $distance += $offsets_hr->{$i}->{'offset'};
-                        }
-                    }
-                    $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
-                        {'distance'}{'iptopt'} . " $distance";
-                    $offset = $distance;
+                $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
+                    {'distance'}{'iptopt'} . " $pattern_hr->{'distance'}";
 
-                    $perl_trigger_command .= 'A'x$distance
-                        if $include_perl_triggers;
-                }
-                if ($depth > -1) {
-                    ### make sure there is room for the pattern
-                    my $min_depth = $content_len;
-                    $min_depth += $offset if $offset > -1;
-                    $depth = $min_depth if $depth < $min_depth;
-
-                    $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
-                        {'depth'}{'iptopt'} . " $depth";
-
-                    $perl_trigger_command .= 'A'x$depth
-                        if $include_perl_triggers;
-
-                } elsif ($within > -1) {  ### depth trumps within
-                    ### the minimum within value must allow room for
-                    ### the current pattern as well as the previous one
-                    my $min_within = $content_len;
-                    if ($i > 0) {
-                        $min_within += &get_content_len($content_fast_pattern_order[$i-1]);
-                    }
-                    $min_within += $offset if $offset > -1;
-                    $within = $min_within if $within < $min_within;
-                    $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
-                        {'within'}{'iptopt'} . " $within";
-
-                    $perl_trigger_command .= 'A'x$within
-                        if $include_perl_triggers;
-                }
-
-                ### if the --payload option is available for
-                ### the string match extension
-                $ipt_content_criteria .= ' --payload'
-                    if $ipt_has_string_payload_offset_opt;
+                $perl_trigger_command .= 'A'x$pattern_hr->{'distance'}
+                    if $include_perl_triggers;
             }
+
+            if (defined $pattern_hr->{'depth'}) {
+
+                $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
+                    {'depth'}{'iptopt'} . " $pattern_hr->{'depth'}";
+
+                $perl_trigger_command .= 'A'x$pattern_hr->{'depth'}
+                    if $include_perl_triggers;
+
+            } elsif (defined $pattern_hr->{'within'}) {  ### depth trumps within
+
+                $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
+                    {'within'}{'iptopt'} . " $pattern_hr->{'within'}";
+
+                $perl_trigger_command .= 'A'x$pattern_hr->{'within'}
+                    if $include_perl_triggers;
+            }
+
+            ### if the --payload option is available for
+            ### the string match extension
+            $ipt_content_criteria .= ' --payload'
+                if $ipt_has_string_payload_offset_opt;
         }
 
         if ($include_perl_triggers) {
             ### now append the perl trigger command bytes
-            if ($neg_match) {
-                $perl_trigger_command .= 'A'x(&get_content_len($content_str));
+            if ($pattern_hr->{'negative_match'}) {
+                $perl_trigger_command .= 'A'x($pattern_hr->{'length'});
             } else {
                 $perl_trigger_command .= &translate_perl_trigger($content_str);
             }
@@ -2311,6 +2244,161 @@ sub build_content_matches() {
     }
 
     return $ipt_content_criteria, $perl_trigger_command;
+}
+
+sub convert_pattern_for_iptables() {
+    my $snort_str = shift;
+
+    my $rv = 0;
+    my $ipt_str = $snort_str;
+    my $log_str = '';
+
+    my %pattern = (
+        'orig_snort_str' => $snort_str,
+        'ipt_pattern'    => '',
+        'negative_match' => 0,
+        'fast_pattern'   => 0
+    );
+
+    if ($ipt_str =~ /\s*\!\s*"/) {
+        $ipt_str =~ s/\s*\!\s*"//;
+        $pattern{'negative_match'} = 1;
+    }
+
+    $ipt_str =~ s/`/|60|/g;     ### ` -> |60|
+    $ipt_str =~ s/'/|27|/g;     ### ' -> |27|
+    $ipt_str =~ s/\x2d/|2d|/g;  ### - -> |2d|
+    $ipt_str =~ s/\x24/|24|/g;  ### $ -> |24|
+
+    ### convert all escaped chars to their hex equivalents
+    $ipt_str =~ s/\x5c(.)/sprintf "|%02x|", (ord($1))/eg;
+
+    my $ctr = 0;
+    while ($ipt_str =~ m/\|\|/) {
+        ### consolidate consecutive hex blocks
+        if ($ipt_str =~ /\|.+?\|\|.+?\|/) {
+            $ipt_str =~ s/\|(.+?)\|\|(.+?)\|/|$1 $2|/;
+        }
+        $ctr++;
+        last if $ctr > 10;
+    }
+
+    ### remove all spaces between hex codes (they simply waste space
+    ### on the command line, and they aren't part of the string to
+    ### search in network traffic anyway).
+    $ipt_str = &consolidate_hex_spaces($ipt_str);
+
+    ### handles length of hex blocks
+    my $content_len = &get_content_len($ipt_str);
+    if ($content_len >= $ipt_max_str_len
+            or $content_len >= $config{'MAX_STRING_LEN'}) {
+        return 0, "pattern too long: $snort_str", \%pattern;
+    }
+
+    $pattern{'ipt_pattern'} = $ipt_str;
+    $pattern{'length'}      = $content_len;
+
+    return 1, $log_str, \%pattern;
+}
+
+sub add_offsets_for_iptables() {
+    my ($patterns_ar, $avg_hdr_len, $opt, $val) = @_;
+
+    my $current_index = $#$patterns_ar;
+    my $prev          = $#$patterns_ar - 1;
+    my $pattern_len   = $patterns_ar->[$current_index]->{'length'};
+
+    ### the option should not be defined - if so, there is a duplicate
+    ### Snort keyword in the signature
+    if (defined $patterns_ar->[$current_index]->{$opt}) {
+        return 0, "duplicate keyword: $opt";
+    }
+
+    ### store the value that was in the original Snort rule
+    $patterns_ar->[$current_index]->{"${opt}_snort_orig"} = $val;
+
+    if ($ipt_has_string_payload_offset_opt) {
+        $patterns_ar->[$current_index]->{$opt} = $val;
+    } else {
+        $patterns_ar->[$current_index]->{$opt}
+            = $val + $avg_hdr_len + $MAC_HDR_LEN;
+    }
+
+    ### account for relative match from the end of the
+    ### previous pattern
+    if ($opt eq 'offset') {
+
+        if (defined $patterns_ar->[$current_index]->{'depth'}) {
+            $patterns_ar->[$current_index]->{'depth'}
+                += $patterns_ar->[$current_index]->{'offset_snort_orig'};
+        }
+
+    } elsif ($opt eq 'distance') {
+
+        if ($prev > -1) {
+            ### see if we need to increase the distance based
+            ### on the length of the previous pattern match and
+            ### offset
+            $patterns_ar->[$current_index]->{'distance'}
+                += $patterns_ar->[$prev]->{'length'};
+        }
+
+    } elsif ($opt eq 'depth') {
+
+        ### make sure there is room for the pattern
+        my $min_depth = $pattern_len;
+        unless ($ipt_has_string_payload_offset_opt) {
+            $min_depth += $avg_hdr_len + $MAC_HDR_LEN;
+        }
+        $patterns_ar->[$current_index]->{'depth'} = $min_depth
+            if $patterns_ar->[$current_index]->{'depth'} < $min_depth;
+
+        if (defined $patterns_ar->[$current_index]->{'offset'}) {
+            $patterns_ar->[$current_index]->{'depth'}
+                += $patterns_ar->[$current_index]->{'offset_snort_orig'};
+        }
+
+    } elsif ($opt eq 'within') {
+
+        ### the minimum within value must allow room for
+        ### the current pattern as well as the previous one
+        my $min_within = $pattern_len;
+        unless ($ipt_has_string_payload_offset_opt) {
+            $min_within += $avg_hdr_len + $MAC_HDR_LEN;
+        }
+        if ($prev > -1) {
+            $min_within += $patterns_ar->[$prev]->{'length'};
+            if (defined $patterns_ar->[$prev]->{'offset_snort_orig'}) {
+                $patterns_ar->[$current_index]->{'within'}
+                    += $patterns_ar->[$prev]->{'offset_snort_orig'};
+            }
+        }
+        $patterns_ar->[$current_index]->{'within'} = $min_within
+            if $patterns_ar->[$current_index]->{'within'} < $min_within;
+    }
+
+    return 1, '';
+}
+
+sub get_avg_hdr_len() {
+    my $hdr_hr = shift;
+
+    my $avg_hdr_len = $config{'AVG_IP_HEADER_LEN'};
+    if (defined $hdr_hr->{'proto'}) {
+        if ($hdr_hr->{'proto'} =~ /udp/i) {
+            $avg_hdr_len += $UDP_HDR_LEN;  ### udp header is 8 bytes
+        } elsif ($hdr_hr->{'proto'} =~ /icmp/i) {
+            $avg_hdr_len += $ICMP_HDR_LEN;  ### icmp header is 8 bytes
+        } else {
+            ### default to TCP
+            $avg_hdr_len += $config{'AVG_TCP_HEADER_LEN'};
+        }
+    } else {
+        ### don't know what the average transport layer (if there
+        ### is one) length will be; add 10 bytes just to be safe
+        $avg_hdr_len += 10;
+    }
+    return $avg_hdr_len;
 }
 
 ### handles length of hex blocks
