@@ -951,9 +951,8 @@ sub parse_rule_options() {
             for my $key qw/offset depth within distance/ {
                 if ($opt eq $key) {
                     my ($offsets_rv, $log_str)
-                            = &add_offsets_for_iptables(\@patterns,
+                            = &define_offsets(\@patterns,
                                 $avg_hdr_len, $key, $val);
-
                     unless ($offsets_rv) {
                         &logr("[-] SID: $sid, $log_str");
                         return 0, \%opts, \@patterns;
@@ -964,14 +963,12 @@ sub parse_rule_options() {
         }
     }
 
-    ### make sure no offset is past depth
-    for my $ar (@patterns) {
-        if (defined $ar->{'offset'} and defined $ar->{'depth'}) {
-            if ($ar->{'depth'} < $ar->{'offset'}) {
-                &logr("[-] SID: $sid, depth < offset");
-                return 0, \%opts, \@patterns;
-            }
-        }
+    ### update offset, depth, within, and distance values for relative
+    ### matches
+    my ($offsets_rv, $log_str) = &update_offsets_relative_matches(\@patterns);
+    unless ($offsets_rv) {
+        &logr("[-] SID: $sid, $log_str");
+        return 0, \%opts, \@patterns;
     }
 
     for my $opt (keys %{$snort_opts{'logprefix'}}) {
@@ -2200,12 +2197,10 @@ sub convert_pattern_for_iptables() {
     return 1, $log_str, \%pattern;
 }
 
-sub add_offsets_for_iptables() {
+sub define_offsets() {
     my ($patterns_ar, $avg_hdr_len, $opt, $val) = @_;
 
     my $current_index = $#$patterns_ar;
-    my $prev          = $#$patterns_ar - 1;
-    my $pattern_len   = $patterns_ar->[$current_index]->{'length'};
 
     ### the option should not be defined - if so, there is a duplicate
     ### Snort keyword in the signature
@@ -2216,6 +2211,8 @@ sub add_offsets_for_iptables() {
     ### store the value that was in the original Snort rule
     $patterns_ar->[$current_index]->{"${opt}_snort_orig"} = $val;
 
+    ### store the value and account for average header length if
+    ### necessary
     if ($ipt_has_string_payload_offset_opt) {
         $patterns_ar->[$current_index]->{$opt} = $val;
     } else {
@@ -2223,59 +2220,70 @@ sub add_offsets_for_iptables() {
             = $val + $avg_hdr_len + $MAC_HDR_LEN;
     }
 
-    ### account for relative match from the end of the
-    ### previous pattern
-    if ($opt eq 'offset') {
+    return 1, '';
+}
 
-        if (defined $patterns_ar->[$current_index]->{'depth'}) {
-            $patterns_ar->[$current_index]->{'depth'}
-                += $patterns_ar->[$current_index]->{'offset_snort_orig'};
-        }
+sub update_offsets_relative_matches() {
+    my $patterns_ar = shift;
 
-    } elsif ($opt eq 'distance') {
+    for (my $i=0; $i <= $#$patterns_ar; $i++) {
 
-        if ($prev > -1) {
-            ### see if we need to increase the distance based
-            ### on the length of the previous pattern match and
-            ### offset
-            $patterns_ar->[$current_index]->{'distance'}
-                += $patterns_ar->[$prev]->{'length'};
-        }
+        my $pat_hr = $patterns_ar->[$i];
+        my $snort_offset   = -1;
+        my $snort_depth    = -1;
+        my $snort_distance = -1;
+        my $snort_within   = -1;
 
-    } elsif ($opt eq 'depth') {
+        $snort_offset = $pat_hr->{'offset_snort_orig'}
+            if defined $pat_hr->{'offset_snort_orig'};
+        $snort_depth = $pat_hr->{'depth_snort_orig'}
+            if defined $pat_hr->{'depth_snort_orig'};
+        $snort_distance = $pat_hr->{'distance_snort_orig'}
+            if defined $pat_hr->{'distance_snort_orig'};
+        $snort_within = $pat_hr->{'within_snort_orig'}
+            if defined $pat_hr->{'within_snort_orig'};
 
-        ### make sure there is room for the pattern
-        my $min_depth = $pattern_len;
-        unless ($ipt_has_string_payload_offset_opt) {
-            $min_depth += $avg_hdr_len + $MAC_HDR_LEN;
-        }
-        $patterns_ar->[$current_index]->{'depth'} = $min_depth
-            if $patterns_ar->[$current_index]->{'depth'} < $min_depth;
-
-        if (defined $patterns_ar->[$current_index]->{'offset'}) {
-            $patterns_ar->[$current_index]->{'depth'}
-                += $patterns_ar->[$current_index]->{'offset_snort_orig'};
-        }
-
-    } elsif ($opt eq 'within') {
-
-        ### the minimum within value must allow room for
-        ### the current pattern as well as the previous one
-        my $min_within = $pattern_len;
-        unless ($ipt_has_string_payload_offset_opt) {
-            $min_within += $avg_hdr_len + $MAC_HDR_LEN;
-        }
-        if ($prev > -1) {
-            $min_within += $patterns_ar->[$prev]->{'length'};
-            if (defined $patterns_ar->[$prev]->{'offset_snort_orig'}) {
-                $patterns_ar->[$current_index]->{'within'}
-                    += $patterns_ar->[$prev]->{'offset_snort_orig'};
+        if ($snort_depth > -1) {
+            ### if there is also an offset, then the depth begins after
+            ### the offset starts
+            if ($snort_offset > -1) {
+                $pat_hr->{'depth'} += $snort_offset;
+            } elsif ($snort_distance > -1) {
+                $pat_hr->{'depth'} += $snort_distance;
+            }
+            if ($snort_depth < $pat_hr->{'length'}) {
+                return 0, "depth: $snort_depth less than " .
+                    "pattern length: $pat_hr->{'length'}";
             }
         }
-        $patterns_ar->[$current_index]->{'within'} = $min_within
-            if $patterns_ar->[$current_index]->{'within'} < $min_within;
-    }
 
+        if ($snort_distance > -1) {
+            ### see if we need to increase the distance based
+            ### on the length of the previous pattern match and offset
+            if ($i > 0) {
+                my $prev_pat_hr = $patterns_ar->[$i-1];
+                $pat_hr->{'distance'} += $prev_pat_hr->{'length'};
+                if (defined $prev_pat_hr->{'offset_snort_orig'}) {
+                    $pat_hr->{'distance'} += $prev_pat_hr->{'offset_snort_orig'};
+                }
+            }
+        }
+
+        if ($snort_within > -1) {
+            if ($snort_offset > -1) {
+                $pat_hr->{'within'} += $snort_offset;
+            } elsif ($snort_distance > -1) {
+                $pat_hr->{'within'} += $snort_distance;
+            }
+            if ($i > 0) {
+                my $prev_pat_hr = $patterns_ar->[$i-1];
+                $pat_hr->{'within'} += $prev_pat_hr->{'length'};
+                if (defined $prev_pat_hr->{'offset_snort_orig'}) {
+                    $pat_hr->{'within'} += $prev_pat_hr->{'offset_snort_orig'};
+                }
+            }
+        }
+    }
     return 1, '';
 }
 
