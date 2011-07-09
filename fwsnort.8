@@ -18,7 +18,7 @@ into promiscuous mode or queuing packets from kernel to user space.  Note
 that fwsnort can also build an iptables policy that combines the string
 match extension with the NFQUEUE or QUEUE targets to allow the kernel to
 perform preliminary string matches that are defined within Snort rules
-before queuing matching packets to userspace.  Because the bulk of
+before queuing matching packets to a userspace snort_inline instance.  Because the bulk of
 network communications are not malicious, this should provide a speedup
 for snort_inline since the majority of packets do not then have to be
 copied from kernel memory into user memory and subsequently inspected by
@@ -26,8 +26,7 @@ snort_inline.  There is a tradeoff here in terms of signature detection
 however because snort_inline when deployed in this way does not have the
 opportunity to see all packets associated with a session, so stream
 reassembly and signature comparisons against a reassembled buffer do not
-take place (the stream preprocessor - stream4, stream5, etc. - should be
-disabled).
+take place (the stream preprocessor should be disabled).
 
 As of
 .B fwsnort-1.5
