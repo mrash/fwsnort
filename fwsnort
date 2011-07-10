@@ -423,6 +423,8 @@ my $duplicate_last_build  = 0;
 my $ipt_max_str_len = 1;
 my $ipt_max_log_prefix_len = 1;
 my $no_fast_pattern_order = 0;
+my $ipt_have_multiport_match = 0;
+my $ipt_multiport_max = 2;
 
 ### to be added to the string match extension
 my $ipt_has_string_payload_offset_opt = 0;
@@ -1104,16 +1106,35 @@ sub parse_rule_hdr() {
             }
         }
 
-        ### port lists are not supported, but they will be with the iptables
-        ### 'multiport' match.
         for my $var qw(sport dport) {
             next unless $hsh{$var} =~ /,/;
-            &logr("[-] Warning: taking the first port in the list " .
-                "$hsh{$var} until the $ipt_str multiport match is supported " .
-                "at line: $line_num.");
-            $hsh{$var} =~ s/,.*//;
-            $hsh{$var} =~ s/\[//;
-            $hsh{$var} =~ s/\]//;
+            if ($ipt_have_multiport_match) {
+                $hsh{$var} =~ s/\[//;
+                $hsh{$var} =~ s/\]//;
+                my $ctr = 1;
+                my @ports = split /\s*,\s*/, $hsh{$var};
+                my $ports_str = '';
+                for my $port (@ports) {
+                    if ($port =~ /\d+:$/) {
+                        $ports_str .= "${port}65535,";
+                    } else {
+                        $ports_str .= "${port},";
+                    }
+                    $ctr++;
+                    $ctr++ if $port =~ /\:/;  ### a range counts for two ports
+                    ### multiport is limited to 15 ports
+                    last if $ctr >= $ipt_multiport_max;
+                }
+                $ports_str =~ s/,$//;
+                $hsh{$var} = $ports_str;
+            } else {
+                &logr("[-] Warning: taking the first port in the list " .
+                    "$hsh{$var} until the $ipt_str multiport match is supported " .
+                    "at line: $line_num.");
+                $hsh{$var} =~ s/,.*//;
+                $hsh{$var} =~ s/\[//;
+                $hsh{$var} =~ s/\]//;
+            }
         }
 
         return \%hsh;
@@ -1753,22 +1774,20 @@ sub ipt_build_rule() {
         }
     }
 
-    ### append the source port
-    if (defined $hdr_hr->{'sport'} and $hdr_hr->{'sport'} !~ /any/i) {
-        my $negate = '';
-        my $sport = $hdr_hr->{'sport'};
-        $negate = '! ' if $sport =~ m|!|;
-        $sport =~ s/\!\s*(\d)/$1/;
-        $rule .= " $negate$ipt_hdr_opts{'sport'} $sport";
-    }
-
-    ### append the destination port
-    if (defined $hdr_hr->{'dport'} and $hdr_hr->{'dport'} !~ /any/i) {
-        my $negate = '';
-        my $dport = $hdr_hr->{'dport'};
-        $negate = '! ' if $dport =~ m|!|;
-        $dport =~ s/\!\s*(\d)/$1/;
-        $rule .= " $negate$ipt_hdr_opts{'dport'} $dport";
+    ### append the source and destination ports
+    for my $type qw/sport dport/ {
+        if (defined $hdr_hr->{$type} and $hdr_hr->{$type} !~ /any/i) {
+            my $negate = '';
+            my $port = $hdr_hr->{$type};
+            $negate = '! ' if $port =~ m|!|;
+            $port =~ s/\!\s*(\d)/$1/;
+            if ($port =~ /,/) {
+                ### multiport match
+                $rule .= " -m multiport ${negate}--${type}s $port";
+            } else {
+                $rule .= " ${negate}$ipt_hdr_opts{$type} $port";
+            }
+        }
     }
 
     my $rv = &ipt_build_opts($rule, $hdr_hr, $opts_hr, $patterns_ar,
@@ -3734,6 +3753,22 @@ sub ipt_capabilities() {
             "disabling...\n" if $verbose or $ipt_check_capabilities;
     }
 
+    ### test for the multiport match.
+    if (&ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -p tcp " .
+            "-s $non_host -m multiport --dports 53,123:500 -j LOG") == $IPT_SUCCESS) {
+        print "[+] $ipt_str has the 'multiport' match...\n"
+            if $verbose or $ipt_check_capabilities;
+        $ipt_have_multiport_match = 1;
+
+        ### find the maximum number of supported ports (usually 15)
+        &ipt_find_max_multiport_supported_ports();
+
+    } else {
+        print "[-] $ipt_str does not have the 'multiport' match...\n"
+            if $verbose or $ipt_check_capabilities;
+        &logr("[-] $ipt_str multiport match not available");
+    }
+
     ### test for string match support.
     if ($kernel_ver ne '2.4') {
 
@@ -3954,6 +3989,33 @@ sub ipt_find_max_log_prefix_len() {
     $ipt_max_log_prefix_len--;
 
     print "    Max supported LOG prefix length: $ipt_max_log_prefix_len\n"
+        if $verbose or $ipt_check_capabilities;
+
+    return;
+}
+
+sub ipt_find_max_multiport_supported_ports() {
+
+    my $test_ports_str = $ipt_multiport_max-1;
+
+    for (;;) {
+
+        $test_ports_str .= ",$ipt_multiport_max";
+
+        my $test_rule_rv = 0;
+
+        $test_rule_rv = &ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s " .
+            qq|$non_host -p tcp -m multiport --dports $test_ports_str -j LOG |);
+
+        last if $test_rule_rv != $IPT_SUCCESS;
+
+        $ipt_multiport_max++;
+
+        last if $ipt_multiport_max == 1025; ### unlikely we'll ever get here
+    }
+    $ipt_multiport_max--;
+
+    print "    Max supported multiport ports: $ipt_multiport_max\n"
         if $verbose or $ipt_check_capabilities;
 
     return;
