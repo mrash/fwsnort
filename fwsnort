@@ -138,6 +138,10 @@ my %snort_opts = (
             'iptopt' => '-m string',
             'regex'  => '[\s;]pcre:\s*\"(.*?)\"\s*;'
         },
+        'nocase'  => {
+            'iptopt' => '--icase',
+            'regex'  => '[\s;]nocase\s*;',
+        },
         'offset'  => {
             'iptopt' => '--from',
             'regex'  => '[\s;]offset:\s*(\d+)\s*;'
@@ -257,7 +261,6 @@ my %snort_opts = (
     ### snort options that fwsnort will ignore
     'ignore' => {
         'rawbytes' => '[\s;]rawbytes\s*;',  ### iptables does a raw match anyway
-        'nocase'   => '[\s;]nocase\s*;',
         'logto'    => '[\s;]logto:\s*\S+\s*;',
         'session'  => '[\s;]session\s*;',
         'tag'      => '[\s;]tag:\s*.*?\s*;',
@@ -948,6 +951,10 @@ sub parse_rule_options() {
                 $patterns[0]->{'fast_pattern'} = 1;
             } else {
                 $patterns[$#patterns]->{'fast_pattern'} = 1;
+            }
+        } elsif ($opt eq 'nocase') {
+            unless (defined $snort_opts{'ignore'}{'nocase'}) {
+                $patterns[$#patterns]->{'nocase'} = 1;
             }
         } else {
             for my $key qw/offset depth within distance/ {
@@ -2138,6 +2145,12 @@ sub build_content_matches() {
                     if $include_perl_triggers;
             }
 
+            ### see if we need to match the string match case insensitive
+            if ($pattern_hr->{'nocase'}) {
+                $ipt_content_criteria .= ' ' . $snort_opts{'filter'}
+                    {'nocase'}{'iptopt'};
+            }
+
             ### if the --payload option is available for
             ### the string match extension
             $ipt_content_criteria .= ' --payload'
@@ -2172,7 +2185,8 @@ sub convert_pattern_for_iptables() {
         'orig_snort_str' => $snort_str,
         'ipt_pattern'    => '',
         'negative_match' => 0,
-        'fast_pattern'   => 0
+        'fast_pattern'   => 0,
+        'nocase'         => 0,
     );
 
     if ($ipt_str =~ /\s*\!\s*"/) {
@@ -3788,6 +3802,16 @@ sub ipt_capabilities() {
 
         ### now find the maximum string length that is supported by iptables
         &ipt_find_max_string_len();
+
+        ### test for case insensitive string matching
+        $test_rule_rv = &ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s " .
+            qq|$non_host -m string --string "test" --icase | .
+            qq|--algo $string_match_alg -j LOG|);
+        unless ($test_rule_rv == $IPT_SUCCESS) {
+            $snort_opts{'ignore'}{'nocase'}
+                = $snort_opts{'filter'}{'nocase'}{'regex'};
+            delete $snort_opts{'filter'}{'fast_pattern'};
+        }
 
         ### test for --replace-string support (only available for 2.4 kernels
         ### if the replace-string patch has been applied).
