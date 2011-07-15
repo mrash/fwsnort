@@ -3536,9 +3536,9 @@ sub handle_cmd_line() {
 
     &get_homedir();
 
-    &save_args() unless $run_last;
-
     &usage(0) if $help;
+
+    &save_args() unless $run_last;
 
     ### Print the version number and exit if -V given on the command line.
     if ($print_ver) {
