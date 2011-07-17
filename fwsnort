@@ -98,7 +98,8 @@ use Getopt::Long;
 use strict;
 
 ### config file
-my $fwsnort_conf = '/etc/fwsnort/fwsnort.conf';
+my $CONFIG_DEFAULT = '/etc/fwsnort/fwsnort.conf';
+my $fwsnort_conf = $CONFIG_DEFAULT;
 
 ### version number
 my $version = '1.5';
@@ -550,12 +551,7 @@ if ($ipt_rule_ctr > 1) {
 
 &write_save_file();
 
-print "\n    Main fwsnort $save_str file: ",
-    "$config{'FWSNORT_SAVE_FILE'}\n\n",
-    "    You can instantiate the fwsnort policy with the ",
-    "following command:\n\n",
-    "    $restore_bin < $config{'FWSNORT_SAVE_FILE'}\n\n",
-    "    Or just execute: $config{'FWSNORT_SAVE_EXEC_FILE'}\n\n";
+&print_final_message();
 
 exit 0;
 #===================== end main ======================
@@ -2753,6 +2749,8 @@ sub ipt_add_chains() {
 
     ### save format - add the built-in chains first
     for my $chain qw/INPUT FORWARD OUTPUT/ {
+        ### should always be defined unless we're not running as root
+        next unless defined $ipt_save_built_in_chains{$chain};
         push @fwsnort_save_lines, $ipt_save_built_in_chains{$chain};
     }
 
@@ -3180,6 +3178,8 @@ sub ipt_flush() {
 
 sub cache_ipt_save_policy() {
 
+    return unless $is_root;
+
     open IPT, "$save_bin |" or die "[*] Could not execute $save_bin";
     while (<IPT>) {
         push @ipt_save_lines, $_;
@@ -3233,6 +3233,8 @@ sub fwsnort_init() {
     ### turn off buffering
     $| = 1;
 
+    &set_non_root_values() unless $is_root;
+
     ### read in configuration info from the config file
     &import_config();
 
@@ -3266,10 +3268,6 @@ sub fwsnort_init() {
     unless ($is_root) {
         $no_ipt_sync = 1;
         $no_ipt_test = 1;
-        $config{'LOG_FILE'} = './fwsnort.log';  ### local file
-        unlink $config{'LOG_FILE'} if -e $config{'LOG_FILE'};
-        $config{'FWSNORT_SCRIPT'} = './fwsnort.sh';  ### local file
-        unlink $config{'FWSNORT_SCRIPT'} if -e $config{'FWSNORT_SCRIPT'};
     }
 
     if ($ipt_exec) {
@@ -4137,16 +4135,14 @@ sub setup() {
     ### import fwsnort perl modules
     &import_perl_modules();
 
-    if ($is_root) {
-        unless (-d $config{'ARCHIVE_DIR'}) {
-            mkdir $config{'ARCHIVE_DIR'}, 0500 or
-                die "[*] Could not mkdir($config{'ARCHIVE_DIR'}): $!";
-        }
+    unless (-d $config{'ARCHIVE_DIR'}) {
+        mkdir $config{'ARCHIVE_DIR'}, 0500 or
+            die "[*] Could not mkdir($config{'ARCHIVE_DIR'}): $!";
+    }
 
-        unless (-d $config{'LOG_DIR'}) {
-            mkdir $config{'LOG_DIR'}, 0755 or
-                die "[*] Could not mkdir($config{'LOG_DIR'}): $!";
-        }
+    unless (-d $config{'LOG_DIR'}) {
+        mkdir $config{'LOG_DIR'}, 0755 or
+            die "[*] Could not mkdir($config{'LOG_DIR'}): $!";
     }
 
     if (($queue_mode or $nfqueue_mode) and not -d $config{'QUEUE_RULES_DIR'}) {
@@ -4249,6 +4245,7 @@ sub chk_commands() {
 
 sub archive() {
     my $file = shift;
+    return unless -e $file;
     return unless $file =~ m|/|;
     my ($filename) = ($file =~ m|.*/(.*)|);
     my $targetbase = "$config{'ARCHIVE_DIR'}/${filename}.old";
@@ -4273,12 +4270,17 @@ sub write_ipt_script() {
     ### archive any existing ipt_script file
     &archive($config{'FWSNORT_SCRIPT'});
 
+    ### make sure the script is writable first
+    if (-e $config{'FWSNORT_SCRIPT'}) {
+        chmod 0755, $config{'FWSNORT_SCRIPT'} or die $!;
+    }
+
     open F, "> $config{'FWSNORT_SCRIPT'}" or
         die "[*] Could not open $config{'FWSNORT_SCRIPT'}: $!";
     print F "$_\n" for @ipt_script_lines;
     close F;
 
-    chmod 0500, $config{'FWSNORT_SCRIPT'};
+    chmod 0500, $config{'FWSNORT_SCRIPT'} or die $!;
 
     return;
 }
@@ -4381,11 +4383,18 @@ sub write_save_file() {
     ### write out the iptables-save formatted fwsnort rules
     &archive($config{'FWSNORT_SAVE_FILE'});
 
-    open T, "> $config{'FWSNORT_SAVE_FILE'}" or die $!;
+    ### make sure the save file is writable first
+    if (-e $config{'FWSNORT_SCRIPT'}) {
+        chmod 0755, $config{'FWSNORT_SCRIPT'} or die $!;
+    }
+
+    open T, "> $config{'FWSNORT_SAVE_FILE'}" or
+        die "[*] Could not write to: $config{'FWSNORT_SAVE_FILE'}";
     print T for @fwsnort_save_lines;
     close T;
 
-    chmod 0600, $config{'FWSNORT_SAVE_FILE'};
+    chmod 0600, $config{'FWSNORT_SAVE_FILE'} or
+        die "[*] Could not chmod 0600 $config{'FWSNORT_SAVE_FILE'}";
 
     ### write out the script that will exec iptables-restore against
     ### save file - this is what splices the fwsnort policy into the
@@ -4402,11 +4411,18 @@ sub write_save_file() {
         qq|echo " "|,
         "exit\n";
 
-    open T, "> $config{'FWSNORT_SAVE_EXEC_FILE'}" or die $!;
+    ### make sure the file is writable first
+    if (-e $config{'FWSNORT_SAVE_EXEC_FILE'}) {
+        chmod 0755, $config{'FWSNORT_SAVE_EXEC_FILE'} or die $!;
+    }
+
+    open T, "> $config{'FWSNORT_SAVE_EXEC_FILE'}" or
+        die "[*] Could not write to: $config{'FWSNORT_SAVE_EXEC_FILE'}";
     print T "$_\n" for @fws_exec_lines;
     close T;
 
-    chmod 0500, $config{'FWSNORT_SAVE_EXEC_FILE'};
+    chmod 0500, $config{'FWSNORT_SAVE_EXEC_FILE'} or
+        die "[*] Could not chmod 0500 $config{'FWSNORT_SAVE_EXEC_FILE'}";
 
     return;
 }
@@ -4414,6 +4430,51 @@ sub write_save_file() {
 sub is_root() {
     if ($< == 0 and $> == 0) {
         $is_root = 1;
+    }
+    return;
+}
+
+sub set_non_root_values() {
+    if ($fwsnort_conf eq $CONFIG_DEFAULT) {
+        $fwsnort_conf = './fwsnort.conf';
+    }
+    $ipt_max_str_len = 128;
+    $ipt_max_log_prefix_len = 29;
+    $ipt_have_multiport_match = 1;
+    $ipt_multiport_max = 15;
+    return;
+}
+
+sub print_final_message() {
+
+    if ($is_root) {
+        print <<_MSG_;
+
+
+    Main fwsnort $save_str file: $config{'FWSNORT_SAVE_FILE'}
+
+    You can instantiate the fwsnort policy with the following command:
+
+    $restore_bin < $config{'FWSNORT_SAVE_FILE'}
+
+    Or just execute: $config{'FWSNORT_SAVE_EXEC_FILE'}
+
+_MSG_
+    } else {
+        print <<_MSG_;
+
+    Main fwsnort $save_str file: $config{'FWSNORT_SAVE_FILE'}
+
+    It does not appear as though you are running as root, so it is NOT
+    recommended that you run the fwsnort.sh script without first re-running
+    fwsnort as root first. The reason is that non-root users cannot execute
+    iptables, and therefore fwsnort had no way to check for iptables
+    capabilities or to parse any existing iptables policy for proper splicing
+    of fwsnort rules.
+
+    Exiting.
+
+_MSG_
     }
     return;
 }
