@@ -834,42 +834,11 @@ sub parse_rule_options() {
         }
     }
 
-    if ($queue_mode or $nfqueue_mode) {
+    unless ($queue_mode or $nfqueue_mode) {
 
-        ### we only disqualify a signature in NFQUEUE/QUEUE mode if it does
-        ### not contain the "content" or "uricontent" keywords
-        my $found_content = 0;
-        while ($rule_options =~ /(\w+):\s*(.*?)\s*;/g) {
-            my $opt = $1;
-            my $val = $2;
-            if ($opt eq 'content' or $opt eq 'uricontent') {
-                return 0, \%opts, \@patterns unless $val =~ /"$/;
-                $val =~ s/^"//;
-                $val =~ s/"$//;
-                push @patterns, $val;
-                $found_content = 1;
-            }
-            for my $key qw/offset depth within distance/ {
-                if ($opt eq $key) {
-#                    $offsets{$#content}{$key} = $val;
-                }
-            }
-        }
-        unless ($found_content) {
-            my $queue_str = 'QUEUE';
-            $queue_str = 'NFQUEUE' if $nfqueue_mode;
-            &logr("[-] SID: $sid  In --$queue_str mode signature must have " .
-                "'content' or 'uricontent' keyword " .
-                "at line: $line_num, skipping.");
-            if (%include_sids and defined $include_sids{$sid}) {
-                print "[-] SID: $sid does not contain 'content' ",
-                    "or 'uricontent'\n";
-            }
-            return 0, \%opts, \@patterns;
-        }
-
-    } else {
-
+        ### if we're queuing packets to userspace Snort, then we don't have to
+        ### disqualify a signature based on an option that is not supported by
+        ### iptables
         my $found_unsupported = '';
         for my $opt (keys %{$snort_opts{'unsupported'}}) {
             ### see if we match a regex belonging to an unsupported option
@@ -903,6 +872,7 @@ sub parse_rule_options() {
         }
     }
 
+    my $found_content = 0;
     while ($rule_options =~ /(\w+):?\s*((?:.*?[^\x5c]?))\s*;/g) {
         my $opt = $1;
         my $val = 1;
@@ -920,6 +890,7 @@ sub parse_rule_options() {
                     = &convert_pattern_for_iptables($val);
 
             if ($rv) {
+                $found_content = 1;
                 push @patterns, $ipt_pattern_hr;
             } else {
                 &logr("[-] SID: $sid, $log_str");
@@ -939,8 +910,10 @@ sub parse_rule_options() {
                     push @patterns, $str;
                 }
             } else {
-                &logr("[-] SID: $sid, unsupported complex pcre: $val");
-                return 0, \%opts, \@patterns;
+                unless ($queue_mode or $nfqueue_mode) {
+                    &logr("[-] SID: $sid, unsupported complex pcre: $val");
+                    return 0, \%opts, \@patterns;
+                }
             }
 
         } elsif ($opt eq 'fast_pattern') {
@@ -969,6 +942,19 @@ sub parse_rule_options() {
                 }
             }
         }
+    }
+
+    if (($queue_mode or $nfqueue_mode) and not $found_content) {
+        my $queue_str = 'QUEUE';
+        $queue_str = 'NFQUEUE' if $nfqueue_mode;
+        &logr("[-] SID: $sid  In --$queue_str mode signature must have " .
+                "'content' or 'uricontent' keyword " .
+                "at line: $line_num, skipping.");
+        if (%include_sids and defined $include_sids{$sid}) {
+            print "[-] SID: $sid does not contain 'content' ",
+                  "or 'uricontent'\n";
+        }
+        return 0, \%opts, \@patterns;
     }
 
     ### update offset, depth, within, and distance values for relative
