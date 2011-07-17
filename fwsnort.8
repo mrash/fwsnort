@@ -26,7 +26,8 @@ snort_inline.  There is a tradeoff here in terms of signature detection
 however because snort_inline when deployed in this way does not have the
 opportunity to see all packets associated with a session, so stream
 reassembly and signature comparisons against a reassembled buffer do not
-take place (the stream preprocessor should be disabled).
+take place (the stream preprocessor should be disabled in the userspace
+snort_inline instance).
 
 As of
 .B fwsnort-1.5
