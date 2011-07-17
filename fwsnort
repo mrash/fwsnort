@@ -265,7 +265,10 @@ my %snort_opts = (
         'logto'    => '[\s;]logto:\s*\S+\s*;',
         'session'  => '[\s;]session\s*;',
         'tag'      => '[\s;]tag:\s*.*?\s*;',
-        'react'    => '[\s;]react:\s*.*?\s*;' ### FIXME -j REJECT
+        'react'    => '[\s;]react:\s*.*?\s*;', ### FIXME -j REJECT
+        'http_uri' => '[\s;]http_uri\s*;',
+        'http_method' => '[\s;]http_method\s*;',
+        'urilen'    => '[\s;]urilen:\s*.*?\s*;',
     }
 );
 
@@ -3372,7 +3375,8 @@ sub fwsnort_init() {
 
     if ($strict) {
         ### make the snort options parser very strict
-        for my $opt qw/uricontent pcre distance within/ {
+        for my $opt qw/uricontent pcre
+                distance within http_uri http_method urilen/ {
             $snort_opts{'unsupported'}{$opt}
                 = $snort_opts{'filter'}{$opt};
             delete $snort_opts{'filter'}{$opt};
