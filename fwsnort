@@ -3860,6 +3860,31 @@ sub ipt_capabilities() {
         $ipt_has_string_payload_offset_opt = 1;
     }
 
+    if ($queue_mode or $nfqueue_mode) {
+        ### test for the QUEUE or NFQUEUE target
+        if ($nfqueue_mode) {
+            if (&ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s " .
+                    "$non_host -p tcp --dport 3001 -j NFQUEUE")
+                        == $IPT_SUCCESS) {
+                print "[+] $ipt_str has NFQUEUE support....\n"
+                    if $verbose or $ipt_check_capabilities;
+            } else {
+                die "[*] The NFQUEUE target does not appear to be available ",
+                    "in iptables.";
+            }
+        } else {
+            if (&ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s " .
+                    "$non_host -p tcp --dport 3001 -j QUEUE")
+                        == $IPT_SUCCESS) {
+                print "[+] $ipt_str has QUEUE support....\n"
+                    if $verbose or $ipt_check_capabilities;
+            } else {
+                die "[*] The QUEUE target does not appear to be available ",
+                    "in iptables.";
+            }
+        }
+    }
+
     unless ($no_ipt_conntrack) {
 
         ### test for connection tracking support (conntrack
