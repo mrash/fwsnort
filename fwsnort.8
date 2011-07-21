@@ -202,6 +202,16 @@ the NFQUEUE target.  This requires CONFIG_IP_NF_QUEUE support in the Linux kerne
 .BR \-\^\-queue-num\ \<num>
 Specify a queue number in \-\-NFQUEUE mode.
 .TP
+.BR \-\^\-queue-pre-match-max\ \<num>
+In \-\-QUEUE or \-\-NFQUEUE mode, limit the number of content matches that are
+performed within the kernel before sending a matching packet to a userspace
+Snort instance.  This allows a level of tuning with respect to how much work
+the kernel does to qualify a packet based on a signature match before having
+Snort do the same thing.  The default is to perform all specified content
+matches in the signature before queuing the packet to userspace because the
+multiple in-kernel content matches is probably less expensive than sending a
+packet to userspace by default.
+.TP
 .BR \-\^\-string-match-alg\ \<alg>
 Specify the string matching algorithm to use with the kernel.  By default, this
 is 'bm' for the 'Boyer-Moore' string matching algorithm, but 'kmp' may also be

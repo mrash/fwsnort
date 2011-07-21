@@ -372,6 +372,7 @@ my $rules_dir  = '';
 my $homedir    = '';
 my $run_last   = 0;
 my $queue_rules_dir = '';
+my $queue_pre_match_max = 0;
 my $dump_conf  = 0;
 my $kernel_ver = '2.6';  ### default
 my $string_match_alg = 'bm';
@@ -2052,6 +2053,13 @@ sub build_content_matches() {
 
     for (my $i=0; $i <= $#content_fast_pattern_order; $i++) {
 
+        if (($queue_mode or $nfqueue_mode) and $queue_pre_match_max > 0) {
+            ### limit the number of content matches to perform within the
+            ### kernel before sending the packet to a userspace Snort
+            ### instance
+            last if $i >= $queue_pre_match_max;
+        }
+
         my $pattern_hr = $content_fast_pattern_order[$i];
         my $content_str = $pattern_hr->{'ipt_pattern'};
 
@@ -3512,6 +3520,10 @@ sub handle_cmd_line() {
                                                   # rules directory in --QUEUE or
                                                   # --NFQUEUE mode.
         'queue-num=i'    => \$nfqueue_num,  # Specifies the NFQUEUE number.
+        'queue-pre-match-max=i' => \$queue_pre_match_max,  ### max number of patterns
+                                                  ### to match within the kernel before
+                                                  ### queuing a packet to userspace
+                                                  ### Snort
         'Home-dir=s'     => \$cmdl_homedir,
         'Last-cmd'       => \$run_last,
         'lib-dir=s'      => \$lib_dir,      # Specify path to lib directory.
