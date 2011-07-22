@@ -273,10 +273,12 @@ my %snort_opts = (
 );
 
 ### rules update link
-my $rules_url = 'http://rules.emergingthreats.net/open/snort-2.9.0/emerging-all.rules';
+my $DEFAULT_RULES_URL = 'http://rules.emergingthreats.net/open/snort-2.9.0/emerging-all.rules';
+my $rules_url = $DEFAULT_RULES_URL;
 
 ### config vars that may span multiple lines
 my %multi_line_vars = (
+    'UPDATE_RULES_URL' => '',
     'WHITELIST' => '',
     'BLACKLIST' => '',
 );
@@ -3639,6 +3641,7 @@ sub required_vars() {
         FWSNORT_FORWARD_JUMP MAX_STRING_LEN CONF_DIR RULES_DIR ARCHIVE_DIR
         QUEUE_RULES_DIR LOG_DIR LIBS_DIR CONF_FILE FWSNORT_SCRIPT LOG_FILE
         FWSNORT_SAVE_FILE FWSNORT_SAVE_EXEC_FILE IPT_BACKUP_SAVE_FILE
+        UPDATE_RULES_URL
     );
     for my $var (@required_vars) {
         die "[*] Variable $var not defined in $fwsnort_conf. Exiting.\n"
@@ -4180,27 +4183,45 @@ sub setup() {
 }
 
 sub update_rules() {
-    print "[+] Downloading latest rules into $config{'RULES_DIR'}/\n    $rules_url\n";
+    print "[+] Downloading latest rules into $config{'RULES_DIR'}/";
+
     my $dir = $config{'RULES_DIR'};
     $dir =~ s/\,.*//;
     chdir $dir or die "[*] Could not chdir $dir: $!";
-    if (-e 'emerging-all.rules') {
-        move 'emerging-all.rules', 'emerging-all.rules.tmp'
-            or die "[*] Could not move emerging-all.rules -> ",
-            "emerging-all.rules.tmp";
-    }
-    system "$cmds{'wget'} $rules_url";
-    if (-e 'emerging-all.rules') {  ### successful download
-        unlink 'emerging-all.rules.tmp';
-    } else {
-        print "[-] Could not download emerging-all.rules file.\n";
-        if (-e 'emerging-all.rules.tmp') {
-            ### move the original back
-            move 'emerging-all.rules', 'emerging-all.rules.tmp'
-                or die "[*] Could not move emerging-all.rules -> ",
-                "emerging-all.rules.tmp";
+
+    my $ctr = 0;
+    for my $url (@{$config{'UPDATE_RULES_URL'}}) {
+        my $file = '';
+        if ($url =~ m|.*/(.*)|) {
+            $file = $1;
+        } else {
+            next;
+        }
+
+        if (-e $file) {
+            move $file, "${file}.tmp"
+                or die "[*] Could not move $file -> $file.tmp";
+        }
+
+        system "$cmds{'wget'} $url";
+
+        if (-e $file) {  ### successful download
+            unlink "${file}.tmp";
+        } else {
+            print "[-] Could not download $file file.\n";
+            if (-e "${file}.tmp") {
+                ### move the original back
+                move $file, "${file}.tmp"
+                    or die "[*] Could not move $file -> $file.tmp";
+            }
+        }
+
+        if ($ctr == 0 and $rules_url ne $DEFAULT_RULES_URL) {
+            ### manual URL specified from the command line
+            last;
         }
     }
+
     print "[+] Finished.\n";
     exit 0;
 }
