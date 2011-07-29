@@ -1,3 +1,23 @@
+commit c9982963632825c6ddd2666a0bee9643a363de3b
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Thu Jul 28 20:19:41 2011 -0400
+
+    Added iptables capabilities test for COMMENT len
+    
+    In keeping with the ability to test the capabilities of iptables where fwsnort
+    is deployed, added the ability find the maximum length of a string provided to
+    the COMMENT match.  This match is used to store Snort rule information within
+    the running fwsnort policy.
+
+commit 9f93d921ebdfdfa03549aa2a7058e2b71d1b15b1
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Tue Jul 26 22:17:08 2011 -0400
+
+    Added the ChangeLog file for 'git log' output.
+    
+    The complete ChangeLog is derived from 'git log' with this commit.  Version-
+    specific change logs will be included with each release.
+
 commit 859958655bc272ffa0413fe9ba4568046a7b5f73
 Author: Michael Rash <mbr@cipherdyne.org>
 Date:   Tue Jul 26 22:12:02 2011 -0400
