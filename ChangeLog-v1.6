@@ -1,0 +1,521 @@
+commit 00dd168ac015fb64028dc87d5949d768d56a2598
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Thu Jul 28 20:40:36 2011 -0400
+
+    Updated ChangeLog and added the ShortLog file
+    
+    Minor change to update the global ChangeLog and added the ShortLog file.
+
+commit c9982963632825c6ddd2666a0bee9643a363de3b
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Thu Jul 28 20:19:41 2011 -0400
+
+    Added iptables capabilities test for COMMENT len
+    
+    In keeping with the ability to test the capabilities of iptables where fwsnort
+    is deployed, added the ability find the maximum length of a string provided to
+    the COMMENT match.  This match is used to store Snort rule information within
+    the running fwsnort policy.
+
+commit 9f93d921ebdfdfa03549aa2a7058e2b71d1b15b1
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Tue Jul 26 22:17:08 2011 -0400
+
+    Added the ChangeLog file for 'git log' output.
+    
+    The complete ChangeLog is derived from 'git log' with this commit.  Version-
+    specific change logs will be included with each release.
+
+commit 859958655bc272ffa0413fe9ba4568046a7b5f73
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Tue Jul 26 22:12:02 2011 -0400
+
+    Bumped version from 1.5 to 1.6
+    
+    Bumped version from 1.5 to 1.6 in preparation for the upcoming release.
+
+commit 3adc5b28e08cb658fd5bbb4cc0b367471c03077e
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Tue Jul 26 21:53:52 2011 -0400
+
+    Renamed ChangeLog -> ChangeLog.old
+    
+    Renamed ChangeLog -> ChangeLog.old after the svn -> git conversion.  All
+    ChangeLog* files from now on will conform to:
+    
+    ChangeLog.v<num>   <-- This is the change log for the released version.
+    ChangeLog          <-- The complete log output from git.
+
+commit 409b78468d2e6f136d18e4a9e4528bce2e65cc06
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Thu Jul 21 23:03:29 2011 -0400
+
+    Added support for rules updates from several URL's
+    
+    Added support for grabbing Snort rules from multiple URL's via a new variable
+    UPDATE_RULES_URL in the /etc/fwsnort/fwsnort.conf file.  This variable can be
+    specified multiple times.
+
+commit fe692d2ece6d986a92fa6277cd1c55238145f401
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Wed Jul 20 23:00:07 2011 -0400
+
+    Added --queue-pre-match-max <num> argument
+    
+    Added a new command line arg --queue-pre-match-max <num> that allows the number
+    of patterns that will be matched within the kernel before sending a packet to
+    a userspace Snort instance (via the QUEUE or NFQUEUE targets) to be limited.
+    
+    Here is an example for the "ET WEB_CLIENT Possible Internet Explorer srcElement
+    Memory Corruption Attempt" signature from Emerging Threats (sid 2010799).
+    First, here is the original rule:
+    
+    alert tcp $EXTERNAL_NET $HTTP_PORTS -> $HOME_NET any (msg:"ET WEB_CLIENT Possible Internet Explorer srcElement Memory Corruption Attempt"; flow:established,to_client; file_data; content:"document.createEventObject"; distance:0; nocase; content:".innerHTML"; within:100; nocase; content:"window.setInterval"; distance:0; nocase; content:"srcElement"; fast_pattern; nocase; distance:0; classtype:attempted-user; reference:url,www.microsoft.com/technet/security/bulletin/ms10-002.mspx; reference:url,tools.cisco.com/security/center/viewAlert.x?alertId=19726; reference:url,www.kb.cert.org/vuls/id/492515; reference:cve,2010-0249; reference:url,doc.emergingthreats.net/2010799; reference:url,www.emergingthreats.net/cgi-bin/cvsweb.cgi/sigs/CURRENT_EVENTS/CURRENT_MSIE; sid:2010799; rev:5;)
+    
+    The translated rule is shown below in the iptables-save format after running
+    the command "fwsnort --no-ipt-sync --no-ipt-rule-num --NFQUEUE --snort-sid 2010799":
+    
+    -A FWSNORT_FORWARD_ESTAB -p tcp -m tcp --sport 80 -m string --string "srcElement" --algo bm --from 82 --icase -m string --string "document.createEventObject" --algo bm --from 64 --icase -m string --string ".innerHTML" --algo bm --to 190 --icase -m string --string "window.setInterval" --algo bm --from 74 --icase -m comment --comment "sid:2010799; msg:ET WEB_CLIENT Possible Internet Explorer srcElement Memory Corruption Attempt; classtype:attempted-user; reference:url,www.microsoft.com/technet/security/bulletin/ms10-002.mspx; rev:5; FWS:1.5;" -j NFQUEUE
+    
+    Now, by using the --queue-pre-match-max argument, instead of forcing iptables
+    to match on all four patterns in the original rule, we limit it to matching
+    only the first pattern.  Note also that fwsnort has interpreted the 'fast_pattern'
+    keyword so that the "srcElement" pattern is searched for instead of the pattern
+    "document.createEventObject" which is the first to appear in the original rule.
+    
+    Here is the command:
+    
+    fwsnort --no-ipt-sync --no-ipt-rule-num --NFQUEUE --snort-sid 2010799 --queue-pre-match-max 1
+    
+    The translated rule is now:
+    
+    -A FWSNORT_FORWARD_ESTAB -p tcp -m tcp --sport 80 -m string --string "srcElement" --algo bm --from 82 --icase -m comment --comment "sid:2010799; msg:ET WEB_CLIENT Possible Internet Explorer srcElement Memory Corruption Attempt; classtype:attempted-user; reference:url,www.microsoft.com/technet/security/bulletin/ms10-002.mspx; rev:5; FWS:1.5;" -j NFQUEUE
+
+commit 800584c9c9cdd0158fecb5b42982f084ea0f830a
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Sun Jul 17 14:25:05 2011 -0400
+
+    Minor man page wording update for NFQUEUE mode
+    
+    Minor man page wording update for NFQUEUE mode to make sure to convey to the
+    reader the need to disable the stream preprocessor for the userspace
+    snort_inline instance.
+
+commit 80ee4a9ff0707affb860ba9ff409082ce2e294be
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Sun Jul 17 14:20:54 2011 -0400
+
+    Added iptables capabilities test for NFQUEUE modes
+    
+    Added a test to see whether iptables supports either the QUEUE or NFQUEUE
+    targets in --QUEUE and --NFQUEUE modes respectively.
+
+commit acbafc7a486001d4d02437b78b2ca4464ca6dccf
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Sun Jul 17 13:09:57 2011 -0400
+
+    Bugfix to support --NFQUEUE mode
+    
+    With the recent code refactoring for the Snort 'fast_pattern' keyword, the
+    --QUEUE and --NFQUEUE modes were broken in the process.  This changes restores
+    these modes:
+    
+    ./fwsnort --no-ipt-sync --NFQUEUE |grep Generated
+    [+] Generated iptables rules for 12916 out of 13131 signatures: 98.36%
+
+commit 0ca89dcbd981ac4c122754f3edf0ce1a2d4e55f0
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Sun Jul 17 12:39:16 2011 -0400
+
+    Ignore http_uri, http_method, and urilen
+    
+    iptables has no good way to support the http_uri, http_method, and urilen Snort
+    keywords, so this change ignores them.  The tradeoff is that certain signatures
+    may have a higher rate of false positives, but detection may outweigh this for
+    rules like this one:
+    
+    alert tcp $HOME_NET any -> $EXTERNAL_NET $HTTP_PORTS (msg:"ET TROJAN Unknown Generic Trojan Checkin"; flow:established,to_server; content:"unit_id="; http_uri; content:"&uv_id="; http_uri; content:"&uv_new="; http_uri; content:"&url="; http_uri; content:"&charset="; http_uri; content:"&hashval="; http_uri; content:"&app="; http_uri; content:"&lg="; http_uri; classtype:trojan-activity; sid:2013204; rev:1;)
+    
+    It is possible to force fwsnort to not ignore the http_* keywords with the
+    --strict command line argument.
+    
+    The number of signatures that this change picks up is trivial though for the
+    bundled signature set in the deps/snort_rules/ directory:
+    
+    Before:
+    
+    ./fwsnort --no-ipt-sync |grep Generated
+    [+] Generated iptables rules for 9341 out of 13131 signatures: 71.14%
+    
+    After:
+    
+    ./fwsnort --no-ipt-sync |grep Generated
+    [+] Generated iptables rules for 9343 out of 13131 signatures: 71.15%
+
+commit 683dd21a337f19886851dba71ecc24ae381e331b
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Sat Jul 16 22:50:30 2011 -0400
+
+    Updated to allow non-root users to execute fwsnort.
+    
+    This update allows non-root users to run fwsnort, but a modified fwsnort.conf
+    file must be supplied that changes various paths.  Running as a non-root user
+    is mostly only useful to see how fwsnort translates certain Snort rules.  Here
+    is an example of running fwsnort as a non-root user:
+    
+    $ ./fwsnort -c fwsnort.conf.nonroot --snort-sid 1234 |less
+    [+] Parsing Snort rules files...
+    [+] Found sid: 1234 in web-misc.rules
+        Successful translation.
+    
+    [+] Logfile: /home/mbr/git/fwsnort.git/fwsnort.log
+    [+] iptables script (individual commands): /home/mbr/git/fwsnort.git/fwsnort_iptcmds.sh
+    [*] Could not write to: /home/mbr/git/fwsnort.git/fwsnort.sh at ./fwsnort line 4418.
+    [mbr@minastirith ~/git/fwsnort.git]$ ./fwsnort -c fwsnort.conf.nonroot --snort-sid 1234 |less
+    [+] Parsing Snort rules files...
+    [+] Found sid: 1234 in web-misc.rules
+        Successful translation.
+    
+    [+] Logfile: /home/mbr/git/fwsnort.git/fwsnort.log
+    [+] iptables script (individual commands): /home/mbr/git/fwsnort.git/fwsnort_iptcmds.sh
+    
+        Main fwsnort iptables-save file: /home/mbr/git/fwsnort.git/fwsnort.save
+    
+        It does not appear as though you are running as root, so it is NOT
+        recommended that you become root and execute the fwsnort.sh script. The
+        reason is that non-root users cannot execute iptables, and therefore
+        fwsnort had no way to check for iptables capabilities or to parse any
+        existing iptables policy for proper splicing of the fwsnort rules.
+    
+        Exiting.
+
+commit 24aa16d3ed2941143c787b9e449e61ce9857c0ab
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Thu Jul 14 22:17:20 2011 -0400
+
+    Minor change to not write args in --help mode.
+    
+    Minor update to exclude 'fwsnort --help' from the saved command line arguments
+    copy.  This ensures that 'fwsnort --Last' does not just re-execute
+    'fwsnort --help'.
+
+commit 7d1a5d684b4883b16040b20491fcbd5455410846
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Sun Jul 10 14:37:30 2011 -0400
+
+    Added support for the Snort 'nocase' keyword
+    
+    The iptables string match extension supports case insensitive matches with
+    the --icase option.  This commit updates fwsnort to leverage --icase whenever
+    the 'nocase' modifier it applied to a pattern match in a Snort rule.
+
+commit 593e0963fa2d117230cfee9b9a747e4cdeae3471
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Sat Jul 9 23:59:15 2011 -0400
+
+    Updated to the latest Emerging Threats Snort rules
+    
+    Updated to the latest Emerging Threats Snort rules - this file contains over
+    10,000 rules now.  Here is some sample translation output stats with fwsnort:
+    
+    =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+        Snort Rules File          Success   Fail      Total
+    
+    [+] emerging-all.rules        7440      2582      10022
+                                  =============================
+                                  7440      2582      10022
+    
+    [+] Generated iptables rules for 7440 out of 10022 signatures: 74.24%
+
+commit a3641f6cdad3f349f0ab79053267e7e0ffd376f6
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Sat Jul 9 22:44:44 2011 -0400
+
+    Added iptables 'multiport' match support
+    
+    The iptables 'multiport' match is now supported, and this enables fwsnort to
+    properly translate a few Snort rules from the emerging threats rule set like
+    this one:
+    
+    alert tcp $HOME_NET [0:20,22:24,26:138,140:444,446:464,466:586,588:901,903:1432,1434:65535] -> any any (msg:"ET MALWARE Suspicious FTP 220 Banner on Local Port (spaced)"; flow:from_server,established; content:"220 "; depth:4; content:!"VMware Authentication Daemon"; depth:32; classtype:non-standard-protocol; reference:url,doc.emergingthreats.net/2011124; reference:url,www.emergingthreats.net/cgi-bin/cvsweb.cgi/sigs/MALWARE/MALWARE_Off_Port_FTP; sid:2011124; rev:12;)
+    
+    The translated version is now:
+    
+    $IPTABLES -A FWSNORT_FORWARD_ESTAB -p tcp -m tcp -m multiport --sports 0:20,22:24,26:138,140:444,446:464,466:586,588:901 -m string ! --string "VMware Authentication Daemon" --algo bm --to 96 -m string --string "220 " --algo bm --to 68 -m comment --comment "sid:2011124; msg:ET MALWARE Suspicious FTP 220 Banner on Local Port (spaced); classtype:non-standard-protocol; reference:url,doc.emergingthreats.net/2011124; rev:12; FWS:1.5;" -j LOG --log-ip-options --log-tcp-options --log-prefix "SID2011124 ESTAB "
+
+commit 6aa673eed3344bd4d08f536b0ee246bc9c6c201b
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Sat Jul 9 16:21:35 2011 -0400
+
+    Added --no-fast-pattern-order to --help output
+    
+    Added --no-fast-pattern-order to --help output and also added the
+    'fast_pattern' hash key to the 'ignore' bucket if --no-fast-pattern-order is
+    given on the command line.
+
+commit d165a722e995eace732f5165ea4b7c1dd0469dd1
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Sat Jul 9 16:07:53 2011 -0400
+
+    Implemented tighter 'within' criteria
+    
+    This commit fixes a problem where fwsnort was in some cases too lax with how it
+    calculated relative pattern matching depths that are defined via the Snort 'within'
+    keyword.  This should result in fewer fwsnort log messages for certain signatures.
+    An example signature that this change improves is:
+    
+    alert tcp $HOME_NET any -> $AIM_SERVERS any (msg:"CHAT AIM login"; flow:to_server,established; content:"*|02|"; depth:2; content:"|00 17 00 06|"; distance:4; within:8; classtype:policy-violation; sid:1631; rev:7;)
+    
+    fwsnort previous to this change translated this as a set of signatures including
+    the following (allowing for the multiple IP's in the $AIM_SERVERS variable):
+    
+    $IPTABLES -A FWSNORT_FORWARD_ESTAB -d 64.12.24.0/24 -p tcp -m tcp -m string --hex-string "*|02|" --algo bm --to 66 -m string --hex-string "|00170006|" --algo bm --from 70 --to 76 -m comment --comment "sid:1631; msg:CHAT AIM login; classtype:policy-violation; rev:7; FWS:1.5;" -j LOG --log-ip-options --log-tcp-options --log-prefix "SID1631 ESTAB "
+    
+    After this change the signature becomes:
+    
+    $IPTABLES -A FWSNORT_FORWARD_ESTAB -d 64.12.24.0/24 -p tcp -m tcp -m string --hex-string "*|02|" --algo bm --to 66 -m string --hex-string "|00170006|" --algo bm --from 70 --to 74 -m comment --comment "sid:1631; msg:CHAT AIM login; classtype:policy-violation; rev:7; FWS:1.5;" -j LOG --log-ip-options --log-tcp-options --log-prefix "SID1631 ESTAB "
+    
+    Note that in the second pattern match the --to criteria has been reduced from
+    76 to 74.  (The second rule was generated with --no-fast-pattern-ordering to
+    make the diff make sense more easily.)
+
+commit 49acb36d0ea8425ebaedd03f9f41140781b56ca0
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Sat Jul 9 12:00:23 2011 -0400
+
+    Added the --no-fast-pattern-ordering argument
+    
+    Added --no-fast-pattern-ordering to have fwsnort not try to reorder pattern
+    matches to process the longest pattern first.  This option also instructs
+    fwsnort to ignore the Snort 'fast_pattern' keyword in any Snort rule.
+
+commit e35727256975e86135038fef093393e777f32210
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Sat Jul 9 11:47:19 2011 -0400
+
+    Moved GetOpt() call to handle_cmd_line()
+    
+    Minor updated to move the GetOpt() function call for parsing command line args
+    to the handle_cmd_line() function (where it should have been for a while).
+
+commit 4d65f91f4439831f2ebff6ea3430de079eef7201
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Fri Jul 8 22:50:13 2011 -0400
+
+    minor man page wording update
+
+commit b27412de270377b51325fbbd43b5d18ed87a8183
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Fri Jul 8 22:47:05 2011 -0400
+
+    Fixed fast_pattern support for relative matches
+    
+    This is a significant code refactoring in order to support the fast_pattern
+    keyword when relative matches are involved.  Previous to this change, the
+    initial fast_pattern implementation would not take into account how the
+    iptables --from and --to keywords should be set under the 'distance' and
+    'within' keywords.
+
+commit d7c2ceb906f120cb55df41d2fe277d0f17f1e5f6
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Tue Jul 5 23:14:19 2011 -0400
+
+    Added 'detection_filter' to not supported list
+    
+    The newer 'detection_filter' Snort keyword (a replacement for the older
+    'threshold' keyword) is not supported yet.  The iptables limit match should
+    be able to help here eventually.
+
+commit 1e024f14f34453eb992fa9370dd4f04b02374074
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Tue Jul 5 22:46:34 2011 -0400
+
+    minor comment wording update for TCP options
+
+commit 81a6a2b8896d8f7e62e4160004809ad8fd9e245b
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Tue Jul 5 06:47:25 2011 -0400
+
+    Added content match ordering based on length
+    
+    In cases where the 'fast_pattern' option is not used, Snort generally tries to
+    pick the longest pattern to match first since this should usually result in
+    better performance.  That is, longer there is a higher chance for a longer
+    string to be more unique, and this would result in shorter strings from not
+    being searched for.  This works in the context of iptables because 'matches'
+    are AND'd togther, so if the first string match fails, no subsequent string
+    matches will be executed.  Hence, the search for "shortstr" below would not
+    happen if the search for "thisisalongstring" failed:
+    
+    -m string --string 'thisisalongstring' --algo bm -m string --string 'shortstr' --algo bm
+    
+    One thing to note is that iptables does not support relative string matches
+    in the same way that Snort does.  The iptables string match can specify an
+    offset and depth into the packet via --from and --to.  The end result is that
+    the fwsnort way of maximizing performance is to find the longest string, do
+    the match, and apply an approximation for --from and --to whenever they are
+    required for any pattern.  That is, it doesn't have to worry about relative
+    matches and finding the end of a pattern in order to know where to start the
+    next search.  Now, this will result in signature matching in fwsnort not
+    being as accurate as Snort (remember that fwsnort emulates Snort behavior as
+    closely as possible given functionality implemented in iptables), but it
+    should be faster.
+
+commit f1a68b5e3a02f593030ac07fc89546e1426e8a83
+Merge: 439f739 509b3d9
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Mon Jul 4 22:19:53 2011 -0400
+
+    Merge branch 'master' of github.com:mrash/fwsnort
+
+commit 439f739bcf268a6e94720dabc31b00dd72ebb566
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Mon Jul 4 21:57:14 2011 -0400
+
+    Added 'fast_pattern' support + no patterns bug fix
+    
+    Added support for the Snort 'fast_pattern' keyword which is used to force a
+    particular payload match to be done first.  This allows the signature author
+    to optimize the performance of certain signatures based on a knowledge of
+    how likely certain strings are to match within application layer protocols.
+    A gooo write up of the 'fast_pattern' keyword was posted to the VRT blog
+    here:
+    
+    http://vrt-blog.snort.org/2010/04/using-snort-fast-patterns-wisely-for.html
+    
+    Also fixed a bug that would exclude all signatures that do not have at least
+    one content match.  A good example of such a signature is this one:
+    
+    alert tcp $EXTERNAL_NET 6112 -> $HOME_NET any (msg:"ET GAMES Battle.net
+    connection reset (possible IP-Ban)"; flags:R,12; classtype: policy-violation;
+    reference:url,doc.emergingthreats.net/bin/view/Main/2002117;
+    reference:url,www.emergingthreats.net/cgi-bin/cvsweb.cgi/sigs/GAMES/GAMES_Battlenet;
+    sid:2002117; rev:6;)
+    
+    Between this bug fix and the 'fast_pattern' support, fwsnort is able to
+    translated nearly 300 additional signatures beyond the fwsnort-1.5 release:
+    
+    [+] Generated iptables rules for 8529 out of 12224 signatures: 69.77%
+    
+    [+] Generated iptables rules for 8812 out of 12224 signatures: 72.09%
+
+commit 509b3d97f0a277c0ef84b7c737f991e1685610a6
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Mon Jul 4 21:57:14 2011 -0400
+
+    Added support for Snort keyword 'fast_pattern'
+    
+    Added support for the Snort 'fast_pattern' keyword which is used to force a
+    particular payload match to be done first.  This allows the signature author
+    to optimize the performance of certain signatures based on a knowledge of
+    how likely certain strings are to match within application layer protocols.
+    A gooo write up of the 'fast_pattern' keyword was posted to the VRT blog
+    here:
+    
+    http://vrt-blog.snort.org/2010/04/using-snort-fast-patterns-wisely-for.html
+
+commit 79a88abbf186c2eefbdf0d7ebeef3493ecf80fbe
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Thu Jun 30 20:52:22 2011 -0400
+
+    minor man page wording update
+
+commit a8663fdb1779b17dcd136c319a883c8cada839e5
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Thu Jun 30 20:50:30 2011 -0400
+
+    Added three Snort signature keywords
+    
+    Added the 'detection_filter', 'threshold', and 'urilen' Snort rule keywords.
+    Also included a minor update to calculate max keyword length on the fly.
+
+commit ddedf5d8447f1a5d819308471e98a0cdf527acd2
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Wed Jun 29 20:23:38 2011 -0400
+
+    Added newer Snort keywords to snort_opts.pl
+    
+    Added Snort keywords fast_pattern, http_header, http_uri, and http_method
+    to the snort_opts.pl script.
+
+commit cfcb1ea40313e2176afd67ada576748e38f7c10b
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Mon Jun 27 22:39:57 2011 -0400
+
+    minor ChangeLog update
+
+commit bc184f2edfc11bb9e4beeab73d8ec5f2413faf77
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Mon Jun 27 21:41:19 2011 -0400
+
+    Bugfix for --ipt-apply to exec fwsnort.sh
+    
+    Fixed the --ipt-apply functionality - the variable that held the fwsnort.sh
+    path was not initialized properly prior to this change.
+
+commit 00c4379a69975097948ed9e5ba356eeba69c0c93
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Mon Jun 20 21:00:57 2011 -0400
+
+    Added the --Conntrack-state argument
+    
+    Added the --Conntrack-state argument to specify a conntrack state in place of
+    the "established" state that commonly accompanies the Snort "flow" keyword.
+    By default, fwsnort uses the conntrack state of "ESTABLISHED" for this.  In
+    certain corner cases, it might be useful to use "ESTABLISHED,RELATED" instead
+    to apply application layer inspection to things like ICMP port unreachable
+    messages that are responses to real attempted communications.  (Need to add
+    UDP tracking for the _ESTAB chains for this too - coming soon.)
+
+commit 84f12e1f048ff94ceab7e6ed3aa596864eefe763
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Mon Jun 20 20:09:06 2011 -0400
+
+    Added test for conntrack --ctstate
+    
+    Recent releases of iptables and the Linux kernel support matching
+    on connection state via the conntrack modules and the --ctstate
+    switch.  Added a capabilities test for this, and will fall back to
+    using the state match if the conntrack module is not available.
+
+commit 7645c3977e65471f5c9ba730a300b04f73901786
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Sun Jun 19 11:58:05 2011 -0400
+
+    Bugfix for --ipt-list and --ipt-flush
+    
+    Fixed a problem with --ipt-list and --ipt-flush to ensure that the proper
+    iptables binary path is chosen.  These args failed without this because the
+    iptables binary was not set.
+
+commit 304f5c6e44668a89ec91924a8e32799cf4ee3736
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Sun Jun 19 11:14:44 2011 -0400
+
+    Bugfix for --log-prefix maximum lengths
+    
+    Bugfix to ensure the iptables log prefixes built by fwsnort are not
+    longer than those allowed by the running iptables firewall.  This is
+    usually a total of 29 characters, but fwsnort now dynamically figures out
+    this value.
+    
+    This bug was originally reported by Yves Pagani to the fwsnort mailing
+    list.
+
+commit 3b45f07288edfd7988c0b953bf33c02374b5c09b
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Sat Jun 18 22:40:56 2011 -0400
+
+    Removed old reference to $rev_num
+    
+    In keeping with svn, fwsnort used to store the $Id$ file ID into $rev_num. This
+    has been removed.
+
+commit 2081d991865b347e6bf123e8d94076b1ebb7eb31
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Sat Jun 18 21:09:12 2011 -0400
+
+    Removed legacy $Id$ tags (for old svn repos)
+    
+    $Id$ tags don't really mean anything to git so they have been removed from all
+    source files.
