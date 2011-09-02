@@ -2041,9 +2041,22 @@ sub build_content_matches() {
         ### of signature matches on average)
         my $max_len = 0;
         my $max_len_index = 0;
-        for (my $index=0; $index <= $#$patterns_ar; $index++) {
-            if ($patterns_ar->[$index]->{'length'} > $max_len) {
-                $max_len = $patterns_ar->[$index]->{'length'};
+        PATTERN: for (my $index=0; $index <= $#$patterns_ar; $index++) {
+            my $pat_ar = $patterns_ar->[$index];
+
+            if ($pat_ar->{'length'} > $max_len) {
+
+                ### make sure it is not a relative match
+                next PATTERN if defined $pat_ar->{'distance'};
+                next PATTERN if defined $pat_ar->{'within'};
+
+                if ($index < $#$patterns_ar) {
+                    my $next_pat_ar = $patterns_ar->[$index+1];
+                    next PATTERN if defined $next_pat_ar->{'distance'};
+                    next PATTERN if defined $next_pat_ar->{'within'};
+                }
+
+                $max_len = $pat_ar->{'length'};
                 $max_len_index = $index;
             }
         }
