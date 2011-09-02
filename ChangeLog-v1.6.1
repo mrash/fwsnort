@@ -1,0 +1,59 @@
+commit 336dea6aa9dd5b2a2ae3de88f3a4213f0efae92e
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Thu Sep 1 23:04:14 2011 -0400
+
+    bumped version to 1.6.1
+
+commit 4cfbd3e7e29a601ac74e59031b620235ce8d76f6
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Thu Sep 1 22:58:22 2011 -0400
+
+    (Kim Hagen) Bug fix for 'Couldn't load target' error
+    
+    Kim Hagen submitted this patch for a bug in fwsnort-1.6 where the fwsnort
+    policy in iptables-save format could not be loaded whenever iptables-save put
+    the nat table output after the filter table output.  In this case, fwsnort
+    would fail with an error like the following (fixed in fwsnort-1.6.1):
+    
+        Couldn't load target
+        `FWSNORT_FORWARD_ESTAB':/lib/xtables/libipt_FWSNORT_FORWARD_ESTAB.so:
+        cannot open shared object file: No such file or directory
+    
+    fwsnort now invokes 'iptables-save -t filter' in order to ensure that
+    ordering issues do not affect how fwsnort builds its translated rule set.
+
+commit 19625a6eb7e40a375be733b0a74b550292f4dcf8
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Thu Sep 1 22:13:18 2011 -0400
+
+    Bug fix for fast_pattern interpretation for relative matches
+    
+    This change ensures that fwsnort does not attempt to re-order pattern matches
+    for patterns that have a relative match requirement.  For non-relative matches
+    fwsnort re-orders pattern matches based on the pattern length, reasoning that
+    the longest pattern should be processed first for better performance.  The
+    usage of the fast_pattern keyword give the user explicit control over this.
+    
+    Here is a Snort rule that is now properly handled by fwsnort:
+    
+    alert tcp $EXTERNAL_NET $HTTP_PORTS -> $HOME_NET any (msg:"ET WEB_CLIENT Possible Adobe Reader and Acrobat Forms Data Format Remote Security Bypass Attempt"; flow:established,to_client; file_data; content:"%FDF-"; depth:300; content:"/F(JavaScript|3a|"; nocase; distance:0; classtype:attempted-user; reference:url,www.securityfocus.com/bid/37763; reference:cve,2009-3956; reference:url,doc.emergingthreats.net/2010664; reference:url,www.emergingthreats.net/cgi-bin/cvsweb.cgi/sigs/CURRENT_EVENTS/CURRENT_Adobe; reference:url,www.stratsec.net/files/SS-2010-001_Stratsec_Acrobat_Script_Injection_Security_Advisory_v1.0.pdf; sid:2010664; rev:8;)
+    
+    Before this change, fwsnort translated this rule as:
+    
+    $IPTABLES -A FWSNORT_FORWARD_ESTAB -p tcp -m tcp --sport 80 -m string --hex-string "/F(JavaScript|3a|" --algo bm --from 69 --icase -m string --hex-string "%FDF|2d|" --algo bm --to 364 -m comment --comment "sid:2010664; msg:ET WEB_CLIENT Possible Adobe Reader and Acrobat Forms Data Format Remote Security Bypass Attempt; classtype:attempted-user; reference:url,www.securityfocus.com/bid/37763; rev:8; FWS:1.6;" -j LOG --log-ip-options --log-tcp-options --log-prefix "SID2010664 ESTAB "
+    
+    Note that in the above rule, the "/F(JavaScript|3a|" pattern was switched to
+    be evaluated first even though it is a relative match to the previous pattern
+    in the original Snort rule.  After this change, fwsnort translates this rule
+    as:
+    
+    $IPTABLES -A FWSNORT_FORWARD_ESTAB -p tcp -m tcp --sport 80 -m string --hex-string "%FDF|2d|" --algo bm --to 364 -m string --hex-string "/F(JavaScript|3a|" --algo bm --from 69 --icase -m comment --comment "sid:2010664; msg:ET WEB_CLIENT Possible Adobe Reader and Acrobat Forms Data Format Remote Security Bypass Attempt; classtype:attempted-user; reference:url,www.securityfocus.com/bid/37763; rev:8; FWS:1.6;" -j LOG --log-ip-options --log-tcp-options --log-prefix "SID2010664 ESTAB "
+
+commit d90f90270c0ad3125a42ee04de43b2fe22e93ca9
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Thu Sep 1 22:09:41 2011 -0400
+
+    Updated to the latest Emerging Threats rule set
+    
+    Update to the latest 'emerging-all.rules' Snort rule set from Emerging Threats
+    (http://www.emergingthreats.net).
