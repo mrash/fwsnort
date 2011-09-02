@@ -65,3 +65,14 @@ Andy Rowland
 Yves Pagani
     - Found a bug where fwnsort could build iptables --log-prefix strings that
       are longer than the underlying iptables firewall would allow.
+
+Kim Hagen
+    - Submitted a patch for a bug in fwsnort-1.6 where the fwsnort policy in
+      iptables-save format could not be loaded whenever iptables-save put the
+      nat table output after the filter table output.  In this case, fwsnort
+      would fail with an error like the following (fixed in fwsnort-1.6.1):
+
+        Couldn't load target
+        `FWSNORT_FORWARD_ESTAB':/lib/xtables/libipt_FWSNORT_FORWARD_ESTAB.so:
+        cannot open shared object file: No such file or directory 
+

@@ -3195,7 +3195,7 @@ sub cache_ipt_save_policy() {
 
     return unless $is_root;
 
-    open IPT, "$save_bin |" or die "[*] Could not execute $save_bin";
+    open IPT, "$save_bin -t filter |" or die "[*] Could not execute $save_bin";
     while (<IPT>) {
         push @ipt_save_lines, $_;
     }
