@@ -662,7 +662,7 @@ IPTables::Parse - Perl extension for parsing iptables firewall rulesets
       if (defined $ipt_hr->{'all'}) {
           print "The INPUT chain has a default DROP rule for all protocols.\n";
       } else {
-          for my $proto qw/tcp udp icmp/ {
+          for my $proto (qw/tcp udp icmp/) {
               if (defined $ipt_hr->{$proto}) {
                   print "The INPUT chain drops $proto by default.\n";
               }
@@ -677,7 +677,7 @@ IPTables::Parse - Perl extension for parsing iptables firewall rulesets
       if (defined $ipt_hr->{'all'}) {
           print "The INPUT chain has a default LOG rule for all protocols.\n";
       } else {
-          for my $proto qw/tcp udp icmp/ {
+          for my $proto (qw/tcp udp icmp/) {
               if (defined $ipt_hr->{$proto}) {
                   print "The INPUT chain logs $proto by default.\n";
               }
