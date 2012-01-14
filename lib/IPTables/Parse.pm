@@ -783,7 +783,7 @@ this address if there are any questions, comments, or bug reports.
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2005-2008 by Michael Rash
+Copyright (C) 2005-2012 by Michael Rash
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself, either Perl version 5.8.5 or,
