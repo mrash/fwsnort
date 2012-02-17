@@ -372,6 +372,7 @@ my $ipt_script = '';
 my $logfile    = '';
 my $rules_dir  = '';
 my $homedir    = '';
+my $abs_num    = 0;
 my $run_last   = 0;
 my $queue_rules_dir = '';
 my $queue_pre_match_max = 0;
@@ -385,13 +386,12 @@ my $update_rules   = 0;  ### used to download latest snort rules
 my $ipt_print_type = 0;
 my $ipt_check_capabilities = 0;
 my $ipt_rule_ctr   = 1;
-my $ipt_sync       = 1;
+my $ipt_sync       = 0;
 my $ipt_flush      = 0;
 my $ipt_del_chains = 0;
 my $ipt_list       = 0;
 my $ipt_file       = '';
 my $no_pcre        = 0;
-my $no_ipt_sync    = 0;
 my $no_ipt_log     = 0;
 my $no_ipt_test    = 0;
 my $no_ipt_jumps   = 0;
@@ -399,6 +399,7 @@ my $no_ipt_input   = 0;
 my $no_ipt_output  = 0;
 my $no_addr_check  = 0;
 my $no_ipt_forward = 0;
+my $ignore_opt     = 0;
 my $include_sids   = '';
 my $exclude_sids   = '';
 my $add_deleted    = 0;
@@ -581,7 +582,6 @@ sub parse_snort_rules() {
         }
     }
 
-    my $abs_num  = 0;
     my $sabs_num = 0;
     my $tot_ipt_apply = 0;
     my $tot_unsup_ctr = 0;
@@ -3281,7 +3281,6 @@ sub fwsnort_init() {
     }
 
     unless ($is_root) {
-        $no_ipt_sync = 1;
         $no_ipt_test = 1;
     }
 
@@ -3295,8 +3294,6 @@ sub fwsnort_init() {
             die "[*] $config{'FWSNORT_SAVE_EXEC_FILE'} does not exist.";
         }
     }
-
-    $ipt_sync = 0 if $no_ipt_sync;
 
     if ($enable_ip6tables) {
         ### switch to ip6tables
@@ -3484,10 +3481,12 @@ sub handle_cmd_line() {
         'snort-rfile=s'  => \$rules_file,   # Translate a single rules file.
         'no-pcre'        => \$no_pcre,      # Make no attempt to translate PCRE's.
         'no-addresses'   => \$no_addr_check, # Don't check local ifconfig output.
-        'no-ipt-sync'    => \$no_ipt_sync,  # Do not sync with the iptables policy.
+        'no-ipt-sync'    => \$ignore_opt,   # Do not sync with the iptables policy.
+        'ipt-sync'       => \$ipt_sync,     # Sync fwsnort ruls with the iptables
+                                            # policy.
         'no-ipt-log'     => \$no_ipt_log,   # Do not generate iptables logging rules.
-        'no-ipt-test'    => \$no_ipt_test,  # Don't perform any checks against
-                                            # iptables.
+        'no-ipt-test'    => \$no_ipt_test,  # Don't perform any checks for
+                                            # iptables capabilities.
         'no-ipt-jumps'   => \$no_ipt_jumps, # Don't jump packets from the INPUT or
                                             # FORWARD chains.
         'no-ipt-conntrack' => \$no_ipt_conntrack, # Don't use iptables connection
@@ -3657,7 +3656,7 @@ sub required_vars() {
         FWSNORT_FORWARD_JUMP MAX_STRING_LEN CONF_DIR RULES_DIR ARCHIVE_DIR
         QUEUE_RULES_DIR LOG_DIR LIBS_DIR CONF_FILE FWSNORT_SCRIPT LOG_FILE
         FWSNORT_SAVE_FILE FWSNORT_SAVE_EXEC_FILE IPT_BACKUP_SAVE_FILE
-        UPDATE_RULES_URL
+        UPDATE_RULES_URL STATE_DIR
     );
     for my $var (@required_vars) {
         die "[*] Variable $var not defined in $fwsnort_conf. Exiting.\n"
@@ -4212,14 +4211,15 @@ sub setup() {
     ### import fwsnort perl modules
     &import_perl_modules();
 
+    for my $dir ($config{'LOG_DIR'}, $config{'STATE_DIR'}) {
+        unless (-d $dir) {
+            mkdir $dir, 0755 or die "[*] Could not mkdir($dir): $!";
+        }
+    }
+
     unless (-d $config{'ARCHIVE_DIR'}) {
         mkdir $config{'ARCHIVE_DIR'}, 0500 or
             die "[*] Could not mkdir($config{'ARCHIVE_DIR'}): $!";
-    }
-
-    unless (-d $config{'LOG_DIR'}) {
-        mkdir $config{'LOG_DIR'}, 0755 or
-            die "[*] Could not mkdir($config{'LOG_DIR'}): $!";
     }
 
     if (($queue_mode or $nfqueue_mode) and not -d $config{'QUEUE_RULES_DIR'}) {
@@ -4499,7 +4499,7 @@ sub write_save_file() {
     my @fws_exec_lines = ();
     push @fws_exec_lines, &hdr_lines();
 
-    push @fws_exec_lines, qq|echo " "|, qq|echo "[+] Splicing fwsnort rules | .
+    push @fws_exec_lines, qq|echo " "|, qq|echo "[+] Splicing fwsnort $abs_num rules | .
         qq|into the $ipt_str policy..."|,
         "$restore_bin < $config{'FWSNORT_SAVE_FILE'}",
         qq|echo "    Done."\n|,
@@ -4631,8 +4631,8 @@ Options:
     --ipt-check-capabilities  - Check iptables capabilities and exit.
     --no-ipt-comments         - Do not add Snort "msg" fields to iptables
                                 rules with the iptables comment match.
-    --no-ipt-sync             - Add iptables rules for signatures that
-                                are already blocked by iptables.
+    --ipt-sync                - Only add iptables rules for signatures that
+                                are not already blocked by iptables.
     --no-ipt-log              - Do not generate iptables log rules
                                 (can only be used with --ipt-drop).
     --no-ipt-test             - Do not run any checks for availability

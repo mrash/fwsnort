@@ -215,7 +215,7 @@ sub install() {
 
     print "\n========================================================\n",
         "\n[+] fwsnort will generate an iptables script located at:\n",
-        "    /etc/fwsnort/fwsnort.sh when executed.\n",
+        "    /var/lib/fwsnort.sh when executed.\n",
         "\n[+] fwsnort has been successfully installed!\n\n";
 
     return;

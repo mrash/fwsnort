@@ -263,10 +263,17 @@ rule for each successfully translated snort rule.  This can be disabled
 with the \-\-no-ipt-log option, but \-\-ipt-drop must also be specified.
 .TP
 .BR \-\^\-no-ipt-sync
-Do not consult the iptables policy currently running on the machine
-for applicable snort rules.  Unless limited with the \-\-include-type or \-\-snort-sid
-options this can result in a fwsnort.sh script that contains several
-thousand iptables rules.
+This is a deprecated option since the default behavior is to translate as
+many Snort rules into iptables rules as possible.  With
+.B fwsnort
+able to produce iptables rules in iptables\-save format, it is extremely fast
+to instantiate a large set of translated Snort rules into an iptables policy.
+A new \-\-ipt-sync option has been added to reverse this behavior (not
+recommended).
+.TP
+.BR \-\^\-ipt-sync
+Consult the iptables policy currently running on the machine
+for applicable snort rules.
 .TP
 .BR \-\^\-no-ipt-test
 Do not test the iptables build for existence of support for the LOG and
