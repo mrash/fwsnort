@@ -16,7 +16,7 @@
 #
 # Version: 1.6.1
 #
-# Copyright (C) 2003-2011 Michael Rash (mbr@cipherdyne.org)
+# Copyright (C) 2003-2012 Michael Rash (mbr@cipherdyne.org)
 #
 # License - GNU Public License version 2 (GPLv2):
 #
@@ -1385,6 +1385,9 @@ sub match_addr() {
     my $ipt_mask = '32';
     my $negate = 0;
 
+    my $s_obj   = '';
+    my $ipt_obj = '';
+
     $negate = 1 if $hdr_src =~ /\!/;
 
     if ($rule_src =~ /\!/) {
@@ -1407,6 +1410,8 @@ sub match_addr() {
         $ipt_ip = $1;
     }
 
+    $ipt_obj = new NetAddr::IP($ipt_ip, $ipt_mask);
+
     for my $addr (@{&expand_addresses($hdr_src)}) {
         my $src_ip   = '';
         my $src_mask = '32';
@@ -1419,17 +1424,11 @@ sub match_addr() {
         } elsif ($addr =~ m|($ip_re)|) {
             $src_ip = $1;
         }
-#        return 1 if ipv4_in_network(
-#            $ipt_ip, $ipt_mask,
-#            $src_ip, $src_mask);
+        $s_obj = new NetAddr::IP($src_ip, $src_mask);
         if ($negate) {
-            return 1 unless ipv4_in_network(
-                $src_ip, $src_mask,
-                $ipt_ip, $ipt_mask);
+            return 1 unless $ipt_obj->within($s_obj);
         } else {
-            return 1 if ipv4_in_network(
-                $src_ip, $src_mask,
-                $ipt_ip, $ipt_mask);
+            return 1 if $ipt_obj->within($s_obj);
         }
     }
     return 0;
@@ -1690,6 +1689,7 @@ sub is_local() {
 
     my $ip   = '';
     my $mask = '32';
+
     if ($addr =~ m|($ip_re)/($ip_re)|) {
         $ip   = $1;
         $mask = $2;
@@ -1700,13 +1700,15 @@ sub is_local() {
         $ip = $1;
     }
 
+    my $ip_obj = new NetAddr::IP($ip, $mask);
+
     for my $local_ar (@local_addrs) {
         my $local_ip   = $local_ar->[0];
         my $local_mask = $local_ar->[1];
 
-        return 1 if ipv4_in_network(
-            $local_ip, $local_mask,
-            $ip, $mask);
+        my $local_obj = new NetAddr::IP($local_ip, $local_mask);
+
+        return 1 if $ip_obj->within($local_obj);
     }
     return 0;
 }
@@ -4141,9 +4143,7 @@ sub import_perl_modules() {
     }
 
     require IPTables::Parse;
-    require Net::IPv4Addr;
-
-    Net::IPv4Addr->import(qw/ipv4_in_network/);
+    require NetAddr::IP;
 
     return;
 }

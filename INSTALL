@@ -22,7 +22,7 @@ Perl modules:
 fwsnort requires two perl modules in order to run properly:
 
 IPTables::Parse
-Net-IPv4Addr
+NetAddr::IP
 
 These two modules are bundled with fwsnort within the deps/ directory, unless
 you have downloaded the fwsnort-nodeps tarball, in which case these two

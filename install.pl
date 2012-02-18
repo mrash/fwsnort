@@ -52,9 +52,9 @@ my %config = ();
 
 ### map perl modules to versions
 my %required_perl_modules = (
-    'Net::IPv4Addr' => {
+    'NetAddr::IP' => {
         'force-install' => 0,
-        'mod-dir' => 'Net-IPv4Addr'
+        'mod-dir' => 'NetAddr-IP'
     },
     'IPTables::Parse' => {
         'force-install' => 1,
