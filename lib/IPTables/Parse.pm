@@ -7,11 +7,9 @@
 #
 # Author: Michael Rash (mbr@cipherdyne.org)
 #
-# Version: 0.7
+# Version: 0.8
 #
 ##################################################################
-#
-# $Id: Parse.pm 2135 2008-01-18 03:20:40Z mbr $
 #
 
 package IPTables::Parse;
@@ -23,7 +21,7 @@ use strict;
 use warnings;
 use vars qw($VERSION);
 
-$VERSION = '0.7';
+$VERSION = '0.8';
 
 sub new() {
     my $class = shift;
