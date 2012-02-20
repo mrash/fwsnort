@@ -44,6 +44,10 @@ sub new() {
         unless -e $self->{'_iptables'};
     croak "[*] $self->{'_iptables'} not executable.\n"
         unless -x $self->{'_iptables'};
+
+    $self->{'_ipt_bin_name'} = 'iptables';
+    $self->{'_ipt_bin_name'} = $1 if $self->{'_iptables'} =~ m|.*/(\S+)|;
+
     bless $self, $class;
 }
 
@@ -160,13 +164,27 @@ sub chain_rules() {
         );
 
         if ($ipt_verbose) {
+
+            ### iptables:
             ### 0     0 ACCEPT  tcp  --  eth1 * 192.168.10.3  0.0.0.0/0  tcp dpt:80
             ### 0     0 ACCEPT  tcp  --  eth1 * 192.168.10.15 0.0.0.0/0  tcp dpt:22
             ### 33 2348 ACCEPT  tcp  --  eth1 * 192.168.10.2  0.0.0.0/0  tcp dpt:22
             ### 0     0 ACCEPT  tcp  --  eth1 * 192.168.10.2  0.0.0.0/0  tcp dpt:80
             ### 0     0 DNAT    tcp  --  *    * 123.123.123.123 0.0.0.0/0 tcp dpt:55000 to:192.168.12.12:80
-            if ($line =~ m|^\s*(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+\-\-\s+
-                                (\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*(.*)|x) {
+
+            ### ip6tables:
+            ### 0     0 ACCEPT  tcp   *   *   ::/0     fe80::aa:0:1/128    tcp dpt:12345
+            ### 0     0 LOG     all   *   *   ::/0     ::/0                LOG flags 0 level 4
+
+            my $match_re = qr/^\s*(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+\-\-\s+
+                                (\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*(.*)/x;
+
+            if ($self->{'_ipt_bin_name'} eq 'ip6tables') {
+                $match_re = qr/^\s*(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+
+                                (\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*(.*)/x;
+            }
+
+            if ($line =~ $match_re) {
                 $rule{'packets'}  = $1;
                 $rule{'bytes'}    = $2;
                 $rule{'target'}   = $3;
@@ -236,6 +254,8 @@ sub chain_rules() {
                 }
             }
         } else {
+
+            ### iptables:
             ### ACCEPT tcp  -- 164.109.8.0/24  0.0.0.0/0  tcp dpt:22 flags:0x16/0x02
             ### ACCEPT tcp  -- 216.109.125.67  0.0.0.0/0  tcp dpts:7000:7500
             ### ACCEPT udp  -- 0.0.0.0/0       0.0.0.0/0  udp dpts:7000:7500
@@ -246,9 +266,19 @@ sub chain_rules() {
 
             ### LOG  all  --  0.0.0.0/0  0.0.0.0/0  LOG flags 0 level 4 prefix `DROP '
             ### LOG  all  --  127.0.0.2  0.0.0.0/0  LOG flags 0 level 4
-            ### ### DNAT tcp  --  123.123.123.123  0.0.0.0/0  tcp dpt:55000 to:192.168.12.12:80
+            ### DNAT tcp  --  123.123.123.123  0.0.0.0/0  tcp dpt:55000 to:192.168.12.12:80
 
-            if ($line =~ m|^\s*(\S+)\s+(\S+)\s+\-\-\s+(\S+)\s+(\S+)\s*(.*)|) {
+            ### ip6tables:
+            ### ACCEPT     tcp   ::/0     fe80::aa:0:1/128    tcp dpt:12345
+            ### LOG        all   ::/0     ::/0                LOG flags 0 level 4
+
+            my $match_re = qr/^\s*(\S+)\s+(\S+)\s+\-\-\s+(\S+)\s+(\S+)\s*(.*)/;
+
+            if ($self->{'_ipt_bin_name'} eq 'ip6tables') {
+                $match_re = qr/^\s*(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*(.*)/;
+            }
+
+            if ($line =~ $match_re) {
                 $rule{'target'}   = $1;
                 my $proto = $2;
                 $proto = 'all' if $proto eq '0';
@@ -308,15 +338,16 @@ sub default_drop() {
         @ipt_lines = @$out_ar;
     }
 
-    return '[-] Could not get iptables output!', 0
+    return "[-] Could not get $self->{'_ipt_bin_name'} output!", 0
         unless @ipt_lines;
 
     my %protocols = ();
     my $found_chain = 0;
+    my $found_default_drop = 0;
     my $rule_ctr = 1;
     my $prefix;
     my $policy = 'ACCEPT';
-    my $any_ip_re = '(?:0\.){3}0/0';
+    my $any_ip_re = qr/(?:0\.){3}0\x2f0|\x3a{2}\x2f0/;
 
     LINE: for my $line (@ipt_lines) {
         chomp $line;
@@ -333,8 +364,20 @@ sub default_drop() {
         next LINE unless $found_chain;
 
         ### include ULOG target as well
-        if ($line =~ m|^\s*U?LOG\s+(\w+)\s+\-\-\s+.*
-            $any_ip_re\s+$any_ip_re\s+(.*)|x) {
+        my $log_re = qr/^\s*U?LOG\s+(\w+)\s+\-\-\s+.*
+                $any_ip_re\s+$any_ip_re\s+(.*)/x;
+        my $drop_re = qr/^DROP\s+(\w+)\s+\-\-\s+.*
+            $any_ip_re\s+$any_ip_re\s*$/x;
+
+        if ($self->{'_ipt_bin_name'} eq 'ip6tables') {
+            $log_re = qr/^\s*U?LOG\s+(\w+)\s+
+                    $any_ip_re\s+$any_ip_re\s+(.*)/x;
+            $drop_re = qr/^DROP\s+(\w+)\s+
+                $any_ip_re\s+$any_ip_re\s*$/x;
+        }
+
+        ### might as well pick up any default logging rules as well
+        if ($line =~ $log_re) {
             my $proto  = $1;
             my $p_tmp  = $2;
             my $prefix = 'NONE';
@@ -350,21 +393,27 @@ sub default_drop() {
             ### $proto may equal "all" here
             $protocols{$proto}{'LOG'}{'prefix'} = $prefix;
             $protocols{$proto}{'LOG'}{'rulenum'} = $rule_ctr;
-        } elsif ($policy eq 'ACCEPT' and $line =~ m|^DROP\s+(\w+)\s+\-\-\s+.*
-            $any_ip_re\s+$any_ip_re\s*$|x) {
+        } elsif ($policy eq 'ACCEPT' and $line =~ $drop_re) {
             my $proto = $1;
             $proto = 'all' if $proto eq '0';
             ### DROP    all  --  0.0.0.0/0     0.0.0.0/0
             $protocols{$1}{'DROP'} = $rule_ctr;
+            $found_default_drop = 1;
         }
         $rule_ctr++;
     }
+
     ### if the policy in the chain is DROP, then we don't
     ### necessarily need to find a default DROP rule.
     if ($policy eq 'DROP') {
         $protocols{'all'}{'DROP'} = 0;
+        $found_default_drop = 1;
     }
-    return \%protocols;
+
+    return "[-] There are no default drop rules in the $self->{'_ipt_bin_name'} policy!", 0
+        unless %protocols and $found_default_drop;
+
+    return \%protocols, 1;
 }
 
 sub default_log() {
@@ -374,7 +423,7 @@ sub default_log() {
     my $file  = shift || '';
     my $iptables  = $self->{'_iptables'};
 
-    my $any_ip_re  = '(?:0\.){3}0/0';
+    my $any_ip_re  = qr/(?:0\.){3}0\x2f0|\x3a{2}\x2f0/;
     my @ipt_lines  = ();
     my %log_chains = ();
     my %log_rules  = ();
@@ -405,7 +454,7 @@ sub default_log() {
         }
     }
 
-    return '[-] Could not get iptables output!', 0
+    return "[-] Could not get $self->{'_ipt_bin_name'} output!", 0
         unless @ipt_lines;
 
     ### first get all logging rules and associated chains
@@ -426,17 +475,34 @@ sub default_log() {
         my $proto = '';
         my $found = 0;
         if ($ipt_verbose) {
-            if ($line =~ m|^\s*\d+\s+\d+\s*U?LOG\s+(\w+)\s+\-\-\s+
-                    \S+\s+\S+\s+$any_ip_re
-                    \s+$any_ip_re\s+.*U?LOG|x) {
-                $proto = $1;
-                $found = 1;
+            if ($self->{'_ipt_bin_name'} eq 'ip6tables') {
+                if ($line =~ m|^\s*\d+\s+\d+\s*U?LOG\s+(\w+)\s+
+                        \S+\s+\S+\s+$any_ip_re
+                        \s+$any_ip_re\s+.*U?LOG|x) {
+                    $proto = $1;
+                    $found = 1;
+                }
+            } else {
+                if ($line =~ m|^\s*\d+\s+\d+\s*U?LOG\s+(\w+)\s+\-\-\s+
+                        \S+\s+\S+\s+$any_ip_re
+                        \s+$any_ip_re\s+.*U?LOG|x) {
+                    $proto = $1;
+                    $found = 1;
+                }
             }
         } else {
-            if ($line =~ m|^\s*U?LOG\s+(\w+)\s+\-\-\s+$any_ip_re
-                    \s+$any_ip_re\s+.*U?LOG|x) {
-                $proto = $1;
-                $found = 1;
+            if ($self->{'_ipt_bin_name'} eq 'ip6tables') {
+                if ($line =~ m|^\s*U?LOG\s+(\w+)\s+$any_ip_re
+                        \s+$any_ip_re\s+.*U?LOG|x) {
+                    $proto = $1;
+                    $found = 1;
+                }
+            } else {
+                if ($line =~ m|^\s*U?LOG\s+(\w+)\s+\-\-\s+$any_ip_re
+                        \s+$any_ip_re\s+.*U?LOG|x) {
+                    $proto = $1;
+                    $found = 1;
+                }
             }
         }
 
@@ -448,8 +514,8 @@ sub default_log() {
         }
     }
 
-    return '[-] There are no logging rules in the iptables policy!', 0
-        unless %log_chains;
+    return "[-] There are no default logging rules " .
+        "in the $self->{'_ipt_bin_name'} policy!", 0 unless %log_chains;
 
     my %sub_chains = ();
 
@@ -467,7 +533,7 @@ sub default_log() {
         }
     }
 
-    return \%log_rules;
+    return \%log_rules, 1;
 }
 
 sub sub_chains() {
@@ -486,7 +552,7 @@ sub sub_chains() {
         if ($found and $line =~ /^\s*Chain\s/) {
             last;
         }
-        if ($line =~ m|^\s*(\S+)\s+\S+\s+\-\-|) {
+        if ($line =~ m|^\s*(\S+)\s+\S+\s+|) {
             my $new_chain = $1;
             if ($new_chain ne 'LOG'
                     and $new_chain ne 'DROP'
@@ -496,7 +562,10 @@ sub sub_chains() {
                     and $new_chain ne 'QUEUE'
                     and $new_chain ne 'SNAT'
                     and $new_chain ne 'DNAT'
-                    and $new_chain ne 'MASQUERADE') {
+                    and $new_chain ne 'MASQUERADE'
+                    and $new_chain ne 'pkts'
+                    and $new_chain ne 'Chain'
+                    and $new_chain ne 'target') {
                 $chains_href->{$new_chain} = '';
                 &sub_chains($new_chain, $chains_href, $ipt_lines_aref);
             }
@@ -519,7 +588,8 @@ sub exec_iptables() {
     my $sigchld_handler = $self->{'_sigchld_handler'};
 
     croak "[*] $cmd does not look like an iptables command."
-        unless $cmd =~ m|^\s*iptables| or $cmd =~ m|^\S+/iptables|;
+        unless $cmd =~ m|^\s*iptables| or $cmd =~ m|^\S+/iptables|
+            or $cmd =~ m|^\s*ip6tables| or $cmd =~ m|^\S+/ip6tables|;
 
     my $rv = 1;
     my @stdout = ();
