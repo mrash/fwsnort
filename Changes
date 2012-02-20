@@ -1,5 +1,13 @@
 Revision history for Perl extension IPTables::Parse.
 
+0.8 Mon Feb 20 15:11:45 2012
+    - Major update to support ip6tables policies.
+    - Added test suite script t/basic_tests.pl to exercise major functions for
+      both iptables and ip6tables.
+    - Bugfix for default_log() and default_drop() functions to ensure that
+      a proper return value is given in addition to the return of a results
+      hash.
+
 0.7 Fri Oct 17 11:55:01 2008
     - Completely re-worked the manner in which iptables commands are executed
       so that they are sent through a single function with various options
