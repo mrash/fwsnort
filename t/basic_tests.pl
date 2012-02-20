@@ -97,9 +97,9 @@ sub default_log_tests() {
     for my $chain (qw/INPUT OUTPUT FORWARD/) {
         &dots_print("default_log(): filter $chain");
 
-        my $ipt_log = $ipt_obj->default_log('filter', $chain);
+        my ($ipt_log, $rv) = $ipt_obj->default_log('filter', $chain);
         $executed++;
-        if ($ipt_log) {
+        if ($rv) {
             &logr("pass ($executed) (found)\n");
             $passed++;
         } else {
@@ -114,11 +114,11 @@ sub default_drop_tests() {
     my $ipt_obj = shift;
 
     for my $chain (qw/INPUT OUTPUT FORWARD/) {
-        &dots_print("default_log(): filter $chain");
+        &dots_print("default_drop(): filter $chain");
 
-        my $ipt_drop = $ipt_obj->default_drop('filter', $chain);
+        my ($ipt_drop, $rv) = $ipt_obj->default_drop('filter', $chain);
         $executed++;
-        if ($ipt_drop) {
+        if ($rv) {
             &logr("pass ($executed) (found)\n");
             $passed++;
         } else {
