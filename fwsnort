@@ -1485,8 +1485,9 @@ sub match_port() {
 }
 
 sub cache_ipt_policy() {
-    my $ipt = new IPTables::Parse
-        or die "[*] Could not acquire IPTables::Parse object";
+
+    my $ipt = new IPTables::Parse 'iptables' => $cmds{'iptables'}
+        or die "[*] Could not acquire IPTables::Parse object: $!";
 
     for my $chain (keys %process_chains) {
         next unless $process_chains{$chain};
@@ -1497,8 +1498,12 @@ sub cache_ipt_policy() {
         $ipt_default_policy_setting{$chain}
             = $ipt->chain_policy('filter', $chain, $ipt_file);
 
-        $ipt_default_drop{$chain}
+        my ($def_drop_hr, $ipt_rv)
             = $ipt->default_drop('filter', $chain, $ipt_file);
+
+        if ($ipt_rv) {
+            $ipt_default_drop{$chain} = $def_drop_hr;
+        }
     }
     return;
 }
@@ -3224,11 +3229,11 @@ sub cache_ipt_save_policy() {
 sub del_jump_rule() {
     my $chain = shift;
 
-    my $ipt = new IPTables::Parse
-        or die "[*] Could not acquire IPTables::Parse object";
+    my $ipt = new IPTables::Parse 'iptables' => $cmds{'iptables'}
+        or die "[*] Could not acquire IPTables::Parse object: $!";
 
     for my $built_in_chain qw/INPUT OUTPUT FORWARD/ {
-        my $rules_ar = $ipt->chain_rules('filter', $built_in_chain, '');
+        my $rules_ar = $ipt->chain_rules('filter', $built_in_chain, $ipt_file);
 
         for (my $i=0; $i <= $#$rules_ar; $i++) {
             my $rule_num = $i+1;
