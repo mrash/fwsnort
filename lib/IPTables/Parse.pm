@@ -3,7 +3,7 @@
 #
 # File: IPTables::Parse.pm
 #
-# Purpose: Perl interface to parse iptables rulesets.
+# Purpose: Perl interface to parse iptables and ip6tables rulesets.
 #
 # Author: Michael Rash (mbr@cipherdyne.org)
 #
@@ -95,6 +95,8 @@ sub chain_rules() {
 
     my $found_chain  = 0;
     my @ipt_lines = ();
+
+    ### only used for IPv4 and NAT
     my $ip_re = qr|(?:[0-2]?\d{1,2}\.){3}[0-2]?\d{1,2}|;
 
     ### array of hash refs
@@ -703,14 +705,15 @@ __END__
 
 =head1 NAME
 
-IPTables::Parse - Perl extension for parsing iptables firewall rulesets
+IPTables::Parse - Perl extension for parsing iptables and ip6tables firewall rulesets
 
 =head1 SYNOPSIS
 
   use IPTables::Parse;
 
+  my $ipt_bin = '/sbin/iptables'; # can set this to /sbin/ip6tables
   my %opts = (
-      'iptables' => '/sbin/iptables',
+      'iptables' => $ipt_bin,
       'iptout'   => '/tmp/iptables.out',
       'ipterr'   => '/tmp/iptables.err',
       'debug'    => 0,
@@ -757,11 +760,12 @@ IPTables::Parse - Perl extension for parsing iptables firewall rulesets
 
 =head1 DESCRIPTION
 
-The C<IPTables::Parse> package provides an interface to parse iptables
-rules on Linux systems through the direct execution of iptables commands, or
-from parsing a file that contains an iptables policy listing.  You can get the
-current policy applied to a table/chain, look for a specific user-defined chain,
-check for a default DROP policy, or determing whether or not logging rules exist.
+The C<IPTables::Parse> package provides an interface to parse iptables or
+ip6tables rules on Linux systems through the direct execution of
+iptables/ip6tables commands, or from parsing a file that contains an
+iptables/ip6tables policy listing.  You can get the current policy applied to a
+table/chain, look for a specific user-defined chain, check for a default DROP
+policy, or determing whether or not logging rules exist.
 
 =head1 FUNCTIONS
 
@@ -785,27 +789,27 @@ the following keys (that contain values depending on the rule): C<src>, C<dst>,
 C<protocol>, C<s_port>, C<d_port>, C<target>, C<packets>, C<bytes>, C<intf_in>,
 C<intf_out>, C<to_ip>, C<to_port>, C<state>, C<raw>, and C<extended>.  The C<extended>
 element contains the rule output past the protocol information, and the C<raw>
-element contains the complete rule itself as reported by iptables.
+element contains the complete rule itself as reported by iptables or ip6tables.
 
 =item default_drop($table, $chain)
 
-This function parses the running iptables policy in order to determine if
-the specified chain contains a default DROP rule.  Two values are returned,
-a hash reference whose keys are the protocols that are dropped by default
-if a global ACCEPT rule has not accepted matching packets first, along with
-a return value that tells the caller if parsing the iptables policy was
-successful.  Note that if all protocols are dropped by default, then the
-hash key 'all' will be defined.
+This function parses the running iptables or ip6tables policy in order to
+determine if the specified chain contains a default DROP rule.  Two values
+are returned, a hash reference whose keys are the protocols that are dropped by
+default if a global ACCEPT rule has not accepted matching packets first, along
+with a return value that tells the caller if parsing the iptables or ip6tables
+policy was successful.  Note that if all protocols are dropped by default, then
+the hash key 'all' will be defined.
 
   ($ipt_hr, $rv) = $ipt_obj->default_drop('filter', 'INPUT');
 
 =item default_log($table, $chain)
 
-This function parses the running iptables policy in order to determine if
+This function parses the running iptables or ip6tables policy in order to determine if
 the specified chain contains a default LOG rule.  Two values are returned,
 a hash reference whose keys are the protocols that are logged by default
 if a global ACCEPT rule has not accepted matching packets first, along with
-a return value that tells the caller if parsing the iptables policy was
+a return value that tells the caller if parsing the iptables or ip6tables policy was
 successful.  Note that if all protocols are logged by default, then the
 hash key 'all' will be defined.  An example invocation is:
 
@@ -820,16 +824,16 @@ Michael Rash, E<lt>mbr@cipherdyne.orgE<gt>
 =head1 SEE ALSO
 
 The IPTables::Parse is used by the IPTables::ChainMgr extension in support of
-the psad, fwsnort, and fwknop projects to parse iptables policies (see the psad(8),
-fwsnort(8), and fwknop(8) man pages).  As always, the iptables(8) provides the
-best information on command line execution and theory behind iptables.
+the psad and fwsnort projects to parse iptables or ip6tables policies (see the psad(8),
+and fwsnort(8) man pages).  As always, the iptables(8) and ip6tables(8) man pages
+provide the best information on command line execution and theory behind iptables
+and ip6tables.
 
 Although there is no mailing that is devoted specifically to the IPTables::Parse
 extension, questions about the extension will be answered on the following
 lists:
 
   The psad mailing list: http://lists.sourceforge.net/lists/listinfo/psad-discuss
-  The fwknop mailing list: http://lists.sourceforge.net/lists/listinfo/fwknop-discuss
   The fwsnort mailing list: http://lists.sourceforge.net/lists/listinfo/fwsnort-discuss
 
 The latest version of the IPTables::Parse extension can be found at:
@@ -846,7 +850,7 @@ Thanks to the following people:
 =head1 AUTHOR
 
 The IPTables::Parse extension was written by Michael Rash F<E<lt>mbr@cipherdyne.orgE<gt>>
-to support the psad, fwknop, and fwsnort projects.  Please send email to
+to support the psad and fwsnort projects.  Please send email to
 this address if there are any questions, comments, or bug reports.
 
 =head1 COPYRIGHT AND LICENSE
