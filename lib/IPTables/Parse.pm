@@ -712,6 +712,7 @@ IPTables::Parse - Perl extension for parsing iptables and ip6tables firewall rul
   use IPTables::Parse;
 
   my $ipt_bin = '/sbin/iptables'; # can set this to /sbin/ip6tables
+
   my %opts = (
       'iptables' => $ipt_bin,
       'iptout'   => '/tmp/iptables.out',
@@ -740,7 +741,7 @@ IPTables::Parse - Perl extension for parsing iptables and ip6tables firewall rul
           }
       }
   } else {
-      print "[-] Could not parse iptables policy\n";
+      print "[-] Could not parse $ipt_obj->{'_ipt_bin_name'} policy\n";
   }
 
   ($ipt_hr, $rv) = $ipt_obj->default_log($table, $chain);
@@ -755,7 +756,7 @@ IPTables::Parse - Perl extension for parsing iptables and ip6tables firewall rul
           }
       }
   } else {
-      print "[-] Could not parse iptables policy\n";
+      print "[-] Could not parse $ipt_obj->{'_ipt_bin_name'} policy\n";
   }
 
 =head1 DESCRIPTION
