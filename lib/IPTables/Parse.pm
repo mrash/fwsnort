@@ -7,7 +7,7 @@
 #
 # Author: Michael Rash (mbr@cipherdyne.org)
 #
-# Version: 0.8
+# Version: 0.9
 #
 ##################################################################
 #
@@ -21,7 +21,7 @@ use strict;
 use warnings;
 use vars qw($VERSION);
 
-$VERSION = '0.8';
+$VERSION = '0.9';
 
 sub new() {
     my $class = shift;
@@ -96,7 +96,7 @@ sub chain_rules() {
     my $found_chain  = 0;
     my @ipt_lines = ();
 
-    ### only used for IPv4 and NAT
+    ### only used for IPv4 + NAT
     my $ip_re = qr|(?:[0-2]?\d{1,2}\.){3}[0-2]?\d{1,2}|;
 
     ### array of hash refs
@@ -160,6 +160,7 @@ sub chain_rules() {
             'to_port'  => '',
             'extended' => '',
             'state'    => '',
+            'ctstate'  => '',
             'raw'      => $line
         );
 
@@ -219,37 +220,11 @@ sub chain_rules() {
                             $rule{'to_ip'}   = $1;
                             $rule{'to_port'} = $2;
                         }
-
-                        for my $state_hr (@global_accept_state) {
-                            next unless $state_hr->{'src'} eq '0.0.0.0/0';
-                            next unless $state_hr->{'dst'} eq '0.0.0.0/0';
-                            next unless $state_hr->{'proto'} eq 'all' or
-                                $state_hr->{'proto'} = $rule{'proto'};
-                            next unless $state_hr->{'intf_in'} eq '*' or
-                                $state_hr->{'intf_in'} eq $rule{'intf_in'};
-                            next unless $state_hr->{'intf_out'} eq '*' or
-                                $state_hr->{'intf_out'} eq $rule{'intf_out'};
-                            ### if we make it here, then the state rule
-                            ### applies to this rule
-                            $rule{'state'} = $state_hr->{'state'};
-                        }
                     }
-                    if ($rule{'target'} eq 'ACCEPT'
-                            and $rule{'extended'} =~ m|^state\s+(\S+)|) {
-                        my $state_str = $1;
-                        if ($state_str =~ /ESTABLISHED/
-                                or $state_str =~ /RELATED/) {
-
-                            push @global_accept_state, {
-                                'state'    => $state_str,
-                                'src'      => $rule{'src'},
-                                'dst'      => $rule{'dst'},
-                                'intf_in'  => $rule{'intf_in'},
-                                'intf_out' => $rule{'intf_out'},
-                                'proto'    => $rule{'protocol'}
-                            };
-                            my %state_hash = ();
-                        }
+                    if ($rule{'extended'} =~ /\bctstate\s+(\S+)/) {
+                        $rule{'ctstate'} = $1;
+                    } elsif ($rule{'extended'} =~ /\bstate\s+(\S+)/) {
+                        $rule{'state'} = $1;
                     }
                 }
             }
@@ -308,6 +283,12 @@ sub chain_rules() {
                     if ($rule{'extended'} =~ /\sto:($ip_re):(\d+)/) {
                         $rule{'to_ip'}   = $1;
                         $rule{'to_port'} = $2;
+                    }
+
+                    if ($rule{'extended'} =~ /\bctstate\s+(\S+)/) {
+                        $rule{'ctstate'} = $1;
+                    } elsif ($rule{'extended'} =~ /\bstate\s+(\S+)/) {
+                        $rule{'state'} = $1;
                     }
                 }
             }

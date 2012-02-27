@@ -166,19 +166,40 @@ sub chain_rules_tests() {
 
             my $rules_ar = $ipt_obj->chain_rules($table, $chain);
 
-            ### compare raw rules list with parsed chain_rules()
-            ### output - basic number check
             $executed++;
 
-            if (($#$out_ar - 2) == $#$rules_ar) {
+            my $matched_state = 1;
+            for (my $i=2; $i<=$#$out_ar; $i++) {
+                if ($out_ar->[$i] =~ /\sctstate/) {
+                    unless (defined $rules_ar->[$i-2]->{'ctstate'}
+                            and $rules_ar->[$i-2]->{'ctstate'}) {
+                        $matched_state = 0;
+                        last;
+                    }
+                } elsif ($out_ar->[$i] =~ /\sstate/) {
+                    unless (defined $rules_ar->[$i-2]->{'state'}
+                            and $rules_ar->[$i-2]->{'state'}) {
+                        $matched_state = 0;
+                        last;
+                    }
+                }
+            }
+
+            ### compare raw rules list with parsed chain_rules()
+            ### output - basic number check
+            if (($#$out_ar - 2) == $#$rules_ar and $matched_state) {
                 &logr("pass ($executed)\n");
                 $passed++;
             } else {
                 &logr("fail ($executed)\n");
-                if (($#$out_ar - 2) > $#$rules_ar) {
-                    &logr("    chain_rules() missed rules.\n");
-                } elsif (($#$out_ar - 2) < $#$rules_ar) {
-                    &logr("    chain_rules() added inappropriate rules.\n");
+                if ($matched_state) {
+                    &logr("    chain_rules() missed extended state info.\n");
+                } else {
+                    if (($#$out_ar - 2) > $#$rules_ar) {
+                        &logr("    chain_rules() missed rules.\n");
+                    } elsif (($#$out_ar - 2) < $#$rules_ar) {
+                        &logr("    chain_rules() added inappropriate rules.\n");
+                    }
                 }
                 $failed++;
             }

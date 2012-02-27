@@ -1,5 +1,13 @@
 Revision history for Perl extension IPTables::Parse.
 
+0.9 Sun Feb 26 21:01:45 2012
+    - Applied slightly modified patch from SSIMON to properly pick up usage of
+      state tracking in rule extended information as shown in this bug:
+            https://rt.cpan.org/Ticket/Display.html?id=67372#txn-925687
+      Rule 'extended' hash now includes the 'state' or 'ctstate' key
+      depending on which iptables state tracking module is being used (if
+      any).
+
 0.8 Sun Feb 26 14:03:24 2012
     - Major update to support ip6tables policies.
     - Added test suite script t/basic_tests.pl to exercise major functions for
