@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               IPTables-Parse
-version:            0.9
+version:            1.0
 abstract:           Perl extension for parsing iptables and ip6tables firewall rulesets
 author:
     - Michael Rash <mbr@cipherdyne.org>
