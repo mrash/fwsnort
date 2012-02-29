@@ -28,7 +28,7 @@ sub new() {
     my %args  = @_;
 
     my $self = {
-        _iptables => $args{'iptables'} || '/sbin/iptables',
+        _iptables => $args{'iptables'} || $args{'ip6tables'} || '/sbin/iptables',
         _iptout    => $args{'iptout'}    || '/tmp/ipt.out',
         _ipterr    => $args{'ipterr'}    || '/tmp/ipt.err',
         _ipt_alarm => $args{'ipt_alarm'} || 30,
@@ -822,6 +822,11 @@ The latest version of the IPTables::Parse extension can be found at:
 
 http://www.cipherdyne.org/modules/
 
+Source control is provided by git:
+
+http://www.cipherdyne.org/git/IPTables-Parse.git
+http://www.cipherdyne.org/cgi-bin/gitweb.cgi?p=IPTables-Parse.git;a=summary
+
 =head1 CREDITS
 
 Thanks to the following people:
@@ -837,10 +842,14 @@ this address if there are any questions, comments, or bug reports.
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2005-2012 by Michael Rash
+Copyright (C) 2005-2012 Michael Rash.  All rights reserved.
 
-This library is free software; you can redistribute it and/or modify
-it under the same terms as Perl itself, either Perl version 5.8.5 or,
-at your option, any later version of Perl 5 you may have available.
+This module is free software.  You can redistribute it and/or
+modify it under the terms of the Artistic License 2.0.  More information
+can be found here: http://www.perl.com/perl/misc/Artistic.html
+
+This program is distributed "as is" in the hope that it will be useful,
+but without any warranty; without even the implied warranty of
+merchantability or fitness for a particular purpose.
 
 =cut

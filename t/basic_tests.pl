@@ -73,7 +73,7 @@ sub ip6tables_tests() {
 
     &logr("\n[+] Running $ip6tables_bin tests...\n");
     my %opts = (
-        'iptables' => $ip6tables_bin,
+        'ip6tables' => $ip6tables_bin,
         'iptout'   => '/tmp/ip6tables.out',
         'ipterr'   => '/tmp/ip6tables.err',
         'debug'    => 0,

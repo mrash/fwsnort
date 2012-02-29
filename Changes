@@ -1,5 +1,12 @@
 Revision history for Perl extension IPTables::Parse.
 
+1.0 Tue Feb 28 21:45:19 2012
+    - Added META.{yml,json} files to fix this bug:
+        https://rt.cpan.org/Ticket/Display.html?id=75366
+    - Added the ability to specify 'ip6tables' when instantiating an
+      IPTables::ChainMgr object via 'new'.
+    - Updated license to the Artistic license.
+
 0.9 Sun Feb 26 21:01:45 2012
     - Applied slightly modified patch from SSIMON to properly pick up usage of
       state tracking in rule extended information as shown in this bug:
