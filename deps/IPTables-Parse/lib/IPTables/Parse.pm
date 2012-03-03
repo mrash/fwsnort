@@ -3,11 +3,11 @@
 #
 # File: IPTables::Parse.pm
 #
-# Purpose: Perl interface to parse iptables rulesets.
+# Purpose: Perl interface to parse iptables and ip6tables rulesets.
 #
 # Author: Michael Rash (mbr@cipherdyne.org)
 #
-# Version: 0.8
+# Version: 1.1
 #
 ##################################################################
 #
@@ -21,14 +21,14 @@ use strict;
 use warnings;
 use vars qw($VERSION);
 
-$VERSION = '0.8';
+$VERSION = '1.1';
 
 sub new() {
     my $class = shift;
     my %args  = @_;
 
     my $self = {
-        _iptables => $args{'iptables'} || '/sbin/iptables',
+        _iptables => $args{'iptables'} || $args{'ip6tables'} || '/sbin/iptables',
         _iptout    => $args{'iptout'}    || '/tmp/ipt.out',
         _ipterr    => $args{'ipterr'}    || '/tmp/ipt.err',
         _ipt_alarm => $args{'ipt_alarm'} || 30,
@@ -95,6 +95,8 @@ sub chain_rules() {
 
     my $found_chain  = 0;
     my @ipt_lines = ();
+
+    ### only used for IPv4 + NAT
     my $ip_re = qr|(?:[0-2]?\d{1,2}\.){3}[0-2]?\d{1,2}|;
 
     ### array of hash refs
@@ -158,6 +160,7 @@ sub chain_rules() {
             'to_port'  => '',
             'extended' => '',
             'state'    => '',
+            'ctstate'  => '',
             'raw'      => $line
         );
 
@@ -217,37 +220,11 @@ sub chain_rules() {
                             $rule{'to_ip'}   = $1;
                             $rule{'to_port'} = $2;
                         }
-
-                        for my $state_hr (@global_accept_state) {
-                            next unless $state_hr->{'src'} eq '0.0.0.0/0';
-                            next unless $state_hr->{'dst'} eq '0.0.0.0/0';
-                            next unless $state_hr->{'proto'} eq 'all' or
-                                $state_hr->{'proto'} = $rule{'proto'};
-                            next unless $state_hr->{'intf_in'} eq '*' or
-                                $state_hr->{'intf_in'} eq $rule{'intf_in'};
-                            next unless $state_hr->{'intf_out'} eq '*' or
-                                $state_hr->{'intf_out'} eq $rule{'intf_out'};
-                            ### if we make it here, then the state rule
-                            ### applies to this rule
-                            $rule{'state'} = $state_hr->{'state'};
-                        }
                     }
-                    if ($rule{'target'} eq 'ACCEPT'
-                            and $rule{'extended'} =~ m|^state\s+(\S+)|) {
-                        my $state_str = $1;
-                        if ($state_str =~ /ESTABLISHED/
-                                or $state_str =~ /RELATED/) {
-
-                            push @global_accept_state, {
-                                'state'    => $state_str,
-                                'src'      => $rule{'src'},
-                                'dst'      => $rule{'dst'},
-                                'intf_in'  => $rule{'intf_in'},
-                                'intf_out' => $rule{'intf_out'},
-                                'proto'    => $rule{'protocol'}
-                            };
-                            my %state_hash = ();
-                        }
+                    if ($rule{'extended'} =~ /\bctstate\s+(\S+)/) {
+                        $rule{'ctstate'} = $1;
+                    } elsif ($rule{'extended'} =~ /\bstate\s+(\S+)/) {
+                        $rule{'state'} = $1;
                     }
                 }
             }
@@ -306,6 +283,12 @@ sub chain_rules() {
                     if ($rule{'extended'} =~ /\sto:($ip_re):(\d+)/) {
                         $rule{'to_ip'}   = $1;
                         $rule{'to_port'} = $2;
+                    }
+
+                    if ($rule{'extended'} =~ /\bctstate\s+(\S+)/) {
+                        $rule{'ctstate'} = $1;
+                    } elsif ($rule{'extended'} =~ /\bstate\s+(\S+)/) {
+                        $rule{'state'} = $1;
                     }
                 }
             }
@@ -408,7 +391,8 @@ sub default_drop() {
         $found_default_drop = 1;
     }
 
-    return "[-] There are no default drop rules in the $self->{'_ipt_bin_name'} policy!", 0
+    return "[-] There are no default drop rules in the " .
+            "$self->{'_ipt_bin_name'} policy!", 0
         unless %protocols and $found_default_drop;
 
     return \%protocols, 1;
@@ -574,7 +558,8 @@ sub sub_chains() {
 
 sub exec_iptables() {
     my $self  = shift;
-    my $cmd = shift || croak '[*] Must specify an iptables command to run.';
+    my $cmd = shift || croak "[*] Must specify an " .
+        "$self->{'_ipt_bin_name'} command to run.";
     my $iptables  = $self->{'_iptables'};
     my $iptout    = $self->{'_iptout'};
     my $ipterr    = $self->{'_ipterr'};
@@ -585,7 +570,7 @@ sub exec_iptables() {
     my $ipt_exec_sleep = $self->{'_ipt_exec_sleep'};
     my $sigchld_handler = $self->{'_sigchld_handler'};
 
-    croak "[*] $cmd does not look like an iptables command."
+    croak "[*] $cmd does not look like an $self->{'_ipt_bin_name'} command."
         unless $cmd =~ m|^\s*iptables| or $cmd =~ m|^\S+/iptables|
             or $cmd =~ m|^\s*ip6tables| or $cmd =~ m|^\S+/ip6tables|;
 
@@ -609,7 +594,7 @@ sub exec_iptables() {
         if ($debug or $verbose) {
             print $fh localtime() . " [+] IPTables::Parse: ",
                 "sleeping for $ipt_exec_sleep seconds before ",
-                "executing iptables command.\n";
+                "executing $self->{'_ipt_bin_name'} command.\n";
         }
         sleep $ipt_exec_sleep;
     }
@@ -637,7 +622,8 @@ sub exec_iptables() {
                 ### iptables should never take longer than 30 seconds to execute,
                 ### unless there is some absolutely enormous policy or the kernel
                 ### is exceedingly busy
-                local $SIG{'ALRM'} = sub {die "[*] iptables command timeout.\n"};
+                local $SIG{'ALRM'} = sub {die "[*] $self->{'_ipt_bin_name'} " .
+                    "command timeout.\n"};
                 alarm $ipt_alarm;
                 waitpid($ipt_pid, 0);
                 alarm 0;
@@ -646,7 +632,7 @@ sub exec_iptables() {
                 kill 9, $ipt_pid unless kill 15, $ipt_pid;
             }
         } else {
-            croak "[*] Could not fork iptables: $!"
+            croak "[*] Could not fork $self->{'_ipt_bin_name'}: $!"
                 unless defined $ipt_pid;
 
             ### exec the iptables command and preserve stdout and stderr
@@ -668,7 +654,8 @@ sub exec_iptables() {
     }
 
     if ($debug or $verbose) {
-        print $fh localtime() . "     iptables command stdout:\n";
+        print $fh localtime() . "     $self->{'_ipt_bin_name'} " .
+            "command stdout:\n";
         for my $line (@stdout) {
             if ($line =~ /\n$/) {
                 print $fh $line;
@@ -676,7 +663,8 @@ sub exec_iptables() {
                 print $fh $line, "\n";
             }
         }
-        print $fh localtime() . "     iptables command stderr:\n";
+        print $fh localtime() . "     $self->{'_ipt_bin_name'} " .
+            "command stderr:\n";
         for my $line (@stderr) {
             if ($line =~ /\n$/) {
                 print $fh $line;
@@ -703,14 +691,16 @@ __END__
 
 =head1 NAME
 
-IPTables::Parse - Perl extension for parsing iptables firewall rulesets
+IPTables::Parse - Perl extension for parsing iptables and ip6tables policies
 
 =head1 SYNOPSIS
 
   use IPTables::Parse;
 
+  my $ipt_bin = '/sbin/iptables'; # can set this to /sbin/ip6tables
+
   my %opts = (
-      'iptables' => '/sbin/iptables',
+      'iptables' => $ipt_bin,
       'iptout'   => '/tmp/iptables.out',
       'ipterr'   => '/tmp/iptables.err',
       'debug'    => 0,
@@ -737,7 +727,7 @@ IPTables::Parse - Perl extension for parsing iptables firewall rulesets
           }
       }
   } else {
-      print "[-] Could not parse iptables policy\n";
+      print "[-] Could not parse $ipt_obj->{'_ipt_bin_name'} policy\n";
   }
 
   ($ipt_hr, $rv) = $ipt_obj->default_log($table, $chain);
@@ -752,16 +742,17 @@ IPTables::Parse - Perl extension for parsing iptables firewall rulesets
           }
       }
   } else {
-      print "[-] Could not parse iptables policy\n";
+      print "[-] Could not parse $ipt_obj->{'_ipt_bin_name'} policy\n";
   }
 
 =head1 DESCRIPTION
 
-The C<IPTables::Parse> package provides an interface to parse iptables
-rules on Linux systems through the direct execution of iptables commands, or
-from parsing a file that contains an iptables policy listing.  You can get the
-current policy applied to a table/chain, look for a specific user-defined chain,
-check for a default DROP policy, or determing whether or not logging rules exist.
+The C<IPTables::Parse> package provides an interface to parse iptables or
+ip6tables rules on Linux systems through the direct execution of
+iptables/ip6tables commands, or from parsing a file that contains an
+iptables/ip6tables policy listing.  You can get the current policy applied to a
+table/chain, look for a specific user-defined chain, check for a default DROP
+policy, or determing whether or not logging rules exist.
 
 =head1 FUNCTIONS
 
@@ -785,27 +776,27 @@ the following keys (that contain values depending on the rule): C<src>, C<dst>,
 C<protocol>, C<s_port>, C<d_port>, C<target>, C<packets>, C<bytes>, C<intf_in>,
 C<intf_out>, C<to_ip>, C<to_port>, C<state>, C<raw>, and C<extended>.  The C<extended>
 element contains the rule output past the protocol information, and the C<raw>
-element contains the complete rule itself as reported by iptables.
+element contains the complete rule itself as reported by iptables or ip6tables.
 
 =item default_drop($table, $chain)
 
-This function parses the running iptables policy in order to determine if
-the specified chain contains a default DROP rule.  Two values are returned,
-a hash reference whose keys are the protocols that are dropped by default
-if a global ACCEPT rule has not accepted matching packets first, along with
-a return value that tells the caller if parsing the iptables policy was
-successful.  Note that if all protocols are dropped by default, then the
-hash key 'all' will be defined.
+This function parses the running iptables or ip6tables policy in order to
+determine if the specified chain contains a default DROP rule.  Two values
+are returned, a hash reference whose keys are the protocols that are dropped by
+default if a global ACCEPT rule has not accepted matching packets first, along
+with a return value that tells the caller if parsing the iptables or ip6tables
+policy was successful.  Note that if all protocols are dropped by default, then
+the hash key 'all' will be defined.
 
   ($ipt_hr, $rv) = $ipt_obj->default_drop('filter', 'INPUT');
 
 =item default_log($table, $chain)
 
-This function parses the running iptables policy in order to determine if
+This function parses the running iptables or ip6tables policy in order to determine if
 the specified chain contains a default LOG rule.  Two values are returned,
 a hash reference whose keys are the protocols that are logged by default
 if a global ACCEPT rule has not accepted matching packets first, along with
-a return value that tells the caller if parsing the iptables policy was
+a return value that tells the caller if parsing the iptables or ip6tables policy was
 successful.  Note that if all protocols are logged by default, then the
 hash key 'all' will be defined.  An example invocation is:
 
@@ -820,21 +811,27 @@ Michael Rash, E<lt>mbr@cipherdyne.orgE<gt>
 =head1 SEE ALSO
 
 The IPTables::Parse is used by the IPTables::ChainMgr extension in support of
-the psad, fwsnort, and fwknop projects to parse iptables policies (see the psad(8),
-fwsnort(8), and fwknop(8) man pages).  As always, the iptables(8) provides the
-best information on command line execution and theory behind iptables.
+the psad and fwsnort projects to parse iptables or ip6tables policies (see the psad(8),
+and fwsnort(8) man pages).  As always, the iptables(8) and ip6tables(8) man pages
+provide the best information on command line execution and theory behind iptables
+and ip6tables.
 
 Although there is no mailing that is devoted specifically to the IPTables::Parse
 extension, questions about the extension will be answered on the following
 lists:
 
   The psad mailing list: http://lists.sourceforge.net/lists/listinfo/psad-discuss
-  The fwknop mailing list: http://lists.sourceforge.net/lists/listinfo/fwknop-discuss
   The fwsnort mailing list: http://lists.sourceforge.net/lists/listinfo/fwsnort-discuss
 
-The latest version of the IPTables::Parse extension can be found at:
+The latest version of the IPTables::Parse extension can be found on CPAN and
+also here:
 
-http://www.cipherdyne.org/modules/
+  http://www.cipherdyne.org/modules/
+
+Source control is provided by git:
+
+  http://www.cipherdyne.org/git/IPTables-Parse.git
+  http://www.cipherdyne.org/cgi-bin/gitweb.cgi?p=IPTables-Parse.git;a=summary
 
 =head1 CREDITS
 
@@ -846,15 +843,19 @@ Thanks to the following people:
 =head1 AUTHOR
 
 The IPTables::Parse extension was written by Michael Rash F<E<lt>mbr@cipherdyne.orgE<gt>>
-to support the psad, fwknop, and fwsnort projects.  Please send email to
+to support the psad and fwsnort projects.  Please send email to
 this address if there are any questions, comments, or bug reports.
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2005-2012 by Michael Rash
+Copyright (C) 2005-2012 Michael Rash.  All rights reserved.
 
-This library is free software; you can redistribute it and/or modify
-it under the same terms as Perl itself, either Perl version 5.8.5 or,
-at your option, any later version of Perl 5 you may have available.
+This module is free software.  You can redistribute it and/or
+modify it under the terms of the Artistic License 2.0.  More information
+can be found here: http://www.perl.com/perl/misc/Artistic.html
+
+This program is distributed "as is" in the hope that it will be useful,
+but without any warranty; without even the implied warranty of
+merchantability or fitness for a particular purpose.
 
 =cut
