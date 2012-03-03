@@ -391,7 +391,8 @@ sub default_drop() {
         $found_default_drop = 1;
     }
 
-    return "[-] There are no default drop rules in the $self->{'_ipt_bin_name'} policy!", 0
+    return "[-] There are no default drop rules in the " .
+            "$self->{'_ipt_bin_name'} policy!", 0
         unless %protocols and $found_default_drop;
 
     return \%protocols, 1;
@@ -557,7 +558,8 @@ sub sub_chains() {
 
 sub exec_iptables() {
     my $self  = shift;
-    my $cmd = shift || croak '[*] Must specify an iptables command to run.';
+    my $cmd = shift || croak "[*] Must specify an " .
+        "$self->{'_ipt_bin_name'} command to run.";
     my $iptables  = $self->{'_iptables'};
     my $iptout    = $self->{'_iptout'};
     my $ipterr    = $self->{'_ipterr'};
@@ -568,7 +570,7 @@ sub exec_iptables() {
     my $ipt_exec_sleep = $self->{'_ipt_exec_sleep'};
     my $sigchld_handler = $self->{'_sigchld_handler'};
 
-    croak "[*] $cmd does not look like an iptables command."
+    croak "[*] $cmd does not look like an $self->{'_ipt_bin_name'} command."
         unless $cmd =~ m|^\s*iptables| or $cmd =~ m|^\S+/iptables|
             or $cmd =~ m|^\s*ip6tables| or $cmd =~ m|^\S+/ip6tables|;
 
@@ -592,7 +594,7 @@ sub exec_iptables() {
         if ($debug or $verbose) {
             print $fh localtime() . " [+] IPTables::Parse: ",
                 "sleeping for $ipt_exec_sleep seconds before ",
-                "executing iptables command.\n";
+                "executing $self->{'_ipt_bin_name'} command.\n";
         }
         sleep $ipt_exec_sleep;
     }
@@ -620,7 +622,8 @@ sub exec_iptables() {
                 ### iptables should never take longer than 30 seconds to execute,
                 ### unless there is some absolutely enormous policy or the kernel
                 ### is exceedingly busy
-                local $SIG{'ALRM'} = sub {die "[*] iptables command timeout.\n"};
+                local $SIG{'ALRM'} = sub {die "[*] $self->{'_ipt_bin_name'} " .
+                    "command timeout.\n"};
                 alarm $ipt_alarm;
                 waitpid($ipt_pid, 0);
                 alarm 0;
@@ -629,7 +632,7 @@ sub exec_iptables() {
                 kill 9, $ipt_pid unless kill 15, $ipt_pid;
             }
         } else {
-            croak "[*] Could not fork iptables: $!"
+            croak "[*] Could not fork $self->{'_ipt_bin_name'}: $!"
                 unless defined $ipt_pid;
 
             ### exec the iptables command and preserve stdout and stderr
@@ -651,7 +654,8 @@ sub exec_iptables() {
     }
 
     if ($debug or $verbose) {
-        print $fh localtime() . "     iptables command stdout:\n";
+        print $fh localtime() . "     $self->{'_ipt_bin_name'} " .
+            "command stdout:\n";
         for my $line (@stdout) {
             if ($line =~ /\n$/) {
                 print $fh $line;
@@ -659,7 +663,8 @@ sub exec_iptables() {
                 print $fh $line, "\n";
             }
         }
-        print $fh localtime() . "     iptables command stderr:\n";
+        print $fh localtime() . "     $self->{'_ipt_bin_name'} " .
+            "command stderr:\n";
         for my $line (@stderr) {
             if ($line =~ /\n$/) {
                 print $fh $line;
@@ -686,7 +691,7 @@ __END__
 
 =head1 NAME
 
-IPTables::Parse - Perl extension for parsing iptables and ip6tables firewall rulesets
+IPTables::Parse - Perl extension for parsing iptables and ip6tables policies
 
 =head1 SYNOPSIS
 
@@ -818,14 +823,15 @@ lists:
   The psad mailing list: http://lists.sourceforge.net/lists/listinfo/psad-discuss
   The fwsnort mailing list: http://lists.sourceforge.net/lists/listinfo/fwsnort-discuss
 
-The latest version of the IPTables::Parse extension can be found at:
+The latest version of the IPTables::Parse extension can be found on CPAN and
+also here:
 
-http://www.cipherdyne.org/modules/
+  http://www.cipherdyne.org/modules/
 
 Source control is provided by git:
 
-http://www.cipherdyne.org/git/IPTables-Parse.git
-http://www.cipherdyne.org/cgi-bin/gitweb.cgi?p=IPTables-Parse.git;a=summary
+  http://www.cipherdyne.org/git/IPTables-Parse.git
+  http://www.cipherdyne.org/cgi-bin/gitweb.cgi?p=IPTables-Parse.git;a=summary
 
 =head1 CREDITS
 

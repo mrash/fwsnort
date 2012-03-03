@@ -1,5 +1,11 @@
 Revision history for Perl extension IPTables::Parse.
 
+1.1 Fri Mar 02 22:31:12 2012
+    - Minor update to print the iptables binary name in 'croak' error
+      conditions.  The binary name is either 'iptables' or 'ip6tables'.
+    - Minor perldoc updates to render links better (two spaces at the beginning
+      of lines).
+
 1.0 Tue Feb 28 21:45:19 2012
     - Added META.{yml,json} files to fix this bug:
         https://rt.cpan.org/Ticket/Display.html?id=75366
