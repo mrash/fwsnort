@@ -143,25 +143,26 @@ sub chain_rules() {
 
         ### initialize hash
         my %rule = (
-            'packets'  => '',
-            'bytes'    => '',
-            'target'   => '',
-            'protocol' => '',
-            'proto'    => '',
-            'intf_in'  => '',
-            'intf_out' => '',
-            'src'      => '',
-            's_port'   => '',
-            'sport'    => '',
-            'dst'      => '',
-            'd_port'   => '',
-            'dport'    => '',
-            'to_ip'    => '',
-            'to_port'  => '',
-            'extended' => '',
-            'state'    => '',
-            'ctstate'  => '',
-            'raw'      => $line
+            'packets'    => '',
+            'bytes'      => '',
+            'target'     => '',
+            'protocol'   => '',
+            'proto'      => '',
+            'intf_in'    => '',
+            'intf_out'   => '',
+            'src'        => '',
+            's_port'     => '',
+            'sport'      => '',
+            'dst'        => '',
+            'd_port'     => '',
+            'dport'      => '',
+            'to_ip'      => '',
+            'to_port'    => '',
+            'extended'   => '',
+            'mac_source' => '',
+            'state'      => '',
+            'ctstate'    => '',
+            'raw'        => $line
         );
 
         if ($ipt_verbose) {
@@ -226,6 +227,9 @@ sub chain_rules() {
                     } elsif ($rule{'extended'} =~ /\bstate\s+(\S+)/) {
                         $rule{'state'} = $1;
                     }
+                    if ($rule{'extended'} =~ /\bMAC\s+(\S+)/) {
+                        $rule{'mac_source'} = $1;
+                    }
                 }
             }
         } else {
@@ -289,6 +293,9 @@ sub chain_rules() {
                         $rule{'ctstate'} = $1;
                     } elsif ($rule{'extended'} =~ /\bstate\s+(\S+)/) {
                         $rule{'state'} = $1;
+                    }
+                    if ($rule{'extended'} =~ /\bMAC\s+(\S+)/) {
+                        $rule{'mac_source'} = $1;
                     }
                 }
             }
@@ -519,9 +526,9 @@ sub default_log() {
 }
 
 sub sub_chains() {
-    my ($start_chain, $chains_href, $ipt_lines_aref) = @_;
+    my ($start_chain, $chains_hr, $ipt_lines_ar) = @_;
     my $found = 0;
-    for my $line (@$ipt_lines_aref) {
+    for my $line (@$ipt_lines_ar) {
         chomp $line;
         ### Chain INPUT (policy DROP)
         ### Chain fwsnort_INPUT_eth1 (1 references)
@@ -548,8 +555,8 @@ sub sub_chains() {
                     and $new_chain ne 'pkts'
                     and $new_chain ne 'Chain'
                     and $new_chain ne 'target') {
-                $chains_href->{$new_chain} = '';
-                &sub_chains($new_chain, $chains_href, $ipt_lines_aref);
+                $chains_hr->{$new_chain} = '';
+                &sub_chains($new_chain, $chains_hr, $ipt_lines_ar);
             }
         }
     }
