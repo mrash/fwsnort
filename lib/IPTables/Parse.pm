@@ -7,7 +7,7 @@
 #
 # Author: Michael Rash (mbr@cipherdyne.org)
 #
-# Version: 1.1
+# Version: 1.2
 #
 ##################################################################
 #
@@ -21,7 +21,7 @@ use strict;
 use warnings;
 use vars qw($VERSION);
 
-$VERSION = '1.1';
+$VERSION = '1.2';
 
 sub new() {
     my $class = shift;
@@ -46,8 +46,73 @@ sub new() {
     $self->{'_ipt_bin_name'} = 'iptables';
     $self->{'_ipt_bin_name'} = $1 if $self->{'_iptables'} =~ m|.*/(\S+)|;
 
+    $self->{'parse_keys'} = &parse_keys();
+
     bless $self, $class;
 }
+
+sub parse_keys() {
+    my $self = shift;
+
+    ### only used for IPv4 + NAT
+    my $ipv4_re = qr|(?:[0-2]?\d{1,2}\.){3}[0-2]?\d{1,2}|;
+
+    my %keys = (
+        'regular' => {
+            'packets'  => '',
+            'bytes'    => '',
+            'target'   => '',
+            'protocol' => '',
+            'proto'    => '',
+            'intf_in'  => '',
+            'intf_out' => '',
+            'src'      => '',
+            'dst'      => ''
+        },
+        'extended' => {
+            's_port' => {
+                'regex'     => qr/\bspts?:(\S+)/,
+                'ipt_match' => ''
+            },
+            'sport' => {
+                'regex'     => qr/\bspts?:(\S+)/,
+                'ipt_match' => ''
+            },
+            'd_port' => {
+                'regex'     => qr/\bdpts?:(\S+)/,
+                'ipt_match' => ''
+            },
+            'dport' => {
+                'regex'     => qr/\bdpts?:(\S+)/,
+                'ipt_match' => ''
+            },
+            'to_ip' => {
+                'regex'     => qr/\bto:($ipv4_re):\d+/,
+                'ipt_match' => ''
+            },
+            'to_port' => {
+                'regex'     => qr/\bto:$ipv4_re:(\d+)/,
+                'ipt_match' => ''
+            },
+            'mac_source' => {
+                'regex'     => qr/\bMAC\s+(\S+)/,
+                'ipt_match' => '-m mac --mac_source'
+            },
+            'state' => {
+                'regex'     => qr/\bstate\s+(\S+)/,
+                'ipt_match' => '-m state --state'
+            },
+            'ctstate' => {
+                'regex'     => qr/\bctstate\s+(\S+)/,
+                'ipt_match' => '-m conntrack --ctstate'
+            },
+        },
+        'raw' => ''
+    );
+
+    return \%keys;
+}
+
 
 sub chain_policy() {
     my $self   = shift;
@@ -143,27 +208,15 @@ sub chain_rules() {
 
         ### initialize hash
         my %rule = (
-            'packets'    => '',
-            'bytes'      => '',
-            'target'     => '',
-            'protocol'   => '',
-            'proto'      => '',
-            'intf_in'    => '',
-            'intf_out'   => '',
-            'src'        => '',
-            's_port'     => '',
-            'sport'      => '',
-            'dst'        => '',
-            'd_port'     => '',
-            'dport'      => '',
-            'to_ip'      => '',
-            'to_port'    => '',
-            'extended'   => '',
-            'mac_source' => '',
-            'state'      => '',
-            'ctstate'    => '',
-            'raw'        => $line
+            'extended' => '',
+            'raw'      => $line
         );
+        for my $key (keys %{$self->{'parse_keys'}->{'regular'}}) {
+            $rule{$key} = '';
+        }
+        for my $key (keys %{$self->{'parse_keys'}->{'extended'}}) {
+            $rule{$key} = '';
+        }
 
         if ($ipt_verbose) {
 
@@ -190,47 +243,14 @@ sub chain_rules() {
                 $rule{'packets'}  = $1;
                 $rule{'bytes'}    = $2;
                 $rule{'target'}   = $3;
-
-                my $proto = $4;
-                $proto = 'all' if $proto eq '0';
-                $rule{'protocol'} = $rule{'proto'} = $4;
+                $rule{'protocol'} = $rule{'proto'} = lc($4);
                 $rule{'intf_in'}  = $5;
                 $rule{'intf_out'} = $6;
                 $rule{'src'}      = $7;
                 $rule{'dst'}      = $8;
-                $rule{'extended'} = $9;
+                $rule{'extended'} = $9 || '';
 
-                if ($proto eq 'all') {
-                    $rule{'s_port'} = $rule{'sport'} = '0:0';
-                    $rule{'d_port'} = $rule{'dport'} = '0:0';
-                }
-                if ($rule{'extended'}) {
-                    if ($rule{'protocol'} eq 'tcp'
-                            or $rule{'protocol'} eq 'udp') {
-                        my $s_port  = '0:0';  ### any to any
-                        my $d_port  = '0:0';
-                        if ($rule{'extended'} =~ /dpts?:(\S+)/) {
-                            $d_port = $1;
-                        }
-                        if ($rule{'extended'} =~ /spts?:(\S+)/) {
-                            $s_port = $1;
-                        }
-                        $rule{'s_port'} = $rule{'sport'} = $s_port;
-                        $rule{'d_port'} = $rule{'dport'} = $d_port;
-                        if ($rule{'extended'} =~ /\sto:($ip_re):(\d+)/) {
-                            $rule{'to_ip'}   = $1;
-                            $rule{'to_port'} = $2;
-                        }
-                    }
-                    if ($rule{'extended'} =~ /\bctstate\s+(\S+)/) {
-                        $rule{'ctstate'} = $1;
-                    } elsif ($rule{'extended'} =~ /\bstate\s+(\S+)/) {
-                        $rule{'state'} = $1;
-                    }
-                    if ($rule{'extended'} =~ /\bMAC\s+(\S+)/) {
-                        $rule{'mac_source'} = $1;
-                    }
-                }
+                &parse_rule_extended(\%rule, $self->{'parse_keys'}->{'extended'});
             }
         } else {
 
@@ -264,45 +284,38 @@ sub chain_rules() {
                 $rule{'protocol'} = $rule{'proto'} = $proto;
                 $rule{'src'}      = $3;
                 $rule{'dst'}      = $4;
-                $rule{'extended'} = $5;
+                $rule{'extended'} = $5 || '';
 
-                if ($proto eq 'all') {
-                    $rule{'s_port'} = $rule{'sport'} = '0:0';
-                    $rule{'d_port'} = $rule{'dport'} = '0:0';
-                }
-
-                if ($rule{'extended'}
-                        and ($rule{'protocol'} eq 'tcp'
-                        or $rule{'protocol'} eq 'udp')) {
-                    my $s_port  = '0:0';  ### any to any
-                    my $d_port  = '0:0';
-                    if ($rule{'extended'} =~ /dpts?:(\S+)/) {
-                        $d_port = $1;
-                    }
-                    if ($rule{'extended'} =~ /spts?:(\S+)/) {
-                        $s_port = $1;
-                    }
-                    $rule{'s_port'} = $rule{'sport'} = $s_port;
-                    $rule{'d_port'} = $rule{'dport'} = $d_port;
-                    if ($rule{'extended'} =~ /\sto:($ip_re):(\d+)/) {
-                        $rule{'to_ip'}   = $1;
-                        $rule{'to_port'} = $2;
-                    }
-
-                    if ($rule{'extended'} =~ /\bctstate\s+(\S+)/) {
-                        $rule{'ctstate'} = $1;
-                    } elsif ($rule{'extended'} =~ /\bstate\s+(\S+)/) {
-                        $rule{'state'} = $1;
-                    }
-                    if ($rule{'extended'} =~ /\bMAC\s+(\S+)/) {
-                        $rule{'mac_source'} = $1;
-                    }
-                }
+                &parse_rule_extended(\%rule, $self->{'parse_keys'}->{'extended'});
             }
         }
         push @chain, \%rule;
     }
     return \@chain;
+}
+
+sub parse_rule_extended() {
+    my ($rule_hr, $ext_keys_hr) = @_;
+
+    for my $key (keys %$ext_keys_hr) {
+        if ($rule_hr->{'extended'}
+                =~ /$ext_keys_hr->{$key}->{'regex'}/) {
+            $rule_hr->{$key} = $1;
+        }
+    }
+
+    if ($rule_hr->{'protocol'} eq '0') {
+        $rule_hr->{'s_port'} = $rule_hr->{'sport'} = '0:0';
+        $rule_hr->{'d_port'} = $rule_hr->{'dport'} = '0:0';
+    } elsif ($rule_hr->{'protocol'} eq 'tcp'
+            or $rule_hr->{'protocol'} eq 'udp') {
+        $rule_hr->{'s_port'} = $rule_hr->{'sport'} = '0:0'
+            if $rule_hr->{'s_port'} eq '';
+        $rule_hr->{'d_port'} = $rule_hr->{'dport'} = '0:0'
+            if $rule_hr->{'d_port'} eq '';
+    }
+
+    return;
 }
 
 sub default_drop() {

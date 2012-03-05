@@ -1,5 +1,11 @@
 Revision history for Perl extension IPTables::Parse.
 
+1.2 Sun Mar 04 21:21:11 2012
+    - Major update to add a new 'parse_keys' hash to IPTables::Parse objects so
+      that other modules can easily see what portions of iptables rules can be
+      parsed into the data returned by chain_rules().
+    - Added 'mac_source' into extended hash for parsed iptables rules
+
 1.1 Fri Mar 02 22:31:12 2012
     - Minor update to print the iptables binary name in 'croak' error
       conditions.  The binary name is either 'iptables' or 'ip6tables'.
