@@ -59,32 +59,59 @@ sub parse_keys() {
 
     my %keys = (
         'regular' => {
-            'packets'  => '',
-            'bytes'    => '',
-            'target'   => '',
-            'protocol' => '',
-            'proto'    => '',
-            'intf_in'  => '',
-            'intf_out' => '',
-            'src'      => '',
-            'dst'      => ''
+            'packets'  => {
+                'regex'     => '',
+                'ipt_match' => ''
+            },
+            'bytes'    => {
+                'regex'     => '',
+                'ipt_match' => ''
+            },
+            'target'   => {
+                'regex'     => '',
+                'ipt_match' => ''
+            },
+            'protocol' => {
+                'regex'     => '',
+                'ipt_match' => '-p'
+            },
+            'proto'    => {
+                'regex'     => '',
+                'ipt_match' => '-p'
+            },
+            'intf_in'  => {
+                'regex'     => '',
+                'ipt_match' => '-i'
+            },
+            'intf_out' => {
+                'regex'     => '',
+                'ipt_match' => '-o'
+            },
+            'src'      => {
+                'regex'     => '',
+                'ipt_match' => '-s'
+            },
+            'dst'      => {
+                'regex'     => '',
+                'ipt_match' => '-d'
+            }
         },
         'extended' => {
             's_port' => {
                 'regex'     => qr/\bspts?:(\S+)/,
-                'ipt_match' => ''
+                'ipt_match' => '--sport'
             },
             'sport' => {
                 'regex'     => qr/\bspts?:(\S+)/,
-                'ipt_match' => ''
+                'ipt_match' => '--sport'
             },
             'd_port' => {
                 'regex'     => qr/\bdpts?:(\S+)/,
-                'ipt_match' => ''
+                'ipt_match' => '--dport'
             },
             'dport' => {
                 'regex'     => qr/\bdpts?:(\S+)/,
-                'ipt_match' => ''
+                'ipt_match' => '--dport'
             },
             'to_ip' => {
                 'regex'     => qr/\bto:($ipv4_re):\d+/,
@@ -96,7 +123,7 @@ sub parse_keys() {
             },
             'mac_source' => {
                 'regex'     => qr/\bMAC\s+(\S+)/,
-                'ipt_match' => '-m mac --mac_source'
+                'ipt_match' => '-m mac --mac-source'
             },
             'state' => {
                 'regex'     => qr/\bstate\s+(\S+)/,
@@ -105,6 +132,11 @@ sub parse_keys() {
             'ctstate' => {
                 'regex'     => qr/\bctstate\s+(\S+)/,
                 'ipt_match' => '-m conntrack --ctstate'
+            },
+            'comment' => {
+                'regex'      => qr|\/\*\s(.*?)\s\*\/|,
+                'ipt_match'  => '-m comment --comment',
+                'use_quotes' => 1
             },
         },
         'raw' => ''
@@ -305,13 +337,13 @@ sub parse_rule_extended() {
     }
 
     if ($rule_hr->{'protocol'} eq '0') {
-        $rule_hr->{'s_port'} = $rule_hr->{'sport'} = '0:0';
-        $rule_hr->{'d_port'} = $rule_hr->{'dport'} = '0:0';
+        $rule_hr->{'s_port'} = $rule_hr->{'sport'} = 0;
+        $rule_hr->{'d_port'} = $rule_hr->{'dport'} = 0;
     } elsif ($rule_hr->{'protocol'} eq 'tcp'
             or $rule_hr->{'protocol'} eq 'udp') {
-        $rule_hr->{'s_port'} = $rule_hr->{'sport'} = '0:0'
+        $rule_hr->{'s_port'} = $rule_hr->{'sport'} = 0
             if $rule_hr->{'s_port'} eq '';
-        $rule_hr->{'d_port'} = $rule_hr->{'dport'} = '0:0'
+        $rule_hr->{'d_port'} = $rule_hr->{'dport'} = 0
             if $rule_hr->{'d_port'} eq '';
     }
 
