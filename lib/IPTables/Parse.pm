@@ -138,6 +138,12 @@ sub parse_keys() {
                 'ipt_match'  => '-m comment --comment',
                 'use_quotes' => 1
             },
+            'string' => {
+                'regex'      => qr|STRING\smatch\s\"(.*?)\"|,
+                'ipt_match'  => '-m string --algo bm --string',
+                'use_quotes' => 1
+            },
+
         },
         'raw' => ''
     );
