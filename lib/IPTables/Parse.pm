@@ -143,7 +143,10 @@ sub parse_keys() {
                 'ipt_match'  => '-m string --algo bm --string',
                 'use_quotes' => 1
             },
-
+            'length' => {
+                'regex'      => qr|\blength\s(\S+)|,
+                'ipt_match'  => '-m length --length',
+            },
         },
         'raw' => ''
     );
