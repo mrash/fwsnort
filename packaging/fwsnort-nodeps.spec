@@ -85,6 +85,10 @@ install -m 644 fwsnort.8 $RPM_BUILD_ROOT%{_mandir}/man8/
 %config(noreplace) %_sysconfdir/%name/fwsnort.conf
 
 %changelog
+* Thu Apr 19 2012 Michael Rash <mbr@cipherydne.org>
+- Updated to use the NetAddr::IP module for all IP/subnet calculations
+- fwsnort-1.6.2 release
+
 * Thu Aug 11 2011 Michael Rash <mbr@cipherydne.org>
 - fwsnort-1.6.1 release
 
