@@ -10,16 +10,16 @@
 .SH DESCRIPTION
 .B fwsnort
 translates SNORT rules into iptables rules on Linux systems and generates a
-shell script that implements the resulting iptables commands.
-This ruleset allows network traffic that matches Snort signatures (i.e.
-attacks and other suspicious network behavior) to
+corresponding iptables policy in iptables-save format.  This ruleset allows
+network traffic that matches Snort signatures (i.e.  attacks and other suspicious
+network behavior) to
 be logged and/or dropped by iptables directly without putting an interface
 into promiscuous mode or queuing packets from kernel to user space.  Note
 that fwsnort can also build an iptables policy that combines the string
 match extension with the NFQUEUE or QUEUE targets to allow the kernel to
 perform preliminary string matches that are defined within Snort rules
 before queuing matching packets to a userspace snort_inline instance.  Because the bulk of
-network communications are not malicious, this should provide a speedup
+network communications are not generallly malicious, this should provide a speedup
 for snort_inline since the majority of packets do not then have to be
 copied from kernel memory into user memory and subsequently inspected by
 snort_inline.  There is a tradeoff here in terms of signature detection
@@ -441,10 +441,10 @@ to only inspect traffic that traverses the eth0 and eth1 interfaces:
 .PP
 .B # fwsnort --restrict-intf eth0,eth1
 .PP
-Generate iptables rules for all Snort rules, and write original
-snort rule to the iptables script as a comment:
+Generate iptables rules for Snort rules that appear to be allowed by the local
+iptables policy, and write original snort rules to the iptables script as a comment:
 .PP
-.B # fwsnort --no-ipt-sync --verbose
+.B # fwsnort --ipt-sync --verbose
 .SH DEPENDENCIES
 .B fwsnort
 requires that the iptables string match module be compiled into the

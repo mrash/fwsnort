@@ -3489,7 +3489,7 @@ sub handle_cmd_line() {
         'no-pcre'        => \$no_pcre,      # Make no attempt to translate PCRE's.
         'no-addresses'   => \$no_addr_check, # Don't check local ifconfig output.
         'no-ipt-sync'    => \$ignore_opt,   # Do not sync with the iptables policy.
-        'ipt-sync'       => \$ipt_sync,     # Sync fwsnort ruls with the iptables
+        'ipt-sync'       => \$ipt_sync,     # Sync fwsnort rules with the iptables
                                             # policy.
         'no-ipt-log'     => \$no_ipt_log,   # Do not generate iptables logging rules.
         'no-ipt-test'    => \$no_ipt_test,  # Don't perform any checks for
