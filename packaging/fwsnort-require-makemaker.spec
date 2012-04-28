@@ -54,7 +54,7 @@ to: http://www.cipherdyne.org/fwsnort/
 cd deps
 cd IPTables-Parse && perl Makefile.PL PREFIX=%fwsnortlibdir LIB=%fwsnortlibdir
 cd ..
-cd NetAddr-IP && perl Makefile.PL PREFIX=%psadlibdir LIB=%psadlibdir
+cd NetAddr-IP && perl Makefile.PL PREFIX=%fwsnortlibdir LIB=%fwsnortlibdir
 cd ../..
 
 %build
@@ -71,10 +71,10 @@ mkdir -p $RPM_BUILD_ROOT%fwsnortlogdir
 
 ### fwsnort module dirs
 mkdir -p $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/IPTables/Parse
-mkdir -p $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/Util
-mkdir -p $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/UtilPP
-mkdir -p $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/InetBase
-mkdir -p $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/NetAddr/IP
+mkdir -p $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/Util
+mkdir -p $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/UtilPP
+mkdir -p $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/InetBase
+mkdir -p $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/NetAddr/IP
 mkdir -p $RPM_BUILD_ROOT%fwsnortlibdir/IPTables
 
 mkdir -p $RPM_BUILD_ROOT%_bindir
@@ -89,69 +89,69 @@ install -m 644 fwsnort.8 $RPM_BUILD_ROOT%{_mandir}/man8/
 
 ### install perl modules used by fwsnort
 cd deps
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/hostenum.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/hostenum.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/compactref.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/compactref.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/nprefix.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/nprefix.al
-[ -e NetAddr-IP/blib/lib/auto/NetAddr/IP/.packlist ] && install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/.packlist $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/.packlist
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/re.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/re.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/prefix.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/prefix.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/do_prefix.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/do_prefix.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/wildcard.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/wildcard.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/_compact_v6.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/_compact_v6.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/autosplit.ix $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/autosplit.ix
-[ -e NetAddr-IP/blib/lib/auto/NetAddr/IP/Util/Util.so ] && install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/Util/Util.so $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/Util/Util.so
-[ -e NetAddr-IP/blib/lib/auto/NetAddr/IP/Util/Util.bs ] && install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/Util/Util.bs $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/Util/Util.bs
-[ -e NetAddr-IP/blib/lib/auto/NetAddr/IP/Util/autosplit.ix ] && install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/Util/autosplit.ix $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/Util/autosplit.ix
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/shiftleft.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/UtilPP/shiftleft.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/ipv4to6.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/UtilPP/ipv4to6.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/maskanyto6.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/UtilPP/maskanyto6.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/comp128.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/UtilPP/comp128.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/_deadlen.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/UtilPP/_deadlen.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/sub128.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/UtilPP/sub128.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/notcontiguous.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/UtilPP/notcontiguous.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/bcdn2bin.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/UtilPP/bcdn2bin.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/add128.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/UtilPP/add128.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/ipv6to4.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/UtilPP/ipv6to4.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/_bcdcheck.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/UtilPP/_bcdcheck.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/mask4to6.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/UtilPP/mask4to6.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/_128x2.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/UtilPP/_128x2.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/ipanyto6.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/UtilPP/ipanyto6.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/hasbits.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/UtilPP/hasbits.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/bcdn2txt.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/UtilPP/bcdn2txt.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/slowadd128.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/UtilPP/slowadd128.al
-[ -e NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/autosplit.ix ] && install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/autosplit.ix $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/UtilPP/autosplit.ix
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/simple_pack.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/UtilPP/simple_pack.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/bcd2bin.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/UtilPP/bcd2bin.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/bin2bcdn.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/UtilPP/bin2bcdn.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/_bin2bcdn.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/UtilPP/_bin2bcdn.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/bin2bcd.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/UtilPP/bin2bcd.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/_sa128.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/UtilPP/_sa128.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/_bcd2bin.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/UtilPP/_bcd2bin.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/addconst.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/UtilPP/addconst.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/_128x10.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/UtilPP/_128x10.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/mod_version.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/mod_version.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/_splitref.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/_splitref.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/_compV6.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/_compV6.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/InetBase/inet_any2n.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/InetBase/inet_any2n.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/InetBase/_inet_ntop.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/InetBase/_inet_ntop.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/InetBase/inet_n2ad.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/InetBase/inet_n2ad.al
-[ -e NetAddr-IP/blib/lib/auto/NetAddr/IP/InetBase/autosplit.ix ] && install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/InetBase/autosplit.ix $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/InetBase/autosplit.ix
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/InetBase/_packzeros.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/InetBase/_packzeros.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/InetBase/inet_n2dx.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/InetBase/inet_n2dx.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/InetBase/ipv6_aton.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/InetBase/ipv6_aton.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/InetBase/ipv6_ntoa.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/InetBase/ipv6_ntoa.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/InetBase/inet_ntoa.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/InetBase/inet_ntoa.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/InetBase/_inet_pton.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/InetBase/_inet_pton.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/coalesce.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/coalesce.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/re6.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/re6.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/short.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/short.al
-install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/_splitplan.al $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/auto/NetAddr/IP/_splitplan.al
-install -m 444 NetAddr-IP/blib/lib/NetAddr/IP/InetBase.pm $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/NetAddr/IP/InetBase.pm
-install -m 444 NetAddr-IP/blib/lib/NetAddr/IP/UtilPP.pm $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/NetAddr/IP/UtilPP.pm
-install -m 444 NetAddr-IP/blib/lib/NetAddr/IP/Util.pm $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/NetAddr/IP/Util.pm
-install -m 444 NetAddr-IP/blib/lib/NetAddr/IP/Lite.pm $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/NetAddr/IP/Lite.pm
-install -m 444 NetAddr-IP/blib/lib/NetAddr/IP/Util_IS.pm $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/NetAddr/IP/Util_IS.pm
-install -m 444 NetAddr-IP/blib/lib/NetAddr/IP.pm $RPM_BUILD_ROOT%psadlibdir/%psadmoddir/NetAddr/IP.pm
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/hostenum.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/hostenum.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/compactref.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/compactref.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/nprefix.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/nprefix.al
+[ -e NetAddr-IP/blib/lib/auto/NetAddr/IP/.packlist ] && install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/.packlist $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/.packlist
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/re.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/re.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/prefix.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/prefix.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/do_prefix.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/do_prefix.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/wildcard.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/wildcard.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/_compact_v6.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/_compact_v6.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/autosplit.ix $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/autosplit.ix
+[ -e NetAddr-IP/blib/lib/auto/NetAddr/IP/Util/Util.so ] && install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/Util/Util.so $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/Util/Util.so
+[ -e NetAddr-IP/blib/lib/auto/NetAddr/IP/Util/Util.bs ] && install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/Util/Util.bs $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/Util/Util.bs
+[ -e NetAddr-IP/blib/lib/auto/NetAddr/IP/Util/autosplit.ix ] && install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/Util/autosplit.ix $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/Util/autosplit.ix
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/shiftleft.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/UtilPP/shiftleft.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/ipv4to6.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/UtilPP/ipv4to6.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/maskanyto6.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/UtilPP/maskanyto6.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/comp128.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/UtilPP/comp128.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/_deadlen.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/UtilPP/_deadlen.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/sub128.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/UtilPP/sub128.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/notcontiguous.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/UtilPP/notcontiguous.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/bcdn2bin.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/UtilPP/bcdn2bin.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/add128.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/UtilPP/add128.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/ipv6to4.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/UtilPP/ipv6to4.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/_bcdcheck.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/UtilPP/_bcdcheck.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/mask4to6.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/UtilPP/mask4to6.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/_128x2.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/UtilPP/_128x2.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/ipanyto6.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/UtilPP/ipanyto6.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/hasbits.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/UtilPP/hasbits.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/bcdn2txt.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/UtilPP/bcdn2txt.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/slowadd128.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/UtilPP/slowadd128.al
+[ -e NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/autosplit.ix ] && install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/autosplit.ix $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/UtilPP/autosplit.ix
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/simple_pack.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/UtilPP/simple_pack.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/bcd2bin.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/UtilPP/bcd2bin.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/bin2bcdn.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/UtilPP/bin2bcdn.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/_bin2bcdn.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/UtilPP/_bin2bcdn.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/bin2bcd.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/UtilPP/bin2bcd.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/_sa128.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/UtilPP/_sa128.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/_bcd2bin.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/UtilPP/_bcd2bin.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/addconst.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/UtilPP/addconst.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/UtilPP/_128x10.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/UtilPP/_128x10.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/mod_version.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/mod_version.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/_splitref.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/_splitref.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/_compV6.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/_compV6.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/InetBase/inet_any2n.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/InetBase/inet_any2n.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/InetBase/_inet_ntop.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/InetBase/_inet_ntop.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/InetBase/inet_n2ad.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/InetBase/inet_n2ad.al
+[ -e NetAddr-IP/blib/lib/auto/NetAddr/IP/InetBase/autosplit.ix ] && install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/InetBase/autosplit.ix $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/InetBase/autosplit.ix
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/InetBase/_packzeros.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/InetBase/_packzeros.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/InetBase/inet_n2dx.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/InetBase/inet_n2dx.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/InetBase/ipv6_aton.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/InetBase/ipv6_aton.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/InetBase/ipv6_ntoa.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/InetBase/ipv6_ntoa.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/InetBase/inet_ntoa.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/InetBase/inet_ntoa.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/InetBase/_inet_pton.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/InetBase/_inet_pton.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/coalesce.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/coalesce.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/re6.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/re6.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/short.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/short.al
+install -m 444 NetAddr-IP/blib/lib/auto/NetAddr/IP/_splitplan.al $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/auto/NetAddr/IP/_splitplan.al
+install -m 444 NetAddr-IP/blib/lib/NetAddr/IP/InetBase.pm $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/NetAddr/IP/InetBase.pm
+install -m 444 NetAddr-IP/blib/lib/NetAddr/IP/UtilPP.pm $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/NetAddr/IP/UtilPP.pm
+install -m 444 NetAddr-IP/blib/lib/NetAddr/IP/Util.pm $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/NetAddr/IP/Util.pm
+install -m 444 NetAddr-IP/blib/lib/NetAddr/IP/Lite.pm $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/NetAddr/IP/Lite.pm
+install -m 444 NetAddr-IP/blib/lib/NetAddr/IP/Util_IS.pm $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/NetAddr/IP/Util_IS.pm
+install -m 444 NetAddr-IP/blib/lib/NetAddr/IP.pm $RPM_BUILD_ROOT%fwsnortlibdir/%fwsnortmoddir/NetAddr/IP.pm
 install -m 444 IPTables-Parse/blib/lib/IPTables/Parse.pm $RPM_BUILD_ROOT%fwsnortlibdir/IPTables/Parse.pm
 cd ..
 
