@@ -1,5 +1,5 @@
 %define name fwsnort
-%define version 1.6.1
+%define version 1.6.2
 %define release 1
 %define fwsnortlibdir %_libdir/%name
 %define fwsnortlogdir /var/log/fwsnort
@@ -184,7 +184,7 @@ cp -r deps/snort_rules $RPM_BUILD_ROOT%_sysconfdir/%name
 %_libdir/%name
 
 %changelog
-* Thu Apr 19 2012 Michael Rash <mbr@cipherydne.org>
+* Sat Apr 28 2012 Michael Rash <mbr@cipherydne.org>
 - Updated to use the NetAddr::IP module for all IP/subnet calculations
 - fwsnort-1.6.2 release
 
