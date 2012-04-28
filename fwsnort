@@ -933,7 +933,7 @@ sub parse_rule_options() {
                 $patterns[$#patterns]->{'nocase'} = 1;
             }
         } else {
-            for my $key qw/offset depth within distance/ {
+            for my $key (qw(offset depth within distance)) {
                 if ($opt eq $key) {
                     my ($offsets_rv, $log_str)
                             = &define_offsets(\@patterns,
@@ -1076,7 +1076,7 @@ sub parse_rule_hdr() {
 
         ### map to expanded values (e.g. $HOME -> "any" or whatever
         ### is defined in fwsnort.conf)
-        for my $var qw(src sport dst dport) {
+        for my $var (qw(src sport dst dport)) {
             my $val = $hsh{$var};
             my $negate_flag = 0;
             $negate_flag = 1 if $val =~ m|!|;
@@ -1102,7 +1102,7 @@ sub parse_rule_hdr() {
             }
         }
 
-        for my $var qw(sport dport) {
+        for my $var (qw(sport dport)) {
             next unless $hsh{$var} =~ /,/;
             if ($ipt_have_multiport_match) {
                 $hsh{$var} =~ s/\[//;
@@ -1778,7 +1778,7 @@ sub ipt_build_rule() {
     }
 
     ### append the source and destination ports
-    for my $type qw/sport dport/ {
+    for my $type (qw(sport dport)) {
         if (defined $hdr_hr->{$type} and $hdr_hr->{$type} !~ /any/i) {
             my $negate = '';
             my $port = $hdr_hr->{$type};
@@ -1925,7 +1925,7 @@ sub ipt_build_opts() {
     ### one line above the rule
     my $comment    = '';
     my $target_str = '';
-    for my $key qw(sid msg classtype reference priority rev) {
+    for my $key (qw(sid msg classtype reference priority rev)) {
         if (defined $opts_hr->{$key}) {
             $comment .= qq|$key:$opts_hr->{$key}; |;
         }
@@ -2770,7 +2770,7 @@ sub ipt_add_chains() {
     }
 
     ### save format - add the built-in chains first
-    for my $chain qw/INPUT FORWARD OUTPUT/ {
+    for my $chain (qw(INPUT FORWARD OUTPUT)) {
         ### should always be defined unless we're not running as root
         next unless defined $ipt_save_built_in_chains{$chain};
         push @fwsnort_save_lines, $ipt_save_built_in_chains{$chain};
@@ -2780,7 +2780,7 @@ sub ipt_add_chains() {
     push @ipt_script_lines, "\n###\n############ Create " .
         "fwsnort $ipt_str chains. ############\n###";
 
-    for my $built_in_chain qw/INPUT FORWARD OUTPUT/ {
+    for my $built_in_chain (qw(INPUT FORWARD OUTPUT)) {
 
         ### see if any of the "FWSNORT_<built-in-chain>" chains need to be
         ### excluded
@@ -2820,7 +2820,7 @@ sub ipt_add_chains() {
 sub save_format_add_jump_rules() {
 
     ### add the jump rule for each built-in chain
-    for my $built_in_chain qw/INPUT FORWARD OUTPUT/ {
+    for my $built_in_chain (qw(INPUT FORWARD OUTPUT)) {
 
         next unless defined $process_chains{$built_in_chain}
             and $process_chains{$built_in_chain};
@@ -3232,7 +3232,7 @@ sub del_jump_rule() {
     my $ipt = new IPTables::Parse 'iptables' => $cmds{'iptables'}
         or die "[*] Could not acquire IPTables::Parse object: $!";
 
-    for my $built_in_chain qw/INPUT OUTPUT FORWARD/ {
+    for my $built_in_chain (qw(INPUT OUTPUT FORWARD)) {
         my $rules_ar = $ipt->chain_rules('filter', $built_in_chain, $ipt_file);
 
         for (my $i=0; $i <= $#$rules_ar; $i++) {
@@ -3274,7 +3274,7 @@ sub fwsnort_init() {
     $save_bin    = $cmds{'iptables-save'};
 
     if ($enable_ip6tables) {
-        for my $opt qw/itype icode ttl tos ipopts/ {
+        for my $opt (qw(itype icode ttl tos ipopts)) {
             $snort_opts{'unsupported'}{$opt}
                 = $snort_opts{'filter'}{$opt};
             delete $snort_opts{'filter'}{$opt};
@@ -3391,13 +3391,13 @@ sub fwsnort_init() {
 
     if ($strict) {
         ### make the snort options parser very strict
-        for my $opt qw/uricontent pcre
-                distance within http_uri http_method urilen/ {
+        for my $opt (qw(uricontent pcre
+                distance within http_uri http_method urilen)) {
             $snort_opts{'unsupported'}{$opt}
                 = $snort_opts{'filter'}{$opt};
             delete $snort_opts{'filter'}{$opt};
         }
-        my @ignore = qw/nocase/;
+        my @ignore = (qw(nocase));
 
         if ($kernel_ver eq '2.4') {
             push @ignore, 'offset', 'depth';
@@ -3653,7 +3653,7 @@ sub expand_vars() {
 }
 
 sub required_vars() {
-    my @required_vars = qw(
+    my @required_vars = (qw(
         HOME_NET EXTERNAL_NET HTTP_SERVERS SMTP_SERVERS DNS_SERVERS
         SQL_SERVERS TELNET_SERVERS AIM_SERVERS HTTP_PORTS SHELLCODE_PORTS
         SSH_PORTS ORACLE_PORTS WHITELIST BLACKLIST AVG_IP_HEADER_LEN
@@ -3664,7 +3664,7 @@ sub required_vars() {
         QUEUE_RULES_DIR LOG_DIR LIBS_DIR CONF_FILE FWSNORT_SCRIPT LOG_FILE
         FWSNORT_SAVE_FILE FWSNORT_SAVE_EXEC_FILE IPT_BACKUP_SAVE_FILE
         UPDATE_RULES_URL STATE_DIR
-    );
+    ));
     for my $var (@required_vars) {
         die "[*] Variable $var not defined in $fwsnort_conf. Exiting.\n"
             unless defined $config{$var};
@@ -4317,14 +4317,14 @@ sub delete_test_chain() {
 }
 
 sub chk_commands() {
-    my @path = qw(
+    my @path = (qw(
         /bin
         /sbin
         /usr/bin
         /usr/sbin
         /usr/local/bin
         /usr/local/sbin
-    );
+    ));
     CMD: for my $cmd (keys %cmds) {
         unless (-x $cmds{$cmd}) {
             my $found = 0;
