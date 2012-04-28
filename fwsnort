@@ -383,6 +383,7 @@ my $verbose    = 0;
 my $print_ver  = 0;
 my $cmdl_homedir   = '';
 my $update_rules   = 0;  ### used to download latest snort rules
+my $default_icmp_type = 8;  ### echo request
 my $ipt_print_type = 0;
 my $ipt_check_capabilities = 0;
 my $ipt_rule_ctr   = 1;
@@ -1845,12 +1846,21 @@ sub ipt_build_opts() {
     }
 
     ### append icmp type
-    if (defined $opts_hr->{'itype'} and $hdr_hr->{'proto'} =~ /icmp/i) {
-        $rule .= " $snort_opts{'filter'}{'itype'}{'iptopt'} " .
-            "$opts_hr->{'itype'}";
-        ### append icmp code (becomes "--icmp-type type/code")
-        if (defined $opts_hr->{'icode'}) {
-            $rule .= "/$opts_hr->{'icode'}";
+    if ($hdr_hr->{'proto'} =~ /icmp/i) {
+        if (defined $opts_hr->{'itype'}) {
+            $rule .= " $snort_opts{'filter'}{'itype'}{'iptopt'} " .
+                "$opts_hr->{'itype'}";
+            ### append icmp code (becomes "--icmp-type type/code")
+            if (defined $opts_hr->{'icode'}) {
+                $rule .= "/$opts_hr->{'icode'}";
+            }
+        } else {
+            ### append the default icmp type since some recent versions of
+            ### iptables (such as 1.4.12 on Fedora 16) require it - an error
+            ### like the following will be thrown if it's not there:
+            ### iptables-restore v1.4.12: icmp: option "--icmp-type" must be specified
+            $rule .= " $snort_opts{'filter'}{'itype'}{'iptopt'} " .
+                $default_icmp_type;
         }
     }
 
@@ -3674,6 +3684,8 @@ sub required_vars() {
 
 sub ipt_capabilities() {
 
+    print "[+] Testing $ipt_bin for supported capabilities...\n";
+
     my $test_rule_rv = -1;
 
     ### create test chain
@@ -3813,16 +3825,18 @@ sub ipt_capabilities() {
     }
 
     ### test for string match support.
-    if ($kernel_ver ne '2.4') {
+    my $ipt_str_test = my $ipt_str_test_base =
+            "-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s " .
+            qq|$non_host -m string --string "test" |;
 
+    if ($kernel_ver ne '2.4') {
         ### default to include "--algo bm"
-        $test_rule_rv = &ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s " .
-            qq|$non_host -m string --string "test" | .
-            qq|--algo $string_match_alg -j LOG|);
+        $ipt_str_test .= qq|--algo $string_match_alg -j LOG|;
     } else {
-        $test_rule_rv = &ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s " .
-            qq|$non_host -m string --string "test" -j LOG|);
+        $ipt_str_test .= qq|-j LOG|;
     }
+
+    $test_rule_rv = &ipt_rule_test($ipt_str_test);
 
     if ($test_rule_rv == $IPT_SUCCESS) {
 
@@ -3833,9 +3847,16 @@ sub ipt_capabilities() {
         &ipt_find_max_string_len();
 
         ### test for case insensitive string matching
-        $test_rule_rv = &ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s " .
-            qq|$non_host -m string --string "test" --icase | .
-            qq|--algo $string_match_alg -j LOG|);
+        $ipt_str_test = $ipt_str_test_base;
+
+        if ($kernel_ver ne '2.4') {
+            $ipt_str_test .= qq|--algo $string_match_alg --icase -j LOG|;
+        } else {
+            $ipt_str_test .= qq|--icase -j LOG|;
+        }
+
+        $test_rule_rv = &ipt_rule_test($ipt_str_test);
+
         unless ($test_rule_rv == $IPT_SUCCESS) {
             $snort_opts{'ignore'}{'nocase'}
                 = $snort_opts{'filter'}{'nocase'}{'regex'};
@@ -3845,9 +3866,8 @@ sub ipt_capabilities() {
         ### test for --replace-string support (only available for 2.4 kernels
         ### if the replace-string patch has been applied).
         if ($kernel_ver eq '2.4') {
-            unless (&ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s " .
-                    qq|$non_host -m string --string "test" --replace-string | .
-                    qq|"repl" -j LOG|) == $IPT_SUCCESS) {
+            unless (&ipt_rule_test($ipt_str_test_base .
+                    qq|--replace-string "repl" -j LOG|) == $IPT_SUCCESS) {
                 if (defined $snort_opts{'filter'}{'replace'}) {
                     $snort_opts{'unsupported'}{'replace'} =
                         $snort_opts{'filter'}{'replace'}{'regex'};
@@ -3861,6 +3881,20 @@ sub ipt_capabilities() {
             $snort_opts{'unsupported'}{'replace'}
                 = '[\s;]replace:\s*(.*?)\s*;';
         }
+
+        ### test to see whether '--icmp-type any' is supported
+        $ipt_str_test = $ipt_str_test_base;
+        if ($kernel_ver ne '2.4') {
+            $ipt_str_test .= qq|--algo $string_match_alg -p icmp -m icmp --icmp-type any -j LOG|;
+        } else {
+            $ipt_str_test .= qq|-p icmp -m icmp --icmp-type any -j LOG|;
+        }
+
+        $test_rule_rv = &ipt_rule_test($ipt_str_test);
+        if ($test_rule_rv == $IPT_SUCCESS) {
+            $default_icmp_type = 'any';
+        }
+
     } else {
         &delete_test_chain();
         die

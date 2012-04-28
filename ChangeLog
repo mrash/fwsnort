@@ -18,6 +18,10 @@ fwsnort-1.6.2 (04/28/2012):
       comprehensive support for IPv6 address network parsing and comparisons.
     - Moved the fwsnort.sh script and associated files into the
       /var/lib/fwsnort/ directory.  This was suggested by Peter Vrabec.
+    - Bug fix for recent versions of iptables (such as 1.4.12) where the icmp
+      match requires --icmp-type to be set - some Snort rules look for a string
+      to match in icmp traffic, but don't also specify an icmp type.
+    - Bug fix for 'qw(...) usage as parenthesis' warnings for perl > 5.14
     - Removed the ExtUtils::MakeMaker RPM build requirement from the
       fwsnort.spec file.  This is a compromise which will allow the fwsnort RPM
       to be built even if RPM dosen't or can't see that ExtUtils::MakeMaker is
