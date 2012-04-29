@@ -1,0 +1,426 @@
+commit 8033d5d239dd544eaf927f1ea13c855c7ef054b6 (HEAD, refs/heads/fwsnort-1.6.2)
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Sat Apr 28 20:45:23 2012 -0400
+
+    bumped version to 1.6.2
+
+ VERSION |    2 +-
+ fwsnort |    4 ++--
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+commit 59e2ff7b2567126827bdb8136b2e242d32d16ede (refs/heads/master)
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Sat Apr 28 14:27:02 2012 -0400
+
+    removed ShortLog in favor of ChangeLog + ChangeLog.git
+
+ ShortLog |  727 --------------------------------------------------------------
+ 1 files changed, 0 insertions(+), 727 deletions(-)
+
+commit 562e3acb0afbef722bdfa12ec69cea3d09b1881e (refs/remotes/origin/master)
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Sat Apr 28 14:23:56 2012 -0400
+
+    Added --icmp-type 'any' (with capabilities test)
+    
+    Bug fix for recent versions of iptables (such as 1.4.12) where the icmp
+    match requires --icmp-type to be set - some Snort rules look for a string
+    to match in icmp traffic, but don't also specify an icmp type.
+
+ ChangeLog |    4 +++
+ fwsnort   |   70 +++++++++++++++++++++++++++++++++++++++++++++---------------
+ 2 files changed, 56 insertions(+), 18 deletions(-)
+
+commit 619d7820e7546e247b9232a3b527cb86009315f2
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Sat Apr 28 11:44:27 2012 -0400
+
+    bug fix psadlibdir -> fwsnortlibdir
+
+ packaging/fwsnort-require-makemaker.spec |  136 +++++++++++++++---------------
+ packaging/fwsnort.spec                   |  136 +++++++++++++++---------------
+ 2 files changed, 136 insertions(+), 136 deletions(-)
+
+commit dbfc72ff06809e39bc2dff5b52323d8103625330
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Sat Apr 28 11:43:58 2012 -0400
+
+    bug fix for 'qw() used as parenthesis' warnings under perl > 5.14
+
+ fwsnort |   34 +++++++++++++++++-----------------
+ 1 files changed, 17 insertions(+), 17 deletions(-)
+
+commit 9b31c8bef1e24d114857e38dcf62c22861f6487b
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Sat Apr 28 10:18:16 2012 -0400
+
+    added ChangeLog info for the 1.6.1 and 1.6.2 releases
+
+ ChangeLog |   82 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-
+ 1 files changed, 81 insertions(+), 1 deletions(-)
+
+commit f65256d026d532ef5e7f862ef1273520b3cd173e
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Sat Apr 28 10:17:48 2012 -0400
+
+    updated RPM spec file version to 1.6.2
+
+ packaging/fwsnort-nodeps.spec            |    4 ++--
+ packaging/fwsnort-require-makemaker.spec |    4 ++--
+ packaging/fwsnort.spec                   |    4 ++--
+ 3 files changed, 6 insertions(+), 6 deletions(-)
+
+commit ac12a3d634874f480c8e6e4cebd3aed7fcf8bca2
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Sat Apr 28 10:17:05 2012 -0400
+
+    updated to the latest Snort rules from Emerging Threats
+
+ deps/snort_rules/emerging-all.rules | 2852 +++++++++++++++++++++++++----------
+ 1 files changed, 2032 insertions(+), 820 deletions(-)
+
+commit eab4b7f597deda88fe01662c1ac0d44ecf8be7f0
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Thu Apr 19 21:30:43 2012 -0400
+
+    moved ChangeLog.old -> ChangeLog (the old style is much more readable)
+
+ ChangeLog     | 7229 +++------------------------------------------------------
+ ChangeLog.old |  428 ----
+ 2 files changed, 381 insertions(+), 7276 deletions(-)
+
+commit 25c279906d353b90e294b6f6c5c36fc311c15f5f
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Thu Apr 19 21:30:16 2012 -0400
+
+    minor documentation fixes
+
+ fwsnort   |    2 +-
+ fwsnort.8 |   14 +++++++-------
+ 2 files changed, 8 insertions(+), 8 deletions(-)
+
+commit f8c7588616510c31147da89f8674e3cc27a62d3a
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Thu Apr 19 21:29:58 2012 -0400
+
+    added 1.6.2 release
+
+ packaging/fwsnort-nodeps.spec |    4 ++++
+ 1 files changed, 4 insertions(+), 0 deletions(-)
+
+commit 6dca2e37a06952146b860f3c34abec34b6dcf149
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Thu Apr 19 21:28:50 2012 -0400
+
+    Removed the ExtUtils::MakeMaker build requirement
+    
+    Although building the fwsnort RPM builds a set of perl modules which themselves
+    have the 'use ExtUtils::MakeMaker' requirement in their respective Makefile.PL
+    scripts, some Linux distributions don't seem to make it easy to install
+    ExtUtils::MakeMaker in a manner in which the local RPM install can see it.
+    And, at the same time, it usually is there since installing perl modules is
+    such a common operation.  The compromise is this solution, which will allow the
+    fwsnort RPM to be built even if RPM dosen't or can't see that ExtUtils::MakeMaker
+    is installed - most likely it will build anyway.  If it doesn't, there are
+    bigger problems since fwsnort is written in perl.  If you want to build the fwsnort
+    RPM with a .spec file that requires ExtUtils::MakeMaker, then use the
+    "fwsnort-require-makemaker.spec" file that is bundled in the fwsnort sources.
+
+ packaging/fwsnort-nobuildreqs.spec       |  172 ---------------------
+ packaging/fwsnort-require-makemaker.spec |  239 ++++++++++++++++++++++++++++++
+ packaging/fwsnort.spec                   |   83 +++++++++-
+ 3 files changed, 313 insertions(+), 181 deletions(-)
+
+commit 774b5841386a69d0e701b1c866bc34bc641ab395
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Fri Mar 2 22:58:11 2012 -0500
+
+    updated IPTables::Parse to 1.1
+
+ deps/IPTables-Parse/Changes               |   26 +++-
+ deps/IPTables-Parse/MANIFEST              |    1 +
+ deps/IPTables-Parse/META.json             |   39 +++++
+ deps/IPTables-Parse/META.yml              |   21 +++
+ deps/IPTables-Parse/README                |    2 +-
+ deps/IPTables-Parse/VERSION               |    2 +-
+ deps/IPTables-Parse/lib/IPTables/Parse.pm |  145 +++++++++---------
+ deps/IPTables-Parse/t/basic_tests.pl      |  247 +++++++++++++++++++++++++++++
+ 8 files changed, 408 insertions(+), 75 deletions(-)
+
+commit 818483ea7541371c0f771640b6e893823c86bd5b
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Mon Feb 20 20:33:18 2012 -0500
+
+    updated to IPTables::Parse 0.8
+
+ deps/IPTables-Parse/Changes               |   29 ++-
+ deps/IPTables-Parse/README                |    4 +-
+ deps/IPTables-Parse/VERSION               |    2 +-
+ deps/IPTables-Parse/lib/IPTables/Parse.pm |  450 ++++++++++++++++++++++++----
+ fwsnort                                   |   17 +-
+ 5 files changed, 425 insertions(+), 77 deletions(-)
+
+commit e7bb9c6d0663b3ebdccfa619f42beff2c851e531
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Sun Feb 19 13:21:27 2012 -0500
+
+    bumped version to 1.6.2-pre1
+
+ fwsnort |    4 ++--
+ 1 files changed, 2 insertions(+), 2 deletions(-)
+
+commit 95a39ee4fc5563ea337d9c60178b2bec23692b5e
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Sat Feb 18 14:33:29 2012 -0500
+
+    converted from Net::AddrIPv4 to the excellent NetAddr::IP module
+
+ INSTALL    |    2 +-
+ fwsnort    |   32 ++++++++++++++++----------------
+ install.pl |    4 ++--
+ 3 files changed, 19 insertions(+), 19 deletions(-)
+
+commit 7a7e4653c3dcd56884fc88e78bedcbda691f6647
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Sat Feb 18 14:33:19 2012 -0500
+
+    converted from Net::AddrIPv4 to the excellent NetAddr::IP module
+
+ deps/Net-IPv4Addr/ChangeLog                        |   90 -
+ deps/Net-IPv4Addr/IPv4Addr.pm                      |  385 -
+ deps/Net-IPv4Addr/IPv4Addr.spec                    |   90 -
+ deps/Net-IPv4Addr/MANIFEST                         |   15 -
+ deps/Net-IPv4Addr/Makefile.PL                      |    8 -
+ deps/Net-IPv4Addr/NEWS                             |   28 -
+ deps/Net-IPv4Addr/README                           |   41 -
+ deps/Net-IPv4Addr/VERSION                          |    1 -
+ deps/Net-IPv4Addr/debian/changelog                 |   37 -
+ deps/Net-IPv4Addr/debian/control                   |   12 -
+ deps/Net-IPv4Addr/debian/copyright                 |   14 -
+ deps/Net-IPv4Addr/debian/dirs                      |    4 -
+ deps/Net-IPv4Addr/debian/docs                      |    4 -
+ deps/Net-IPv4Addr/debian/rules                     |   85 -
+ deps/Net-IPv4Addr/ipv4calc                         |   89 -
+ deps/Net-IPv4Addr/test.pl                          |   68 -
+ deps/NetAddr-IP/Artistic                           |  131 +
+ deps/NetAddr-IP/Changes                            |  464 ++
+ deps/NetAddr-IP/Copying                            |  339 +
+ deps/NetAddr-IP/IP.pm                              | 1572 ++++
+ deps/NetAddr-IP/Lite/Changes                       |  373 +
+ deps/NetAddr-IP/Lite/Lite.pm                       | 1583 ++++
+ deps/NetAddr-IP/Lite/MANIFEST                      |  126 +
+ deps/NetAddr-IP/Lite/MANIFEST.SKIP                 |   31 +
+ deps/NetAddr-IP/Lite/META.yml                      |   10 +
+ deps/NetAddr-IP/Lite/Makefile.PL                   |   42 +
+ deps/NetAddr-IP/Lite/README                        |  510 ++
+ deps/NetAddr-IP/Lite/Util/Changes                  |  255 +
+ deps/NetAddr-IP/Lite/Util/MANIFEST                 |   53 +
+ deps/NetAddr-IP/Lite/Util/MANIFEST.SKIP            |   31 +
+ deps/NetAddr-IP/Lite/Util/Makefile.PL              |  235 +
+ deps/NetAddr-IP/Lite/Util/README                   |  605 ++
+ deps/NetAddr-IP/Lite/Util/Util.pm                  |  968 +++
+ deps/NetAddr-IP/Lite/Util/Util.xs                  |  801 ++
+ deps/NetAddr-IP/Lite/Util/config.h.in              |  127 +
+ deps/NetAddr-IP/Lite/Util/configure                | 7799 ++++++++++++++++++++
+ deps/NetAddr-IP/Lite/Util/configure.ac             |   54 +
+ .../Lite/Util/lib/NetAddr/IP/InetBase.pm           |  791 ++
+ deps/NetAddr-IP/Lite/Util/lib/NetAddr/IP/UtilPP.pm |  722 ++
+ deps/NetAddr-IP/Lite/Util/localconf.h              |   80 +
+ deps/NetAddr-IP/Lite/Util/t/4to6.t                 |   69 +
+ deps/NetAddr-IP/Lite/Util/t/add128.t               |   92 +
+ deps/NetAddr-IP/Lite/Util/t/addconst.t             |   77 +
+ deps/NetAddr-IP/Lite/Util/t/af_inet6.t             |   46 +
+ deps/NetAddr-IP/Lite/Util/t/anyto6.t               |   86 +
+ deps/NetAddr-IP/Lite/Util/t/badd.t                 |   69 +
+ deps/NetAddr-IP/Lite/Util/t/bcd2bin.t              |   68 +
+ deps/NetAddr-IP/Lite/Util/t/bcdn2bin.t             |   73 +
+ deps/NetAddr-IP/Lite/Util/t/bin.t                  |  111 +
+ deps/NetAddr-IP/Lite/Util/t/binet_n2ad.t           |   49 +
+ deps/NetAddr-IP/Lite/Util/t/binet_n2dx.t           |   50 +
+ deps/NetAddr-IP/Lite/Util/t/binet_ntoa.t           |   66 +
+ deps/NetAddr-IP/Lite/Util/t/binet_pton.t           |   96 +
+ deps/NetAddr-IP/Lite/Util/t/bipv4_inet.t           |   59 +
+ deps/NetAddr-IP/Lite/Util/t/bipv6_any2n.t          |   48 +
+ deps/NetAddr-IP/Lite/Util/t/bipv6func.t            |   76 +
+ deps/NetAddr-IP/Lite/Util/t/bisIPv4.t              |  187 +
+ deps/NetAddr-IP/Lite/Util/t/bpackzeros.t           |   52 +
+ deps/NetAddr-IP/Lite/Util/t/comp128.t              |   48 +
+ deps/NetAddr-IP/Lite/Util/t/croak.t                |  168 +
+ deps/NetAddr-IP/Lite/Util/t/hasbits.t              |  147 +
+ deps/NetAddr-IP/Lite/Util/t/inet_4map6.t           |   70 +
+ deps/NetAddr-IP/Lite/Util/t/inet_n2ad.t            |   48 +
+ deps/NetAddr-IP/Lite/Util/t/inet_n2dx.t            |   50 +
+ deps/NetAddr-IP/Lite/Util/t/inet_pton.t            |   96 +
+ deps/NetAddr-IP/Lite/Util/t/ipv4_inet.t            |   59 +
+ deps/NetAddr-IP/Lite/Util/t/ipv6_any2n.t           |   47 +
+ deps/NetAddr-IP/Lite/Util/t/ipv6_ntoa.t            |   66 +
+ deps/NetAddr-IP/Lite/Util/t/ipv6func.t             |   75 +
+ deps/NetAddr-IP/Lite/Util/t/ipv6to4.t              |   55 +
+ deps/NetAddr-IP/Lite/Util/t/isIPv4.t               |  186 +
+ deps/NetAddr-IP/Lite/Util/t/leftshift.t            |   58 +
+ deps/NetAddr-IP/Lite/Util/t/mode.t                 |   26 +
+ deps/NetAddr-IP/Lite/Util/t/naip_gethostbyname.t   |   59 +
+ .../Lite/Util/t/no6_naip_gethostbyname.t           |   58 +
+ deps/NetAddr-IP/Lite/Util/t/notcontiguous.t        |   72 +
+ deps/NetAddr-IP/Lite/Util/t/packzeros.t            |   53 +
+ deps/NetAddr-IP/Lite/Util/t/simple_pack.t          |   51 +
+ deps/NetAddr-IP/Lite/Util/t/sub128.t               |   68 +
+ .../Lite/Util/tlib/NetAddr/IP/Util_IS.pm           |   51 +
+ deps/NetAddr-IP/Lite/Util/typemap                  |   28 +
+ deps/NetAddr-IP/Lite/bug2742981                    |   96 +
+ deps/NetAddr-IP/Lite/t/addr.t                      |   36 +
+ deps/NetAddr-IP/Lite/t/aton.t                      |   33 +
+ deps/NetAddr-IP/Lite/t/bigint.t                    |  170 +
+ deps/NetAddr-IP/Lite/t/bignums.t                   |  130 +
+ deps/NetAddr-IP/Lite/t/bin_ips.t                   |  102 +
+ deps/NetAddr-IP/Lite/t/bits.t                      |   37 +
+ deps/NetAddr-IP/Lite/t/broadcast.t                 |   37 +
+ deps/NetAddr-IP/Lite/t/bug62521.t                  |   28 +
+ deps/NetAddr-IP/Lite/t/cidr.t                      |   36 +
+ deps/NetAddr-IP/Lite/t/constants.t                 |   19 +
+ deps/NetAddr-IP/Lite/t/contains.t                  |   40 +
+ deps/NetAddr-IP/Lite/t/copy.t                      |   52 +
+ deps/NetAddr-IP/Lite/t/firstlast.t                 |   66 +
+ deps/NetAddr-IP/Lite/t/lemasklen.t                 |   19 +
+ deps/NetAddr-IP/Lite/t/loops.t                     |   51 +
+ deps/NetAddr-IP/Lite/t/lower.t                     |   11 +
+ deps/NetAddr-IP/Lite/t/mask.t                      |   44 +
+ deps/NetAddr-IP/Lite/t/masklen.t                   |   37 +
+ deps/NetAddr-IP/Lite/t/netaddr.t                   |  208 +
+ deps/NetAddr-IP/Lite/t/network.t                   |   44 +
+ deps/NetAddr-IP/Lite/t/new-nth.t                   |   44 +
+ deps/NetAddr-IP/Lite/t/new-num.t                   |   33 +
+ deps/NetAddr-IP/Lite/t/numeric.t                   |   36 +
+ deps/NetAddr-IP/Lite/t/old-nth.t                   |   36 +
+ deps/NetAddr-IP/Lite/t/old-num.t                   |   33 +
+ deps/NetAddr-IP/Lite/t/over-qq.t                   |   53 +
+ deps/NetAddr-IP/Lite/t/over_comp.t                 |   66 +
+ deps/NetAddr-IP/Lite/t/over_copy.t                 |   85 +
+ deps/NetAddr-IP/Lite/t/over_equal.t                |  122 +
+ deps/NetAddr-IP/Lite/t/over_math.t                 |   64 +
+ deps/NetAddr-IP/Lite/t/overminus.t                 |   45 +
+ deps/NetAddr-IP/Lite/t/pathological.t              |   27 +
+ deps/NetAddr-IP/Lite/t/range.t                     |   34 +
+ deps/NetAddr-IP/Lite/t/relops.t                    |   59 +
+ deps/NetAddr-IP/Lite/t/v4-aton.t                   |   59 +
+ deps/NetAddr-IP/Lite/t/v4-badnm.t                  |   42 +
+ deps/NetAddr-IP/Lite/t/v4-base.t                   |   19 +
+ deps/NetAddr-IP/Lite/t/v4-basem.t                  |   24 +
+ deps/NetAddr-IP/Lite/t/v4-cidr.t                   |   28 +
+ deps/NetAddr-IP/Lite/t/v4-cnew.t                   |   30 +
+ deps/NetAddr-IP/Lite/t/v4-contains.t               |   60 +
+ deps/NetAddr-IP/Lite/t/v4-last.t                   |   32 +
+ deps/NetAddr-IP/Lite/t/v4-new-first.t              |   30 +
+ deps/NetAddr-IP/Lite/t/v4-new.t                    |   67 +
+ deps/NetAddr-IP/Lite/t/v4-new_from_aton.t          |   27 +
+ deps/NetAddr-IP/Lite/t/v4-no_octal.t               |   50 +
+ deps/NetAddr-IP/Lite/t/v4-num.t                    |   36 +
+ deps/NetAddr-IP/Lite/t/v4-numeric.t                |   36 +
+ deps/NetAddr-IP/Lite/t/v4-old-first.t              |   30 +
+ deps/NetAddr-IP/Lite/t/v4-range.t                  |   48 +
+ deps/NetAddr-IP/Lite/t/v4-snew.t                   |   29 +
+ deps/NetAddr-IP/Lite/t/v4-wnew.t                   |   23 +
+ deps/NetAddr-IP/Lite/t/v4_new_cis.t                |   68 +
+ deps/NetAddr-IP/Lite/t/v6-cnew.t                   |   27 +
+ deps/NetAddr-IP/Lite/t/v6-contains.t               |   51 +
+ deps/NetAddr-IP/Lite/t/v6-inc.t                    |   38 +
+ deps/NetAddr-IP/Lite/t/v6-new-base.t               |   70 +
+ deps/NetAddr-IP/Lite/t/v6-new_cis6_base.t          |   69 +
+ deps/NetAddr-IP/Lite/t/v6-new_cis_base.t           |   69 +
+ deps/NetAddr-IP/Lite/t/v6-num.t                    |   53 +
+ deps/NetAddr-IP/Lite/t/v6-numeric.t                |   91 +
+ deps/NetAddr-IP/Lite/t/v6-old-base.t               |   70 +
+ deps/NetAddr-IP/Lite/t/version.t                   |   29 +
+ deps/NetAddr-IP/Lite/t/within.t                    |   40 +
+ deps/NetAddr-IP/MANIFEST                           |  165 +
+ deps/NetAddr-IP/MANIFEST.SKIP                      |   31 +
+ deps/NetAddr-IP/META.yml                           |   14 +
+ deps/NetAddr-IP/Makefile.PL                        |   91 +
+ deps/NetAddr-IP/TODO                               |    5 +
+ deps/NetAddr-IP/VERSION                            |    1 +
+ deps/NetAddr-IP/docs/rfc1884.txt                   | 1023 +++
+ deps/NetAddr-IP/t/constants.t                      |   20 +
+ deps/NetAddr-IP/t/full.t                           |   25 +
+ deps/NetAddr-IP/t/full6.t                          |   25 +
+ deps/NetAddr-IP/t/imhoff.t                         |   35 +
+ deps/NetAddr-IP/t/loops.t                          |   33 +
+ deps/NetAddr-IP/t/lower.t                          |   11 +
+ deps/NetAddr-IP/t/masklen.t                        |   21 +
+ deps/NetAddr-IP/t/new-store.t                      |   40 +
+ deps/NetAddr-IP/t/old-store.t                      |   40 +
+ deps/NetAddr-IP/t/over-arr.t                       |   20 +
+ deps/NetAddr-IP/t/over-qq.t                        |   55 +
+ deps/NetAddr-IP/t/relops.t                         |   59 +
+ deps/NetAddr-IP/t/short.t                          |   57 +
+ deps/NetAddr-IP/t/splitref.t                       |   27 +
+ deps/NetAddr-IP/t/v4-coalesce.t                    |   54 +
+ deps/NetAddr-IP/t/v4-compact.t                     |  110 +
+ deps/NetAddr-IP/t/v4-compplus.t                    |   35 +
+ deps/NetAddr-IP/t/v4-hostenum.t                    |   50 +
+ deps/NetAddr-IP/t/v4-re.t                          |   38 +
+ deps/NetAddr-IP/t/v4-split-bulk.t                  |   23 +
+ deps/NetAddr-IP/t/v4-split-list.t                  |   54 +
+ deps/NetAddr-IP/t/v4-splitplan.t                   |   73 +
+ deps/NetAddr-IP/t/v4-sprefix.t                     |   51 +
+ deps/NetAddr-IP/t/v4-xprefix.t                     |   48 +
+ deps/NetAddr-IP/t/v6-re.t                          |   69 +
+ deps/NetAddr-IP/t/v6-split-bulk.t                  |   21 +
+ deps/NetAddr-IP/t/v6-splitplan.t                   |   72 +
+ deps/NetAddr-IP/t/wildcard.t                       |   37 +
+ 181 files changed, 26626 insertions(+), 971 deletions(-)
+
+commit cca8f706be83ffb440b09053cacd032865ca69dd (tag: refs/tags/fwsnort-1.6.2-pre1)
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Thu Feb 16 21:32:19 2012 -0500
+
+    added the proper ChangeLog back in
+
+ ChangeLog | 2184 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 files changed, 2184 insertions(+), 0 deletions(-)
+
+commit f4715fe90d6ae875fc8570d00198c7b72a5eb413
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Thu Feb 16 21:24:25 2012 -0500
+
+    bumped version to 1.6.2-pre1
+
+ VERSION |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+commit 724f75a13f3ec264eccb553c6c28f83706048047
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Thu Feb 16 21:18:44 2012 -0500
+
+    Switched --no-ipt-sync to default to not syncing with the iptables policy
+    
+    By default fwsnort attempts to match translated Snort rules to the running
+    iptables policy, but this is tough to do well because iptables policies can be
+    complex.  And, before fwsnort switched to the iptables-save format for
+    instantiating the policy, a large set of translated rules could take a really
+    long time to make active within the kernel.  Finally, many Snort rules restrict
+    themselves to established TCP connections anyway, and if a restrictive policy
+    doesn't allow connections to get into the established state for some port let's
+    say, then there is little harm in having translated Snort rules for this port.
+    Some kernel memory would be wasted (small), but no performance would be lost
+    since packets won't be processed against these rules anyway.  The end result is
+    that the default behavior is now to not sync with the local iptables policy in
+    favor of translating and instantiating as many rules as possible.
+    
+    This commit also moves the fwsnort.sh script and associated files into the
+    /var/lib/fwsnort/ directory.
+
+ CREDITS      |    5 ++++-
+ fwsnort      |   36 ++++++++++++++++++------------------
+ fwsnort.8    |   15 +++++++++++----
+ fwsnort.conf |   13 +++++++------
+ install.pl   |    2 +-
+ 5 files changed, 41 insertions(+), 30 deletions(-)
+
+commit 863f73aead5ca9111c64de98fca6a6631e40c7b5
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Thu Feb 16 20:36:59 2012 -0500
+
+    updated to the latest emerging threats Snort rules
+
+ deps/snort_rules/emerging-all.rules |26379 ++++++++++++++++++-----------------
+ 1 files changed, 13483 insertions(+), 12896 deletions(-)
