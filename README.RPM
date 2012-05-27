@@ -1,4 +1,10 @@
 
+NOTE: Before building an RPM manually for your Linux system, it is recommended
+to try installing fwsnort via the standard software install mechanism for your
+distribution since fwsnort is available in many distribution software
+repositories.  For example, you can try installing fwsnort with 'yum' or
+'apt-get' depending on the type of Linux distribution that you are running.
+
 Building RPM files that are compatible with all possible Linux distributions
 is a difficult task.  If a given RPM file that is downloaded from
 http://www.cipherdyne.org/ is not compatible with your particular Linux
