@@ -14,7 +14,7 @@
 #
 # Credits: (see the CREDITS file)
 #
-# Version: 1.6.2-pre1
+# Version: 1.6.2
 #
 # Copyright (C) 2003-2012 Michael Rash (mbr@cipherdyne.org)
 #
@@ -102,7 +102,7 @@ my $CONFIG_DEFAULT = '/etc/fwsnort/fwsnort.conf';
 my $fwsnort_conf = $CONFIG_DEFAULT;
 
 ### version number
-my $version = '1.6.2-pre1';
+my $version = '1.6.2';
 
 my %ipt_hdr_opts = (
     'src'      => '-s',
