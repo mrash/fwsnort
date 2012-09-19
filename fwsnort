@@ -2226,6 +2226,10 @@ sub convert_pattern_for_iptables() {
     $ipt_str =~ s/'/|27|/g;     ### ' -> |27|
     $ipt_str =~ s/\x2d/|2d|/g;  ### - -> |2d|
     $ipt_str =~ s/\x24/|24|/g;  ### $ -> |24|
+    $ipt_str =~ s/\x21/|21|/g;  ### ! -> |21|
+    $ipt_str =~ s/\x3c/|3c|/g;  ### < -> |3c|
+    $ipt_str =~ s/\x3e/|3e|/g;  ### > -> |3e|
+    $ipt_str =~ s/\x3d/|3d|/g;  ### = -> |3d|
 
     ### convert all escaped chars to their hex equivalents
     $ipt_str =~ s/\x5c(.)/sprintf "|%02x|", (ord($1))/eg;
