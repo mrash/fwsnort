@@ -1,3 +1,7 @@
+fwsnort-1.6.3 (09//2012):
+    - Bug fix to ensure that !, <, >, and = chars in content strings are
+      converted to the appropriate hex equivalents.
+
 fwsnort-1.6.2 (04/28/2012):
     - Switched --no-ipt-sync to default to not syncing with the iptables policy.
       By default fwsnort attempts to match translated Snort rules to the
