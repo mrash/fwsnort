@@ -237,8 +237,14 @@ my %snort_opts = (
         'rpc'          => '[\s;]rpc:\s*.*?\s*;',
         'byte_test'    => '[\s;]byte_test\s*.*?\s*;',
         'byte_jump'    => '[\s;]byte_jump\s*.*?\s*;',
+        'byte_extract' => '[\s;]byte_extract\s*.*?\s*;',
+        'file_data'    => '[\s;]file_data\s*;',
         'window'       => '[\s;]window:\s*.*?\s*;',
         'flowbits'     => '[\s;]flowbits:\s*.*?\s*;',
+        'tag'          => '[\s;]tag:\s*.*?\s*;',
+        'ftpbounce'    => '[\s;]ftpbounce\s*;',
+        'base64_data'  => '[\s;]base64_data\s*;',
+        'base64_decode' => '[\s;]base64_decode:\s*.*?\s*;',
 #        'offset'       => '[\s;]offset:\s*\d+\s*;',
 #        'depth'        => '[\s;]depth:\s*\d+\s*;',
 
@@ -267,7 +273,12 @@ my %snort_opts = (
         'tag'      => '[\s;]tag:\s*.*?\s*;',
         'react'    => '[\s;]react:\s*.*?\s*;', ### FIXME -j REJECT
         'http_uri' => '[\s;]http_uri\s*;',
+        'http_raw_uri' => '[\s;]http_raw_uri\s*;',
         'http_method' => '[\s;]http_method\s*;',
+        'http_stat_code' => '[\s;]http_stat_code\s*;',
+        'http_stat_msg' => '[\s;]http_stat_msg\s*;',
+        'http_client_body' => '[\s;]http_client_body\s*;',
+        'http_cookie' => '[\s;]http_cookie\s*;',
         'urilen'    => '[\s;]urilen:\s*.*?\s*;',
     }
 );
@@ -475,7 +486,11 @@ my @argv_cp = @ARGV;
 
 ### check to make sure iptables has various functionality available
 ### such as the LOG target, --hex-strings, the comment match, etc.
-&ipt_capabilities() unless $no_ipt_test;
+if ($no_ipt_test) {
+    &set_defaults_without_ipt_test();
+} else {
+    &ipt_capabilities();
+}
 
 ### cache the running iptables policy in iptables-save format
 &cache_ipt_save_policy();
@@ -2217,37 +2232,41 @@ sub convert_pattern_for_iptables() {
         'nocase'         => 0,
     );
 
-    if ($ipt_str =~ /\s*\!\s*"/) {
-        $ipt_str =~ s/\s*\!\s*"//;
+    if ($ipt_str =~ /^\s*\!\s*"/) {
+        $ipt_str =~ s/^\s*\!\s*"//;
         $pattern{'negative_match'} = 1;
     }
-
-    $ipt_str =~ s/`/|60|/g;     ### ` -> |60|
-    $ipt_str =~ s/'/|27|/g;     ### ' -> |27|
-    $ipt_str =~ s/\x2d/|2d|/g;  ### - -> |2d|
-    $ipt_str =~ s/\x24/|24|/g;  ### $ -> |24|
-    $ipt_str =~ s/\x21/|21|/g;  ### ! -> |21|
-    $ipt_str =~ s/\x3c/|3c|/g;  ### < -> |3c|
-    $ipt_str =~ s/\x3e/|3e|/g;  ### > -> |3e|
-    $ipt_str =~ s/\x3d/|3d|/g;  ### = -> |3d|
 
     ### convert all escaped chars to their hex equivalents
     $ipt_str =~ s/\x5c(.)/sprintf "|%02x|", (ord($1))/eg;
 
-    my $ctr = 0;
-    while ($ipt_str =~ m/\|\|/) {
-        ### consolidate consecutive hex blocks
-        if ($ipt_str =~ /\|.+?\|\|.+?\|/) {
-            $ipt_str =~ s/\|(.+?)\|\|(.+?)\|/|$1 $2|/;
-        }
-        $ctr++;
-        last if $ctr > 10;
-    }
+    ### consolidate any consecutive "|aa||bb|" sequences
+    $ipt_str =~ s/\|\|//g;
 
     ### remove all spaces between hex codes (they simply waste space
     ### on the command line, and they aren't part of the string to
     ### search in network traffic anyway).
     $ipt_str = &consolidate_hex_spaces($ipt_str);
+
+    ### if there are any existing hex blocks or if there are any chars
+    ### that require a new hex block, then just convert the whole string
+    ### to hex syntax for simplicity
+    if ($ipt_str =~ /\|/ or &have_hex_char($ipt_str)) {
+        $ipt_str = &convert_str_to_hex($ipt_str);
+    }
+
+    ### if we ever have more than one hex block then there was some
+    ### pattern translation error
+    my $hex_ctr = 0;
+    while ($ipt_str =~ /\|/g) {
+        $hex_ctr++;
+        last if $hex_ctr >= 10;
+    }
+
+    if ($hex_ctr > 2) {
+        return 0, "too many hex blocks, could not translate: $snort_str",
+            \%pattern;
+    }
 
     ### handles length of hex blocks
     my $content_len = &get_content_len($ipt_str);
@@ -2397,6 +2416,7 @@ sub get_content_len() {
 
 sub consolidate_hex_spaces() {
     my $str = shift;
+
     my $new_str = '';
     my $hex_mode = 0;
     my @chars = split //, $str;
@@ -2409,6 +2429,42 @@ sub consolidate_hex_spaces() {
         }
         $new_str .= $char;
     }
+    return $new_str;
+}
+
+sub have_hex_char() {
+    my $str = shift;
+    return 1 if $str =~ /[^A-Za-z0-9]/;
+    return 0;
+}
+
+sub convert_str_to_hex() {
+    my $str = shift;
+
+    my $new_str = '';
+    my $hex_mode = 0;
+    my @chars = split //, $str;
+    CHAR: for my $char (@chars) {
+        if ($char eq '|') {
+            if ($hex_mode) {
+                $new_str .= $char;
+                $hex_mode = 0;
+            } else {
+                $new_str .= $char;
+                $hex_mode = 1;
+            }
+            next CHAR;
+        }
+        if ($hex_mode) {
+            $new_str .= $char;
+        } else {
+            $new_str .= sprintf "|%02x|", ord($char);
+        }
+    }
+
+    ### consolidate any consecutive "|aa||bb|" sequences
+    $new_str =~ s/\|\|//g;
+
     return $new_str;
 }
 
@@ -3652,11 +3708,16 @@ sub expand_vars() {
                     die "[*] sub-ver $sub_var not allowed within same ",
                         "variable $var" if $sub_var eq $var;
                     if (defined $config{$sub_var}) {
-                        $val =~ s|\$$sub_var|$config{$sub_var}|;
+                        if ($sub_var eq 'INSTALL_ROOT'
+                                and $config{$sub_var} eq '/') {
+                            $val =~ s|\$$sub_var||;
+                        } else {
+                            $val =~ s|\$$sub_var|$config{$sub_var}|;
+                        }
                         $hr->{$var} = $val;
                     } else {
                         die "[*] sub-var \"$sub_var\" not defined in ",
-                            "config for var: $var.";
+                            "config for var: $var."
                     }
                     $has_sub_var = 1;
                 }
@@ -3677,7 +3738,7 @@ sub required_vars() {
         FWSNORT_FORWARD_JUMP MAX_STRING_LEN CONF_DIR RULES_DIR ARCHIVE_DIR
         QUEUE_RULES_DIR LOG_DIR LIBS_DIR CONF_FILE FWSNORT_SCRIPT LOG_FILE
         FWSNORT_SAVE_FILE FWSNORT_SAVE_EXEC_FILE IPT_BACKUP_SAVE_FILE
-        UPDATE_RULES_URL STATE_DIR
+        UPDATE_RULES_URL STATE_DIR INSTALL_ROOT
     ));
     for my $var (@required_vars) {
         die "[*] Variable $var not defined in $fwsnort_conf. Exiting.\n"
@@ -4576,6 +4637,12 @@ sub set_non_root_values() {
     if ($fwsnort_conf eq $CONFIG_DEFAULT) {
         $fwsnort_conf = './fwsnort.conf';
     }
+
+    &set_defaults_without_ipt_test();
+    return;
+}
+
+sub set_defaults_without_ipt_test() {
     $ipt_max_str_len = 128;
     $ipt_max_comment_len = 255;
     $ipt_max_log_prefix_len = 29;
