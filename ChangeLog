@@ -1,6 +1,19 @@
-fwsnort-1.6.3 (09//2012):
+fwsnort-1.6.3 (12/18/2012):
     - Bug fix to ensure that !, <, >, and = chars in content strings are
-      converted to the appropriate hex equivalents.
+      converted to the appropriate hex equivalents.  All content strings with
+      characters outside of [A-Za-z0-9] are now converted to hex-string format
+      in their entirety.  This should also fix an issue that results in the
+      following error when running /var/lib/fwsnort/fwsnort.sh:
+
+        Using intrapositioned negation (`--option ! this`) is deprecated in
+        favor of extrapositioned (`! --option this`).
+        Bad argument `bm'
+        Error occurred at line: 64
+        Try `iptables-restore -h' or 'iptables-restore --help' for more
+        information.
+            Done.
+
+    - Updated to bundle the latest Emerging Threats rule set.
 
 fwsnort-1.6.2 (04/28/2012):
     - Switched --no-ipt-sync to default to not syncing with the iptables policy.
