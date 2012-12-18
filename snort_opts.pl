@@ -35,6 +35,8 @@ my %options = (
     'offset'       => 0,
     'depth'        => 0,
     'nocase'       => 0,
+    'file_data'    => 0,
+    'rawbytes'     => 0,
     'session'      => 0,
     'rpc'          => 0,
     'resp'         => 0,
@@ -47,22 +49,36 @@ my %options = (
     'tag'          => 0,
     'ip_proto'     => 0,
     'sameip'       => 0,
+    'asn1'         => 0,
     'stateless'    => 0,
     'regex'        => 0,
+    'window'       => 0,
+    'isdataat'     => 0,
     'distance'     => 0,
     'within'       => 0,
     'byte_jump'    => 0,
     'byte_test'    => 0,
+    'byte_extract' => 0,
     'pcre'         => 0,
+    'ftpbounce'    => 0,
+    'base64_data'  => 0,
+    'base64_decode' => 0,
     'http_header'  => 0,
+    'http_cookie'  => 0,
     'http_uri'     => 0,
+    'http_raw_uri' => 0,
     'urilen'       => 0,
     'http_method'  => 0,
+    'http_stat_code' => 0,
+    'http_stat_msg' => 0,
+    'http_client_body' => 0,
     'fast_pattern' => 0,
     'metadata'     => 0,
     'threshold'    => 0,
     'detection_filter' => 0,
 );
+
+my %unrecognized = ();
 
 my $dir   = 'deps/snort_rules';
 my $total_rules = 0;
@@ -93,6 +109,12 @@ for my $rfile (@rfiles) {
                     $options{$opt}++;
                 }
             }
+            while ($line =~ m/[\s;](\w+)[:;]/g) {
+                next if $1 =~ /^\d+$/;
+                unless (defined $options{$1}) {
+                    $unrecognized{$1}++;
+                }
+            }
         }
     }
 }
@@ -105,6 +127,11 @@ for my $opt (keys %options) {
 for my $opt (sort {$options{$b} <=> $options{$a}} keys %options) {
     printf("%${max_opt_len}s %13s", $opt, "$options{$opt}/$total_rules  ");
     print sprintf("%.1f", $options{$opt} / $total_rules * 100) . "%\n";
+}
+
+print "\n[-] Potentially unrecognized options:\n";
+for my $opt (keys %unrecognized) {
+    print "    $opt\n";
 }
 
 exit 0;
