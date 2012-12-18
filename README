@@ -1,27 +1,7 @@
 fwsnort   (Firewall Snort)
-Version:  1.6.2
+Version:  1.6.3
 Author:   Michael Rash <mbr@cipherdyne.org>
 Website:  http://www.cipherdyne.org/fwsnort/
-
-Snort is a registered trademark of Sourcefire, Inc
-
-INSTALLATION:
-
-    (See the INSTALL file in the source directory.)
-
-UPGRADING:
-
-    If are installing fwsnort from sources (i.e. not through a distribution
-package manager such as RPM or apt), you can just run the "install.pl" script.
-It takes care of upgrades, and it will merge any customized configuration
-variables in the /etc/fwsnort/fwsnort.conf file with the new file in the
-source directory.  Even if you are using a distribution package manager, you
-can still run the install.pl script in order to preserve any existing
-configuration.  However, in this case the install.pl script will also put in
-place fwsnort according to how it normally handles installation paths, and
-these may not match how your distribution package manager normally handles
-things.
-
 
 DESCRIPTION:
 
@@ -42,7 +22,7 @@ loaded on the machine.
 fwsnort requires the iptables string match module in order to be able to
 detect application layer attacks.  If you are running modern Linux
 distribution then it is likely that the kernel has been compiled with iptables
-string matching support, and fwsnort will test this.
+string matching support, and fwsnort will automatically test this.
 
 PLATFORMS:
 
@@ -50,9 +30,28 @@ fwsnort is compatible with iptables only, hence fwsnort will exclusively run
 on Linux running a 2.6 series kernel (with some support for 2.4 kernels as
 well).
 
+Snort is a registered trademark of Sourcefire, Inc
+
+INSTALLATION:
+
+    (See the INSTALL file in the source directory.)
+
+UPGRADING:
+
+    If are installing fwsnort from sources (i.e. not through a distribution
+package manager such as RPM or apt), you can just run the "install.pl" script.
+It takes care of upgrades, and it will merge any customized configuration
+variables in the /etc/fwsnort/fwsnort.conf file with the new file in the
+source directory.  Even if you are using a distribution package manager, you
+can still run the install.pl script in order to preserve any existing
+configuration.  However, in this case the install.pl script will also put in
+place fwsnort according to how it normally handles installation paths, and
+these may not match how your distribution package manager normally handles
+things.
+
 COPYRIGHT:
 
-Copyright (C) 2003-2010 Michael Rash (mbr@cipherdyne.org)
+Copyright (C) 2003-2012 Michael Rash (mbr@cipherdyne.org)
 
 fwsnort is distributed under the GNU General Public License (GPLv2), and the
 latest version may be downloaded from http://www.cipherdyne.org/
