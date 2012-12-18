@@ -21,7 +21,7 @@
 #    USA
 #
 # TODO:
-#   - Write the uninstall() routine. :)
+#   - Write the uninstall() routine.
 #
 #######################################################################
 #
@@ -440,7 +440,11 @@ sub expand_vars() {
                     die "[*] sub-ver $sub_var not allowed within same ",
                         "variable $var" if $sub_var eq $var;
                     if (defined $config{$sub_var}) {
-                        $val =~ s|\$$sub_var|$config{$sub_var}|;
+                        if ($sub_var eq 'INSTALL_ROOT' and $config{$sub_var} eq '/') {
+                            $val =~ s|\$$sub_var||;
+                        } else {
+                            $val =~ s|\$$sub_var|$config{$sub_var}|;
+                        }
                         $hr->{$var} = $val;
                     } else {
                         die "[*] sub-var \"$sub_var\" not defined in ",
