@@ -1,5 +1,5 @@
 %define name fwsnort
-%define version 1.6.2
+%define version 1.6.3
 %define release 1
 %define fwsnortlogdir /var/log/fwsnort
 
@@ -30,13 +30,15 @@ detecting inbound attacks against against tcp/80. By default fwsnort
 generates iptables rules that log Snort sid's with --log-prefix to klogd
 where the messages can be analyzed with a log watcher such as logwatch or
 psad (see http://www.cipherdyne.org/psad). fwsnort relies on the iptables
-string match module to match Snort content fields in the application portion
+string match extension to match Snort content fields in the application portion
 of ip traffic. Since Snort rules can contain hex data in content fields,
 fwsnort implements a patch against iptables-1.2.7a which adds a
 "--hex-string" option which will accept content fields such as
-"|0d0a5b52504c5d3030320d0a|". fwsnort is able to translate approximately 60%
-of all rules from the Snort-2.3.3 IDS into equivalent iptables rules. For
-more information about the translation strategy as well as
+"|0d0a5b52504c5d3030320d0a|". fwsnort bundles the latest rule set from
+Emerging Threats (http://www.emergingthreats.net) and also includes all rules
+from the Snort-2.3.3 IDS - the final Snort rule set that was released under
+the GPL.  fwsnort is able to translate well over 60% of all bundled rules.
+For more information about the translation strategy as well as
 advantages/disadvantages of the method used by fwsnort to obtain intrusion
 detection data, see the README included with the fwsnort sources or browse
 to: http://www.cipherdyne.org/fwsnort/
@@ -85,6 +87,9 @@ install -m 644 fwsnort.8 $RPM_BUILD_ROOT%{_mandir}/man8/
 %config(noreplace) %_sysconfdir/%name/fwsnort.conf
 
 %changelog
+* Tue Dec 18 2012 Michael Rash <mbr@cipherydne.org>
+- fwsnort-1.6.3 release
+
 * Sat Apr 28 2012 Michael Rash <mbr@cipherydne.org>
 - Updated to use the NetAddr::IP module for all IP/subnet calculations
 - fwsnort-1.6.2 release
