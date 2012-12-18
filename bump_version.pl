@@ -11,9 +11,10 @@
 
 use strict;
 
-my @files = qw(
+my @files = (qw(
     fwsnort
-);
+    README
+));
 
 my $new_version = $ARGV[0] or die "[*] $0 <new version>";
 
