@@ -15,6 +15,8 @@ fwsnort-1.6.3 (12/18/2012):
 
     - Bug fix to set default max string length in --no-ipt-test mode where
       iptables capabilities are not tested.
+    - (Andrew Merenbach) Bug fix to properly honor --exclude-regex filtering
+      option.
     - Updated to bundle the latest Emerging Threats rule set.
 
 fwsnort-1.6.2 (04/28/2012):

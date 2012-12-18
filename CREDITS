@@ -80,3 +80,6 @@ Kim Hagen
 Peter Vrabec
     - Suggested a new directory /var/lib/fwsnort/ for the fwsnort.sh script
       and associated files (fwsnort.save, fwsnort_iptcmd.sh, etc.).
+
+Andrew Merenbach
+    - Contributed bug fix to properly honor --exclude-regex filtering option.

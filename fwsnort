@@ -658,7 +658,7 @@ sub parse_snort_rules() {
 
             ### regex filters
             if ($exclude_re) {
-                next RULE unless $rule =~ $exclude_re;
+                next RULE if $rule =~ $exclude_re;
             }
 
             if ($include_re) {
