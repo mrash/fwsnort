@@ -36,7 +36,8 @@ use strict;
 #========================= config ========================
 my $fwsnort_conf_file = 'fwsnort.conf';
 
-my $sbin_dir    = '/usr/sbin';
+my $sbin_dir     = '/usr/sbin';
+my $install_root = '/';
 
 my $update_website = 'www.emergingthreats.net';
 
@@ -69,6 +70,7 @@ my $rules_url = 'http://rules.emergingthreats.net/open/snort-2.9.0/emerging-all.
 my $uninstall = 0;
 my $skip_module_install   = 0;
 my $cmdline_force_install = 0;
+my $install_test_dir = 0;
 my $force_mod_re = '';
 my $exclude_mod_re = '';
 my $deps_dir = 'deps';
@@ -96,6 +98,7 @@ Getopt::Long::Configure('no_ignore_case');
     'Skip-mod-install'  => \$skip_module_install,
     'rules-url=s' => \$rules_url,
     'uninstall' => \$uninstall, ### uninstall fwsnort
+    'install-test-dir'  => \$install_test_dir,
     'LC_ALL=s'  => \$locale,
     'no-LC_ALL' => \$no_locale,
     'help'      => \$help
@@ -105,6 +108,14 @@ Getopt::Long::Configure('no_ignore_case');
 
 ### set LC_ALL env variable
 $ENV{'LC_ALL'} = $locale unless $no_locale;
+
+### make a copy of the original fwsnort.conf file and restore at the end
+copy $fwsnort_conf_file, "${fwsnort_conf_file}.orig" or die "[*] Could not ",
+    "copy $fwsnort_conf_file -> $fwsnort_conf_file.orig";
+
+if ($install_test_dir) {
+    $install_root = getcwd() . '/test/fwsnort-install';
+}
 
 &import_config();
 
@@ -127,6 +138,14 @@ if ($uninstall) {
 } else {
     &install()
 }
+
+### restore the original fwsnort.conf file (this is just the local one in the
+### sources directory).
+if (-e "${fwsnort_conf_file}.orig") {
+    unlink $fwsnort_conf_file if -e $fwsnort_conf_file;
+    move "${fwsnort_conf_file}.orig", $fwsnort_conf_file;
+}
+
 exit 0;
 #===================== end main ===================
 
@@ -135,12 +154,10 @@ sub install() {
         "sources directory." unless -e 'fwsnort' and -e 'fwsnort.conf';
 
     unless (-d $config{'CONF_DIR'}) {
-        print "[+] mkdir $config{'CONF_DIR'}\n";
-        mkdir $config{'CONF_DIR'}, 0500;
+        &full_mkdir($config{'CONF_DIR'}, 0500);
     }
     unless (-d $config{'RULES_DIR'}) {
-        print "[+] mkdir $config{'RULES_DIR'}\n";
-        mkdir $config{'RULES_DIR'}, 0500;
+        &full_mkdir($config{'RULES_DIR'}, 0500);
     }
 
     ### install perl modules
@@ -275,8 +292,7 @@ sub install_perl_module() {
     if ($install_module) {
         unless (-d $config{'LIBS_DIR'}) {
             print "[+] Creating $config{'LIBS_DIR'}\n";
-            mkdir $config{'LIBS_DIR'}, 0755
-                or die "[*] Could not mkdir $config{'LIBS_DIR'}: $!";
+            &full_mkdir($config{'LIBS_DIR'}, 0755);
         }
         print "[+] Installing the $mod_name $version perl " .
             "module in $config{'LIBS_DIR'}/\n";
@@ -366,7 +382,7 @@ sub install_manpage() {
             }
         }
     }
-    mkdir $mpath, 0755 unless -d $mpath;
+    &full_mkdir($mpath, 0755);
     my $mfile = "${mpath}/${manpage}";
     print "[+] Installing $manpage man page as $mfile\n";
     copy $manpage, $mfile or die "[*] Could not copy $manpage to " .
@@ -380,6 +396,7 @@ sub install_manpage() {
 }
 
 sub query_get_emerging_threats_sigs() {
+    return 0 if $install_test_dir;
     my $ans = '';
     print "[+] Would you like to download the latest Snort rules from \n",
         "    http://$update_website/?\n";
@@ -413,8 +430,30 @@ sub import_config() {
     }
     close C;
 
+    ### see if the install root is the same as the default in fwsnort.conf and
+    ### update if not
+    if ($install_root ne '/') {
+        $install_root = getcwd() . "/$install_root"
+            unless $install_root =~ m|^/|;
+        $config{'INSTALL_ROOT'} = $install_root;
+        $sbin_dir = $config{'INSTALL_ROOT'} . $sbin_dir;
+
+        &put_var('INSTALL_ROOT', $install_root, $fwsnort_conf_file);
+    }
+
     ### resolve internal vars within variable values
     &expand_vars();
+
+    for my $dir ($install_root,
+            $sbin_dir,
+            $config{'LOG_DIR'},
+            $config{'LIB_DIR'},
+            $config{'STATE_DIR'},
+            $config{'QUEUE_RULES_DIR'},
+            $config{'ARCHIVE_DIR'},
+        ) {
+        &full_mkdir($dir, 0755) unless -d $dir;
+    }
 
     &required_vars();
 
@@ -458,6 +497,24 @@ sub expand_vars() {
     return;
 }
 
+sub put_var() {
+    my ($var, $value, $file) = @_;
+
+    open RF, "< $file" or die "[*] Could not open $file: $!";
+    my @lines = <RF>;
+    close RF;
+    open F, "> $file" or die "[*] Could not open $file: $!";
+    for my $line (@lines) {
+        if ($line =~ /^\s*$var\s+.*;/) {
+            printf F "%-24s%s;\n", $var, $value;
+        } else {
+            print F $line;
+        }
+    }
+    close F;
+    return;
+}
+
 sub required_vars() {
     my @required_vars = qw(
         CONF_DIR RULES_DIR ARCHIVE_DIR QUEUE_RULES_DIR LOG_DIR LIBS_DIR
@@ -497,6 +554,7 @@ sub check_commands() {
 }
 
 sub query_preserve_config() {
+    return 0 if $install_test_dir;
     my $ans = '';
     while ($ans ne 'y' && $ans ne 'n') {
         print "[+] Would you like to preserve the config from the\n",
@@ -561,6 +619,23 @@ sub preserve_config() {
     return;
 }
 
+sub full_mkdir() {
+    my ($dir, $perms) = @_;
+
+    my @dirs = split /\//, $dir;
+    my $path = $dirs[0];
+    shift @dirs;
+    for my $d (@dirs) {
+        next unless $d and $d =~ /\S/;
+        $path .= "/$d";
+        unless (-d $path) {
+            printf "[+] mkdir $path, %o\n", $perms;
+            mkdir $path, $perms or die "[*] Could not mkdir($path): $!";
+        }
+    }
+    return;
+}
+
 sub usage() {
     my $exit = shift;
     print <<_HELP_;
@@ -576,6 +651,8 @@ install.pl: [options]
     -r, --rules-url <url>          - Specify the URL to use for updating the
                                      Emerging Threats rule set - the default is:
                                      $rules_url
+    --install-test-dir             - Install fwsnort in test/fwsnort-install
+                                     for test suite.
     -u, --uninstall   - uninstall fwsnort
     -h, --help        - print help and exit
 _HELP_
