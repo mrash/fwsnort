@@ -369,6 +369,8 @@ my $ext_net    = '';  ### normally comes from fwsnort.conf
 my $ipt_exec   = 0;
 my $ipt_drop   = 0;
 my $ipt_reject = 0;
+my $ipt_max_buf_len = 1025;
+my $ipt_cap_search_factor = 128;
 my $help       = 0;
 my $stdout     = 0;
 my $lib_dir    = '';
@@ -3764,7 +3766,13 @@ sub ipt_capabilities() {
             if $verbose or $ipt_check_capabilities;
 
         ### check for the max --log-prefix string length
-        &ipt_find_max_log_prefix_len();
+        $ipt_max_log_prefix_len = &ipt_find_max_len(
+            $ipt_max_log_prefix_len, qq|-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s | .
+            qq|$non_host -p tcp --dport 1234 -j LOG --log-prefix "|, qq|"|
+        );
+
+        print "    Max supported LOG prefix length: $ipt_max_log_prefix_len\n"
+            if $verbose or $ipt_check_capabilities;
 
     } else {
         &delete_test_chain();
@@ -3782,8 +3790,14 @@ sub ipt_capabilities() {
         print "[+] $ipt_str has 'comment' match support...\n"
             if $verbose or $ipt_check_capabilities;
 
-        ### now find the maximum comment length that is supported by iptables
-        &ipt_find_max_comment_len();
+        $ipt_max_comment_len = &ipt_find_max_len(
+            $ipt_max_comment_len, qq|-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s | .
+            qq|$non_host -p tcp --dport 1234 -m comment --comment | .
+            qq|"|, qq|" -j LOG|
+        );
+
+        print "    Max supported comment length: $ipt_max_comment_len\n"
+            if $verbose or $ipt_check_capabilities;
 
     } else {
         unless ($no_ipt_comments) {
@@ -3910,7 +3924,19 @@ sub ipt_capabilities() {
             if $verbose or $ipt_check_capabilities;
 
         ### now find the maximum string length that is supported by iptables
-        &ipt_find_max_string_len();
+        if ($kernel_ver eq '2.4') {
+            $ipt_max_str_len = &ipt_find_max_len(
+                $ipt_max_str_len, qq|-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s | .
+                    qq|$non_host -m string --string "|, qq|" -j LOG|);
+        } else {
+            $ipt_max_str_len = &ipt_find_max_len(
+                $ipt_max_str_len, qq|-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s | .
+                qq|$non_host -m string --string "|, qq|" | .
+                qq|--algo $string_match_alg -j LOG|);
+        }
+
+        print "    Max supported string length: $ipt_max_str_len\n"
+            if $verbose or $ipt_check_capabilities;
 
         ### test for case insensitive string matching
         $ipt_str_test = $ipt_str_test_base;
@@ -4114,89 +4140,36 @@ sub ipt_capabilities() {
     return;
 }
 
-sub ipt_find_max_string_len() {
+sub ipt_find_max_len() {
+    my ($len, $ipt_pre_pattern, $ipt_post_pattern) = @_;
 
     my $test_pattern = '';
 
     for (;;) {
 
-        $test_pattern = 'A'x$ipt_max_str_len;
-        my $test_rule_rv = 0;
+        $test_pattern = 'A'x$len;
 
-        if ($kernel_ver ne '2.4') {
-            $test_rule_rv = &ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s " .
-                qq|$non_host -m string --string "$test_pattern" | .
-                qq|--algo $string_match_alg -j LOG|);
-        } else {
-            $test_rule_rv = &ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s " .
-                qq|$non_host -m string --string "$test_pattern" -j LOG|);
-        }
+        last if &ipt_rule_test($ipt_pre_pattern
+            . $test_pattern . $ipt_post_pattern) != $IPT_SUCCESS;
 
-        last if $test_rule_rv != $IPT_SUCCESS;
+        $len += $ipt_cap_search_factor;
 
-        $ipt_max_str_len++;
-
-        last if $ipt_max_str_len == 1025; ### unlikely we'll ever get here
+        last if $len >= $ipt_max_buf_len;
     }
-    $ipt_max_str_len--;
-
-    print "    Max supported string length: $ipt_max_str_len\n"
-        if $verbose or $ipt_check_capabilities;
-
-    return;
-}
-
-sub ipt_find_max_log_prefix_len() {
-
-    my $test_pattern = '';
 
     for (;;) {
 
-        $test_pattern = 'A'x$ipt_max_log_prefix_len;
-        my $test_rule_rv = 0;
+        $test_pattern = 'A'x$len;
 
-        $test_rule_rv = &ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s " .
-            qq|$non_host -p tcp --dport 1234 -j LOG --log-prefix "$test_pattern"|);
+        last if &ipt_rule_test($ipt_pre_pattern
+            . $test_pattern . $ipt_post_pattern) == $IPT_SUCCESS;
 
-        last if $test_rule_rv != $IPT_SUCCESS;
+        $len--;
 
-        $ipt_max_log_prefix_len++;
-
-        last if $ipt_max_log_prefix_len == 1025; ### unlikely we'll ever get here
+        last if $len == 1;  ### minimum
     }
-    $ipt_max_log_prefix_len--;
 
-    print "    Max supported LOG prefix length: $ipt_max_log_prefix_len\n"
-        if $verbose or $ipt_check_capabilities;
-
-    return;
-}
-
-sub ipt_find_max_comment_len() {
-
-    my $test_comment = '';
-
-    for (;;) {
-
-        $test_comment = 'A'x$ipt_max_comment_len;
-        my $test_rule_rv = 0;
-
-        $test_rule_rv = &ipt_rule_test("-I $TEST_CHAIN $IPT_TEST_RULE_NUM -s " .
-            qq|$non_host -p tcp --dport 1234 -m comment --comment | .
-            qq|"$test_comment" -j LOG|);
-
-        last if $test_rule_rv != $IPT_SUCCESS;
-
-        $ipt_max_comment_len++;
-
-        last if $ipt_max_comment_len == 1025; ### unlikely we'll ever get here
-    }
-    $ipt_max_comment_len--;
-
-    print "    Max supported comment length: $ipt_max_comment_len\n"
-        if $verbose or $ipt_check_capabilities;
-
-    return;
+    return --$len;
 }
 
 sub ipt_find_max_multiport_supported_ports() {
@@ -4216,7 +4189,7 @@ sub ipt_find_max_multiport_supported_ports() {
 
         $ipt_multiport_max++;
 
-        last if $ipt_multiport_max == 1025; ### unlikely we'll ever get here
+        last if $ipt_multiport_max == $ipt_max_buf_len; ### unlikely we'll ever get here
     }
     $ipt_multiport_max--;
 

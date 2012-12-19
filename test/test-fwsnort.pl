@@ -37,6 +37,7 @@ my $test_exclude = '';
 my @tests_to_exclude = ();
 my $list_mode = 0;
 my $diff_mode = 0;
+my $fw_exec = 0;
 my $saved_last_results = 0;
 my $test_system_install = 0;
 my $PRINT_LEN = 68;
@@ -55,6 +56,7 @@ my %test_keys = (
     'fatal'           => $OPTIONAL,
     'exec_err'        => $OPTIONAL,
     'match_all'       => $OPTIONAL,
+    'fw_exec'         => $OPTIONAL,
     'postive_output_matches'  => $OPTIONAL,
     'negative_output_matches' => $OPTIONAL,
 );
@@ -70,6 +72,7 @@ exit 1 unless GetOptions(
     'test-system-install' => \$test_system_install,
     'List-mode'           => \$list_mode,
     'diff'                => \$diff_mode,
+    'enable-fw-exec'      => \$fw_exec,
     'help'                => \$help
 );
 

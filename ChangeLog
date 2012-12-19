@@ -24,6 +24,10 @@ fwsnort-1.6.3 (12/18/2012):
       original iptables policy with "/var/lib/fwsnort/fwsnort.sh -r".  Note
       that this reverts back to the policy as it was when fwsnort itself was
       executed.
+    - Implemented a single unified function for iptables match parameter
+      length testing, and optimized to drastically reduce run time for iptables
+      capabilities checks (going from over 20 seconds to less than one second
+      in some cases).
     - Updated to bundle the latest Emerging Threats rule set.
 
 fwsnort-1.6.2 (04/28/2012):
