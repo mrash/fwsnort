@@ -3027,6 +3027,7 @@ sub ipt_add_conntrack_jumps() {
                 qq|--state $conntrack_state -j | .
                 qq|$config{"FWSNORT_${chain}_ESTAB"}|;
         }
+        next unless $rule_str;
 
         push @ipt_script_lines, qq|\$${ipt_var_str} $rule_str|;
         push @{$save_format_conntrack_jumps{$config{"FWSNORT_$chain"}}},
@@ -4296,11 +4297,6 @@ sub setup() {
     $config{'QUEUE_RULES_DIR'} = $queue_rules_dir if $queue_rules_dir;
     $config{'LOG_FILE'}        = $logfile if $logfile;
 
-    if ($is_root) {
-        chdir $config{'RULES_DIR'} or
-            die "[*] Could not chdir $config{'RULES_DIR'}: $!";
-    }
-
     if ($rules_file) {
         for my $file (split /\,/, $rules_file) {
             die "[*] Snort rules file $file does not exist." unless -e $file;
@@ -4643,6 +4639,7 @@ sub set_non_root_values() {
 }
 
 sub set_defaults_without_ipt_test() {
+    $have_conntrack = 1;
     $ipt_max_str_len = 128;
     $ipt_max_comment_len = 255;
     $ipt_max_log_prefix_len = 29;
