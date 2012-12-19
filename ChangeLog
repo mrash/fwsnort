@@ -20,6 +20,10 @@ fwsnort-1.6.3 (12/18/2012):
     - Added fwsnort test suite to the test/ directory.  This mimics the test
       suites from the psad and fwknop projects, and it designed to examine
       many of the run time results of fwsnort.
+    - Added the ability to easily revert the fwsnort policy back to the
+      original iptables policy with "/var/lib/fwsnort/fwsnort.sh -r".  Note
+      that this reverts back to the policy as it was when fwsnort itself was
+      executed.
     - Updated to bundle the latest Emerging Threats rule set.
 
 fwsnort-1.6.2 (04/28/2012):

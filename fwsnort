@@ -4599,12 +4599,32 @@ sub write_save_file() {
     my @fws_exec_lines = ();
     push @fws_exec_lines, &hdr_lines();
 
-    push @fws_exec_lines, qq|echo " "|, qq|echo "[+] Splicing fwsnort $abs_num rules | .
-        qq|into the $ipt_str policy..."|,
-        "$restore_bin < $config{'FWSNORT_SAVE_FILE'}",
-        qq|echo "    Done."\n|,
-        qq|echo " "|,
-        "exit\n";
+    push @fws_exec_lines, <<_FWSNORT_SH_;
+DO_REVERT=0
+
+while getopts r f
+do
+    case \$f in
+        r) DO_REVERT=1
+    esac
+done
+
+if [ "\$DO_REVERT" = 1 ];
+then
+    echo " "
+    echo "[+] Reverting to original iptables policy..."
+    grep -v FWSNORT $config{'FWSNORT_SAVE_FILE'} | $restore_bin
+else
+    echo " "
+    echo "[+] Splicing fwsnort $abs_num rules into the iptables policy..."
+    $restore_bin < $config{'FWSNORT_SAVE_FILE'}
+fi
+
+echo "    Done."
+echo " "
+exit
+
+_FWSNORT_SH_
 
     ### make sure the file is writable first
     if (-e $config{'FWSNORT_SAVE_EXEC_FILE'}) {
