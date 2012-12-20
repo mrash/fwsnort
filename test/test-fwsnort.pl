@@ -14,6 +14,7 @@ my $run_dir        = 'run';
 my $test_install_dir = 'fwsnort-install';
 
 my $fwsnortCmd = "$test_install_dir/usr/sbin/fwsnort";
+my $fwsnort_sh = "$test_install_dir/var/lib/fwsnort/fwsnort.sh";
 
 my $cmd_out_tmp    = 'cmd.out';
 my $default_conf   = "$conf_dir/default_fwsnort.conf";
@@ -117,6 +118,15 @@ my @tests = (
         'fatal'    => $NO
     },
     {
+        'category' => 'operations',
+        'detail'   => '--ipt-list',
+        'err_msg'  => 'could not get --ipt-list output',
+        'function' => \&generic_exec,
+        'cmdline'  => "$fwsnortCmd --ipt-list -c $default_conf --no-ipt-test",
+        'exec_err' => $NO,
+        'fatal'    => $NO
+    },
+    {
         'category'  => 'operations',
         'detail'    => "--ipt-check-capabilities",
         'err_msg'   => "could not check iptables capabilities",
@@ -140,6 +150,7 @@ my @tests = (
         'match_all' => $MATCH_ALL_RE,
         'function'  => \&generic_exec,
         'cmdline'   => "$fwsnortCmd --no-ipt-test -c $default_conf --snort-sid $simple_sig_id",
+        'fw_exec'   => $fw_exec,
         'exec_err'  => $NO,
         'fatal'     => $NO
     },
@@ -155,6 +166,7 @@ my @tests = (
         'match_all' => $MATCH_ALL_RE,
         'function'  => \&generic_exec,
         'cmdline'   => "$fwsnortCmd --no-ipt-test -c $default_conf --snort-sid $simple_sig_id,109,321",
+        'fw_exec'   => $fw_exec,
         'exec_err'  => $NO,
         'fatal'     => $NO
     },
@@ -182,6 +194,7 @@ my @tests = (
         'match_all' => $MATCH_ALL_RE,
         'function'  => \&generic_exec,
         'cmdline'   => "$fwsnortCmd --no-ipt-test -c $default_conf --include-type backdoor",
+        'fw_exec'   => $fw_exec,
         'exec_err'  => $NO,
         'fatal'     => $NO
     },
@@ -198,6 +211,7 @@ my @tests = (
         'match_all' => $MATCH_ALL_RE,
         'function'  => \&generic_exec,
         'cmdline'   => "$fwsnortCmd --no-ipt-test -c $default_conf --include-type backdoor,dns,ftp",
+        'fw_exec'   => $fw_exec,
         'exec_err'  => $NO,
         'fatal'     => $NO
     },
@@ -366,6 +380,16 @@ sub generic_exec() {
             $current_test_file);
     }
 
+    if ($test_hr->{'fw_exec'} eq $YES) {
+        if (-e $fwsnort_sh) {
+            &run_cmd($fwsnort_sh, $cmd_out_tmp, $current_test_file);
+            &run_cmd("$fwsnortCmd --ipt-list", $cmd_out_tmp, $current_test_file);
+            &run_cmd("$fwsnort_sh -r", $cmd_out_tmp, $current_test_file);
+        } else {
+            &write_test_file("[-] $fwsnort_sh script does not exist.\n");
+        }
+    }
+
     return $rv;
 }
 
@@ -438,7 +462,7 @@ sub file_find_regex() {
     }
 
     for my $line (@write_lines) {
-        &write_test_file($line, $file);
+        &write_test_file($line);
     }
 
     return $found;
