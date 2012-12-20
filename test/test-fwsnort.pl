@@ -335,6 +335,202 @@ my @tests = (
         'fatal'     => $NO
     },
 
+    ### ip6tables testing
+    {
+        'category'  => 'operations',
+        'detail'    => "ip6tables --snort-sid $simple_sig_id",
+        'err_msg'   => "did not translate sid: $simple_sig_id",
+        'positive_output_matches' => [qr/Found\ssid\:\s$simple_sig_id/,
+            qr/Successful\stranslation/
+        ],
+        'match_all' => $MATCH_ALL_RE,
+        'function'  => \&generic_exec,
+        'cmdline'   => "$fwsnortCmd --ip6tables --no-ipt-test -c $default_conf --snort-sid $simple_sig_id",
+        'fw_exec'   => $fw_exec,
+        'exec_err'  => $NO,
+        'fatal'     => $NO
+    },
+    {
+        'category'  => 'operations',
+        'detail'    => "ip6tables  --snort-sid $simple_sig_id,109,321",
+        'err_msg'   => "did not translate sid: $simple_sig_id",
+        'positive_output_matches' => [qr/Found\ssid/,
+            qr/Found\ssid\:\s109/,
+            qr/Found\ssid\:\s321/,
+            qr/Successful\stranslation/,
+        ],
+        'match_all' => $MATCH_ALL_RE,
+        'function'  => \&generic_exec,
+        'cmdline'   => "$fwsnortCmd --ip6tables --no-ipt-test -c $default_conf --snort-sid $simple_sig_id,109,321",
+        'fw_exec'   => $fw_exec,
+        'exec_err'  => $NO,
+        'fatal'     => $NO
+    },
+    {
+        'category'  => 'operations',
+        'detail'    => "ip6tables --snort-sid badsid",
+        'err_msg'   => 'translated badsid signature',
+        'positive_output_matches' => [
+            qr/No\sSnort\srules\scould\sbe\stranslated/
+        ],
+        'match_all' => $MATCH_ALL_RE,
+        'function'  => \&generic_exec,
+        'cmdline'   => "$fwsnortCmd --ip6tables --no-ipt-test -c $default_conf --snort-sid badsid",
+        'exec_err'  => $YES,
+        'fatal'     => $NO
+    },
+    {
+        'category'  => 'operations',
+        'detail'    => "ip6tables --include-type backdoor",
+        'err_msg'   => "did not translate backdoor signatures",
+        'positive_output_matches' => [
+            qr/backdoor\.rules/,
+            qr/Generated\sip6tables\srules\sfor/
+        ],
+        'match_all' => $MATCH_ALL_RE,
+        'function'  => \&generic_exec,
+        'cmdline'   => "$fwsnortCmd --ip6tables --no-ipt-test -c $default_conf --include-type backdoor",
+        'fw_exec'   => $fw_exec,
+        'exec_err'  => $NO,
+        'fatal'     => $NO
+    },
+    {
+        'category'  => 'operations',
+        'detail'    => "ip6tables --strict --include-type backdoor",
+        'err_msg'   => "did not translate backdoor signatures",
+        'positive_output_matches' => [
+            qr/backdoor\.rules/,
+            qr/Generated\sip6tables\srules\sfor/
+        ],
+        'match_all' => $MATCH_ALL_RE,
+        'function'  => \&generic_exec,
+        'cmdline'   => "$fwsnortCmd --ip6tables --no-ipt-test -c $default_conf --strict --include-type backdoor",
+        'fw_exec'   => $fw_exec,
+        'exec_err'  => $NO,
+        'fatal'     => $NO
+    },
+    {
+        'category'  => 'operations',
+        'detail'    => "ip6tables --include-type emerging-all",
+        'err_msg'   => "did not translate emerging-all signatures",
+        'positive_output_matches' => [
+            qr/emerging-all\.rules/,
+            qr/Generated\sip6tables\srules\sfor/
+        ],
+        'match_all' => $MATCH_ALL_RE,
+        'function'  => \&generic_exec,
+        'cmdline'   => "$fwsnortCmd --ip6tables --no-ipt-test -c $default_conf --include-type emerging-all",
+        'fw_exec'   => $fw_exec,
+        'exec_err'  => $NO,
+        'fatal'     => $NO
+    },
+
+    {
+        'category'  => 'operations',
+        'detail'    => "ip6tables --include-type backdoor,dns,ftp",
+        'err_msg'   => "did not translate backdoor,dns,ftp signatures",
+        'positive_output_matches' => [
+            qr/backdoor\.rules/,
+            qr/dns\.rules/,
+            qr/ftp\.rules/,
+            qr/Generated\sip6tables\srules\sfor/
+        ],
+        'match_all' => $MATCH_ALL_RE,
+        'function'  => \&generic_exec,
+        'cmdline'   => "$fwsnortCmd --ip6tables --no-ipt-test -c $default_conf --include-type backdoor,dns,ftp",
+        'fw_exec'   => $fw_exec,
+        'exec_err'  => $NO,
+        'fatal'     => $NO
+    },
+    {
+        'category'  => 'operations',
+        'detail'    => "ip6tables --exclude-type emerging-all",
+        'err_msg'   => "did not translate signatures",
+        'positive_output_matches' => [
+            qr/backdoor\.rules/,
+            qr/dns\.rules/,
+            qr/ftp\.rules/,
+            qr/Generated\sip6tables\srules\sfor/
+        ],
+        'match_all' => $MATCH_ALL_RE,
+        'function'  => \&generic_exec,
+        'cmdline'   => "$fwsnortCmd --ip6tables --no-ipt-test -c $default_conf --exclude-type emerging-all",
+        'fw_exec'   => $fw_exec,
+        'exec_err'  => $NO,
+        'fatal'     => $NO
+    },
+    {
+        'category'  => 'operations',
+        'detail'    => "ip6tables --ex... emerging-all,backdoor,dns,ftp",
+        'err_msg'   => "did not translate signatures",
+        'positive_output_matches' => [
+            qr/chat\.rules/,
+            qr/ddos\.rules/,
+            qr/Generated\sip6tables\srules\sfor/
+        ],
+        'match_all' => $MATCH_ALL_RE,
+        'function'  => \&generic_exec,
+        'cmdline'   => "$fwsnortCmd --ip6tables --no-ipt-test -c $default_conf --exclude-type emerging-all,backdoor,dns,ftp",
+        'fw_exec'   => $fw_exec,
+        'exec_err'  => $NO,
+        'fatal'     => $NO
+    },
+    {
+        'category'  => 'operations',
+        'detail'    => "ip6tables --in.. backdoor,dns,ftp --ex.. dns",
+        'err_msg'   => "did not translate backdoor,ftp signatures",
+        'positive_output_matches' => [
+            qr/backdoor\.rules/,
+            qr/ftp\.rules/,
+            qr/Generated\sip6tables\srules\sfor/
+        ],
+        'negative_output_matches' => [
+            qr/dns\.rules/,
+        ],
+        'match_all' => $MATCH_ALL_RE,
+        'function'  => \&generic_exec,
+        'cmdline'   => "$fwsnortCmd --ip6tables --no-ipt-test -c $default_conf --include-type backdoor,dns,ftp --exclude-type dns",
+        'fw_exec'   => $fw_exec,
+        'exec_err'  => $NO,
+        'fatal'     => $NO
+    },
+    {
+        'category'  => 'operations',
+        'detail'    => "ip6tables --sn.. $simple_sig_id,109,321 --ex.. sid\:109",
+        'err_msg'   => "did not translate sid: $simple_sig_id",
+        'positive_output_matches' => [qr/Found\ssid/,
+            qr/Found\ssid\:\s321/,
+            qr/Successful\stranslation/,
+        ],
+        'negative_output_matches' => [
+            qr/Found\ssid\:\s109/,
+        ],
+        'match_all' => $MATCH_ALL_RE,
+        'function'  => \&generic_exec,
+        'cmdline'   => "$fwsnortCmd --ip6tables --no-ipt-test -c $default_conf --snort-sid $simple_sig_id,109,321 --exclude-regex sid\:109",
+        'fw_exec'   => $fw_exec,
+        'exec_err'  => $NO,
+        'fatal'     => $NO
+    },
+    {
+        'category'  => 'operations',
+        'detail'    => "ip6tables --sn.. $simple_sig_id,109,321 --in... sid\:109",
+        'err_msg'   => "did not translate sid: $simple_sig_id",
+        'positive_output_matches' => [qr/Found\ssid/,
+            qr/Found\ssid\:\s109/,
+            qr/Successful\stranslation/,
+        ],
+        'negative_output_matches' => [
+            qr/Found\ssid\:\s321/,
+        ],
+        'match_all' => $MATCH_ALL_RE,
+        'function'  => \&generic_exec,
+        'cmdline'   => "$fwsnortCmd --ip6tables --no-ipt-test -c $default_conf --snort-sid $simple_sig_id,109,321 --include-regex sid\:109",
+        'fw_exec'   => $fw_exec,
+        'exec_err'  => $NO,
+        'fatal'     => $NO
+    },
+
     {
         'category'  => 'errors',
         'detail'    => 'look for perl warnings',
@@ -503,7 +699,12 @@ sub generic_exec() {
     if ($test_hr->{'fw_exec'} eq $YES) {
         if (-e $fwsnort_sh) {
             $rv = 0 unless &run_cmd($fwsnort_sh, $cmd_out_tmp, $current_test_file);
-            $rv = 0 unless &run_cmd("$fwsnortCmd --ipt-list", $cmd_out_tmp, $current_test_file);
+            if ($test_hr->{'detail'} =~ /ip6tables/) {
+                $rv = 0 unless &run_cmd("$fwsnortCmd --ipt-list --ip6tables",
+                        $cmd_out_tmp, $current_test_file);
+            } else {
+                $rv = 0 unless &run_cmd("$fwsnortCmd --ipt-list", $cmd_out_tmp, $current_test_file);
+            }
             $rv = 0 unless &run_cmd("$fwsnort_sh -r", $cmd_out_tmp, $current_test_file);
         } else {
             &write_test_file("[-] $fwsnort_sh script does not exist.\n");
