@@ -122,34 +122,34 @@ my %snort_opts = (
         ### application layer
         'uricontent' => {  ### use --strict to not translate this
             'iptopt' => '-m string',
-            'regex'  => '[\s;]uricontent:\s*\"(.*?)\"\s*;'
+            'regex'  => qr/[\s;]uricontent:\s*\"(.*?)\"\s*;/
         },
         'content' => {
             'iptopt' => '-m string',
-            'regex'  => '[\s;]content:\s*\"(.*?)\"\s*;'
+            'regex'  => qr/[\s;]content:\s*\"(.*?)\"\s*;/
         },
         'fast_pattern' => {
             'iptopt' => '',  ### fast_pattern just governs ordering of
                              ### content matches
-            'regex'  => '[\s;]fast_pattern(?::\s*.*?\s*)?;',
+            'regex'  => qr/[\s;]fast_pattern(?::\s*.*?\s*)?;/,
         },
         'pcre' => {
             ### only basic PCRE's that just have strings separated
             ### by ".*" or ".+" are supported.
             'iptopt' => '-m string',
-            'regex'  => '[\s;]pcre:\s*\"(.*?)\"\s*;'
+            'regex'  => qr/[\s;]pcre:\s*\"(.*?)\"\s*;/
         },
         'nocase'  => {
             'iptopt' => '--icase',
-            'regex'  => '[\s;]nocase\s*;',
+            'regex'  => qr/[\s;]nocase\s*;/,
         },
         'offset'  => {
             'iptopt' => '--from',
-            'regex'  => '[\s;]offset:\s*(\d+)\s*;'
+            'regex'  => qr/[\s;]offset:\s*(\d+)\s*;/
         },
         'depth' =>  {
             'iptopt' => '--to',
-            'regex'  => '[\s;]depth:\s*(\d+)\s*;'
+            'regex'  => qr/[\s;]depth:\s*(\d+)\s*;/
         },
 
         ### technically, the "distance" and "within" criteria
@@ -161,125 +161,125 @@ my %snort_opts = (
         ### use the --strict option.
         'distance'  => {
             'iptopt' => '--from',
-            'regex'  => '[\s;]distance:\s*(\d+)\s*;'
+            'regex'  => qr/[\s;]distance:\s*(\d+)\s*;/
         },
         'within' =>  {
             'iptopt' => '--to',
-            'regex'  => '[\s;]within:\s*(\d+)\s*;'
+            'regex'  => qr/[\s;]within:\s*(\d+)\s*;/
         },
         'replace' => {  ### for Snort running in inline mode
             'iptopt' => '--replace-string',
-            'regex'  => '[\s;]replace:\s*\"(.*?)\"\s*;'
+            'regex'  => qr/[\s;]replace:\s*\"(.*?)\"\s*;/
         },
         'resp' => {
             'iptopt' => '-j REJECT',
-            'regex'  => '[\s;]resp:\s*(.*?)\s*;'
+            'regex'  => qr/[\s;]resp:\s*(.*?)\s*;/
         },
 
         ### transport layer
         'flags' => {
             'iptopt' => '--tcp-flags',
-            'regex'  => '[\s;]flags:\s*(.*?)\s*;'
+            'regex'  => qr/[\s;]flags:\s*(.*?)\s*;/
         },
         'flow' => {
             'iptopt' => '--tcp-flags',
-            'regex'  => '[\s;]flow:\s*(.*?)\s*;'
+            'regex'  => qr/[\s;]flow:\s*(.*?)\s*;/
         },
 
         ### network layer
         'itype' => {
             'iptopt' => '--icmp-type',  ### --icmp-type type/code
-            'regex'  => '[\s;]itype:\s*(.*?)\s*;'
+            'regex'  => qr/[\s;]itype:\s*(.*?)\s*;/
         },
         'icode' => {
             'iptopt' => 'NONE',
-            'regex'  => '[\s;]icode:\s*(.*?)\s*;'
+            'regex'  => qr/[\s;]icode:\s*(.*?)\s*;/
         },
         'ttl' => {
             'iptopt' => '-m ttl', ### requires CONFIG_IP_NF_MATCH_TTL
-            'regex'  => '[\s;]ttl:\s*(.*?)\s*;'
+            'regex'  => qr/[\s;]ttl:\s*(.*?)\s*;/
         },
         'tos' => {
             'iptopt' => '-m tos --tos', ### requires CONFIG_IP_NF_MATCH_TOS
-            'regex'  => '[\s;]tos:\s*(\d+)\s*;'
+            'regex'  => qr/[\s;]tos:\s*(\d+)\s*;/
         },
         'ipopts' => {
             'iptopt' => '-m ipv4options',  ### requires ipv4options extension
-            'regex'  => '[\s;]ipopts:\s*(\w+)\s*;'
+            'regex'  => qr/[\s;]ipopts:\s*(\w+)\s*;/
         },
         'ip_proto' => {
             'iptopt' => '-p',
-            'regex'  => '[\s;]ip_proto:\s*(.*?)\s*;'
+            'regex'  => qr/[\s;]ip_proto:\s*(.*?)\s*;/
         },
         'dsize' => {  ### requires CONFIG_IP_NF_MATCH_LENGTH
             'iptopt' => '-m length --length',
-            'regex'  => '[\s;]dsize:\s*(.*?)\s*;'
+            'regex'  => qr/[\s;]dsize:\s*(.*?)\s*;/
         },
     },
 
     ### snort options that can be put into iptables
     ### ruleset, but only in log messages with --log-prefix
     'logprefix' =>  {
-        'sid'       => '[\s;]sid:\s*(\d+)\s*;',
-        'msg'       => '[\s;]msg:\s*\"(.*?)\"\s*;',  ### we create a space
-        'classtype' => '[\s;]classtype:\s*(.*?)\s*;',
-        'reference' => '[\s;]reference:\s*(.*?)\s*;',
-        'priority'  => '[\s;]priority:\s*(\d+)\s*;',
-        'rev'       => '[\s;]rev:\s*(\d+)\s*;',
+        'sid'       => qr/[\s;]sid:\s*(\d+)\s*;/,
+        'msg'       => qr/[\s;]msg:\s*\"(.*?)\"\s*;/,  ### we create a space
+        'classtype' => qr/[\s;]classtype:\s*(.*?)\s*;/,
+        'reference' => qr/[\s;]reference:\s*(.*?)\s*;/,
+        'priority'  => qr/[\s;]priority:\s*(\d+)\s*;/,
+        'rev'       => qr/[\s;]rev:\s*(\d+)\s*;/,
     },
 
     ### snort options that cannot be included directly
     ### within iptables filter statements (yet :)
     'unsupported' => {
-        'asn1'         => '[\s;]asn1:\s*.*?\s*;',
-        'fragbits'     => '[\s;]fragbits:\s*.*?\s*;',
-        'content-list' => '[\s;]content\-list:\s*\".*?\"\s*;',
-        'rpc'          => '[\s;]rpc:\s*.*?\s*;',
-        'byte_test'    => '[\s;]byte_test\s*.*?\s*;',
-        'byte_jump'    => '[\s;]byte_jump\s*.*?\s*;',
-        'byte_extract' => '[\s;]byte_extract\s*.*?\s*;',
-        'file_data'    => '[\s;]file_data\s*;',
-        'window'       => '[\s;]window:\s*.*?\s*;',
-        'flowbits'     => '[\s;]flowbits:\s*.*?\s*;',
-        'tag'          => '[\s;]tag:\s*.*?\s*;',
-        'ftpbounce'    => '[\s;]ftpbounce\s*;',
-        'base64_data'  => '[\s;]base64_data\s*;',
-        'base64_decode' => '[\s;]base64_decode:\s*.*?\s*;',
-#        'offset'       => '[\s;]offset:\s*\d+\s*;',
-#        'depth'        => '[\s;]depth:\s*\d+\s*;',
+        'asn1'         => qr/[\s;]asn1:\s*.*?\s*;/,
+        'fragbits'     => qr/[\s;]fragbits:\s*.*?\s*;/,
+        'content-list' => qr/[\s;]content\-list:\s*\".*?\"\s*;/,
+        'rpc'          => qr/[\s;]rpc:\s*.*?\s*;/,
+        'byte_test'    => qr/[\s;]byte_test\s*.*?\s*;/,
+        'byte_jump'    => qr/[\s;]byte_jump\s*.*?\s*;/,
+        'byte_extract' => qr/[\s;]byte_extract\s*.*?\s*;/,
+        'file_data'    => qr/[\s;]file_data\s*;/,
+        'window'       => qr/[\s;]window:\s*.*?\s*;/,
+        'flowbits'     => qr/[\s;]flowbits:\s*.*?\s*;/,
+        'tag'          => qr/[\s;]tag:\s*.*?\s*;/,
+        'ftpbounce'    => qr/[\s;]ftpbounce\s*;/,
+        'base64_data'  => qr/[\s;]base64_data\s*;/,
+        'base64_decode' => qr/[\s;]base64_decode:\s*.*?\s*;/,
+#        'offset'       => qr/[\s;]offset:\s*\d+\s*;/,
+#        'depth'        => qr/[\s;]depth:\s*\d+\s*;/,
 
         ### the following fields get logged by iptables but
         ### we cannot filter them directly except with the
         ### iptables u32 module.  Functionality has been built
         ### into psad to generate alerts for most of these Snort
         ### options.
-        'id'        => '[\s;]id:\s*(\d+)\s*;',
-        'seq'       => '[\s;]seq:\s*(\d+)\s*;',  ### --log-tcp-sequence
-        'ack'       => '[\s;]ack:\s*.*?\s*;',    ### --log-tcp-sequence
-        'icmp_seq'  => '[\s;]icmp_seq:\s*(\d+)\s*;',
-        'icmp_id'   => '[\s;]icmp_id:\s*(\d+)\s*;',
-        'sameip'    => '[\s;]sameip\s*;',
-        'regex'     => '[\s;]regex:\s*(.*?)\s*;',
-        'isdataat'  => '[\s;]isdataat:\s*(.*?)\s*;',
-        'threshold' => '[\s;]threshold:\s*.*?\s*;',               ### FIXME --limit
-        'detection_filter' => '[\s;]detection_filter:\s*.*?\s*;'  ### FIXME --limit
+        'id'        => qr/[\s;]id:\s*(\d+)\s*;/,
+        'seq'       => qr/[\s;]seq:\s*(\d+)\s*;/,  ### --log-tcp-sequence
+        'ack'       => qr/[\s;]ack:\s*.*?\s*;/,    ### --log-tcp-sequence
+        'icmp_seq'  => qr/[\s;]icmp_seq:\s*(\d+)\s*;/,
+        'icmp_id'   => qr/[\s;]icmp_id:\s*(\d+)\s*;/,
+        'sameip'    => qr/[\s;]sameip\s*;/,
+        'regex'     => qr/[\s;]regex:\s*(.*?)\s*;/,
+        'isdataat'  => qr/[\s;]isdataat:\s*(.*?)\s*;/,
+        'threshold' => qr/[\s;]threshold:\s*.*?\s*;/,               ### FIXME --limit
+        'detection_filter' => qr/[\s;]detection_filter:\s*.*?\s*;/  ### FIXME --limit
     },
 
     ### snort options that fwsnort will ignore
     'ignore' => {
-        'rawbytes' => '[\s;]rawbytes\s*;',  ### iptables does a raw match anyway
-        'logto'    => '[\s;]logto:\s*\S+\s*;',
-        'session'  => '[\s;]session\s*;',
-        'tag'      => '[\s;]tag:\s*.*?\s*;',
-        'react'    => '[\s;]react:\s*.*?\s*;', ### FIXME -j REJECT
-        'http_uri' => '[\s;]http_uri\s*;',
-        'http_raw_uri' => '[\s;]http_raw_uri\s*;',
-        'http_method' => '[\s;]http_method\s*;',
-        'http_stat_code' => '[\s;]http_stat_code\s*;',
-        'http_stat_msg' => '[\s;]http_stat_msg\s*;',
-        'http_client_body' => '[\s;]http_client_body\s*;',
-        'http_cookie' => '[\s;]http_cookie\s*;',
-        'urilen'    => '[\s;]urilen:\s*.*?\s*;',
+        'rawbytes' => qr/[\s;]rawbytes\s*;/,  ### iptables does a raw match anyway
+        'logto'    => qr/[\s;]logto:\s*\S+\s*;/,
+        'session'  => qr/[\s;]session\s*;/,
+        'tag'      => qr/[\s;]tag:\s*.*?\s*;/,
+        'react'    => qr/[\s;]react:\s*.*?\s*;/, ### FIXME -j REJECT
+        'http_uri' => qr/[\s;]http_uri\s*;/,
+        'http_raw_uri' => qr/[\s;]http_raw_uri\s*;/,
+        'http_method' => qr/[\s;]http_method\s*;/,
+        'http_stat_code' => qr/[\s;]http_stat_code\s*;/,
+        'http_stat_msg' => qr/[\s;]http_stat_msg\s*;/,
+        'http_client_body' => qr/[\s;]http_client_body\s*;/,
+        'http_cookie' => qr/[\s;]http_cookie\s*;/,
+        'urilen'    => qr/[\s;]urilen:\s*.*?\s*;/,
     },
 
     ### in --strict mode, signatures that include any of these
@@ -857,7 +857,7 @@ sub parse_rule_options() {
     my @patterns = ();
 
     ### get the sid here for logging purposes
-    if ($rule_options =~ /$snort_opts{'logprefix'}{'sid'}/) {
+    if ($rule_options =~ $snort_opts{'logprefix'}{'sid'}) {
         $sid = $1;
     } else {
         return 0, \%opts, \@patterns;
@@ -882,7 +882,7 @@ sub parse_rule_options() {
         my $found_unsupported = '';
         for my $opt (keys %{$snort_opts{'unsupported'}}) {
             ### see if we match a regex belonging to an unsupported option
-            if ($rule_options =~ /$snort_opts{'unsupported'}{$opt}/) {
+            if ($rule_options =~ $snort_opts{'unsupported'}{$opt}) {
                 $found_unsupported .= "'$opt', ";
             }
         }
@@ -906,7 +906,7 @@ sub parse_rule_options() {
 
     for my $opt (keys %{$snort_opts{'filter'}}) {
         ### see if we match the option regex
-        if ($rule_options =~ /$snort_opts{'filter'}{$opt}{'regex'}/) {
+        if ($rule_options =~ $snort_opts{'filter'}{$opt}{'regex'}) {
             $opts{$opt} = 1;
             $opts{$opt} = $1 if defined $1;  ### some keywords may not have an option
         }
@@ -1006,7 +1006,7 @@ sub parse_rule_options() {
     }
 
     for my $opt (keys %{$snort_opts{'logprefix'}}) {
-        if ($rule_options =~ /$snort_opts{'logprefix'}{$opt}/) {
+        if ($rule_options =~ $snort_opts{'logprefix'}{$opt}) {
             $opts{$opt} = $1;
         }
     }
@@ -3856,7 +3856,7 @@ sub ipt_capabilities() {
                 $snort_opts{'filter'}{'ipopts'}{'regex'};
             delete $snort_opts{'filter'}{'ipopts'};
         } else {
-            $snort_opts{'unsupported'}{'ipopts'} = '[\s;]ipopts:\s*(\w+)\s*;';
+            $snort_opts{'unsupported'}{'ipopts'} = qr/[\s;]ipopts:\s*(\w+)\s*;/;
         }
         print "[-] $ipt_str does not have the 'ipv4options' extension, " .
             "disabling...\n" if $verbose or $ipt_check_capabilities;
@@ -3876,7 +3876,7 @@ sub ipt_capabilities() {
                 $snort_opts{'filter'}{'ttl'}{'regex'};
             delete $snort_opts{'filter'}{'ttl'};
         } else {
-            $snort_opts{'unsupported'}{'ttl'} = '[\s;]ttl:\s*(.*?)\s*;';
+            $snort_opts{'unsupported'}{'ttl'} = qr/[\s;]ttl:\s*(.*?)\s*;/;
         }
         print "[+] $ipt_str does not have the 'ttl' match, " .
             "disabling...\n" if $verbose or $ipt_check_capabilities;
@@ -3896,7 +3896,7 @@ sub ipt_capabilities() {
                 $snort_opts{'filter'}{'tos'}{'regex'};
             delete $snort_opts{'filter'}{'tos'};
         } else {
-            $snort_opts{'unsupported'}{'tos'} = '[\s;]tos:\s*(.*?)\s*;';
+            $snort_opts{'unsupported'}{'tos'} = qr/[\s;]tos:\s*(.*?)\s*;/;
         }
         print "[+] $ipt_str does not have the 'tos' match, " .
             "disabling...\n" if $verbose or $ipt_check_capabilities;
@@ -3916,7 +3916,7 @@ sub ipt_capabilities() {
                 $snort_opts{'filter'}{'dsize'}{'regex'};
             delete $snort_opts{'filter'}{'dsize'};
         } else {
-            $snort_opts{'unsupported'}{'dsize'} = '[\s;]dsize:\s*(.*?)\s*;';
+            $snort_opts{'unsupported'}{'dsize'} = qr/[\s;]dsize:\s*(.*?)\s*;/;
         }
         print "[+] $ipt_str does not have the 'length' match, " .
             "disabling...\n" if $verbose or $ipt_check_capabilities;
@@ -4000,12 +4000,12 @@ sub ipt_capabilities() {
                     delete $snort_opts{'filter'}{'replace'};
                 } else {
                     $snort_opts{'unsupported'}{'replace'}
-                        = '[\s;]replace:\s*(.*?)\s*;';
+                        = qr/[\s;]replace:\s*(.*?)\s*;/;
                 }
             }
         } else {
             $snort_opts{'unsupported'}{'replace'}
-                = '[\s;]replace:\s*(.*?)\s*;';
+                = qr/[\s;]replace:\s*(.*?)\s*;/;
         }
 
         ### test to see whether '--icmp-type any' is supported
@@ -4680,7 +4680,7 @@ sub set_defaults_without_ipt_test() {
             $snort_opts{'filter'}{'ipopts'}{'regex'};
         delete $snort_opts{'filter'}{'ipopts'};
     } else {
-        $snort_opts{'unsupported'}{'ipopts'} = '[\s;]ipopts:\s*(\w+)\s*;';
+        $snort_opts{'unsupported'}{'ipopts'} = qr/[\s;]ipopts:\s*(\w+)\s*;/;
     }
 
     return;
