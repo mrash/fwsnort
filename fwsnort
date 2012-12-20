@@ -4598,15 +4598,13 @@ if [ "\$DO_REVERT" = 1 ];
 then
     echo " "
     echo "[+] Reverting to original iptables policy..."
-    grep -v FWSNORT $config{'FWSNORT_SAVE_FILE'} | $restore_bin
+    grep -v FWSNORT $config{'FWSNORT_SAVE_FILE'} | exec $restore_bin
 else
     echo " "
     echo "[+] Splicing fwsnort $abs_num rules into the iptables policy..."
-    $restore_bin < $config{'FWSNORT_SAVE_FILE'}
+    exec $restore_bin < $config{'FWSNORT_SAVE_FILE'}
 fi
 
-echo "    Done."
-echo " "
 exit
 
 _FWSNORT_SH_
@@ -4644,12 +4642,23 @@ sub set_non_root_values() {
 }
 
 sub set_defaults_without_ipt_test() {
+
     $have_conntrack = 1;
     $ipt_max_str_len = 128;
     $ipt_max_comment_len = 255;
     $ipt_max_log_prefix_len = 29;
     $ipt_have_multiport_match = 1;
     $ipt_multiport_max = 15;
+
+    ### put ipopts in the unsupported list
+    if (defined $snort_opts{'filter'}{'ipopts'}) {
+        $snort_opts{'unsupported'}{'ipopts'} =
+            $snort_opts{'filter'}{'ipopts'}{'regex'};
+        delete $snort_opts{'filter'}{'ipopts'};
+    } else {
+        $snort_opts{'unsupported'}{'ipopts'} = '[\s;]ipopts:\s*(\w+)\s*;';
+    }
+
     return;
 }
 
