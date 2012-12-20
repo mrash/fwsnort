@@ -200,6 +200,21 @@ my @tests = (
     },
     {
         'category'  => 'operations',
+        'detail'    => "--strict --include-type backdoor",
+        'err_msg'   => "did not translate backdoor signatures",
+        'positive_output_matches' => [
+            qr/backdoor\.rules/,
+            qr/Generated\siptables\srules\sfor/
+        ],
+        'match_all' => $MATCH_ALL_RE,
+        'function'  => \&generic_exec,
+        'cmdline'   => "$fwsnortCmd --no-ipt-test -c $default_conf --strict --include-type backdoor",
+        'fw_exec'   => $fw_exec,
+        'exec_err'  => $NO,
+        'fatal'     => $NO
+    },
+    {
+        'category'  => 'operations',
         'detail'    => "--include-type emerging-all",
         'err_msg'   => "did not translate emerging-all signatures",
         'positive_output_matches' => [
