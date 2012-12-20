@@ -382,9 +382,9 @@ sub generic_exec() {
 
     if ($test_hr->{'fw_exec'} eq $YES) {
         if (-e $fwsnort_sh) {
-            &run_cmd($fwsnort_sh, $cmd_out_tmp, $current_test_file);
-            &run_cmd("$fwsnortCmd --ipt-list", $cmd_out_tmp, $current_test_file);
-            &run_cmd("$fwsnort_sh -r", $cmd_out_tmp, $current_test_file);
+            $rv = 0 unless &run_cmd($fwsnort_sh, $cmd_out_tmp, $current_test_file);
+            $rv = 0 unless &run_cmd("$fwsnortCmd --ipt-list", $cmd_out_tmp, $current_test_file);
+            $rv = 0 unless &run_cmd("$fwsnort_sh -r", $cmd_out_tmp, $current_test_file);
         } else {
             &write_test_file("[-] $fwsnort_sh script does not exist.\n");
         }
