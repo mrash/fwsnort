@@ -216,6 +216,40 @@ my @tests = (
         'fatal'     => $NO
     },
     {
+        'category'  => 'operations',
+        'detail'    => "--exclude-type emerging-all",
+        'err_msg'   => "did not translate signatures",
+        'positive_output_matches' => [
+            qr/backdoor\.rules/,
+            qr/dns\.rules/,
+            qr/ftp\.rules/,
+            qr/Generated\siptables\srules\sfor/
+        ],
+        'match_all' => $MATCH_ALL_RE,
+        'function'  => \&generic_exec,
+        'cmdline'   => "$fwsnortCmd --no-ipt-test -c $default_conf --exclude-type emerging-all",
+        'fw_exec'   => $fw_exec,
+        'exec_err'  => $NO,
+        'fatal'     => $NO
+    },
+    {
+        'category'  => 'operations',
+        'detail'    => "multiple --exclude-type emerging-all,backdoor,dns,ftp",
+        'err_msg'   => "did not translate signatures",
+        'positive_output_matches' => [
+            qr/chat\.rules/,
+            qr/ddos\.rules/,
+            qr/Generated\siptables\srules\sfor/
+        ],
+        'match_all' => $MATCH_ALL_RE,
+        'function'  => \&generic_exec,
+        'cmdline'   => "$fwsnortCmd --no-ipt-test -c $default_conf --exclude-type emerging-all,backdoor,dns,ftp",
+        'fw_exec'   => $fw_exec,
+        'exec_err'  => $NO,
+        'fatal'     => $NO
+    },
+
+    {
         'category'  => 'errors',
         'detail'    => 'look for perl warnings',
         'err_msg'   => 'found perl warnings',
