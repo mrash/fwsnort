@@ -200,6 +200,22 @@ my @tests = (
     },
     {
         'category'  => 'operations',
+        'detail'    => "--include-type emerging-all",
+        'err_msg'   => "did not translate emerging-all signatures",
+        'positive_output_matches' => [
+            qr/emerging-all\.rules/,
+            qr/Generated\siptables\srules\sfor/
+        ],
+        'match_all' => $MATCH_ALL_RE,
+        'function'  => \&generic_exec,
+        'cmdline'   => "$fwsnortCmd --no-ipt-test -c $default_conf --include-type emerging-all",
+        'fw_exec'   => $fw_exec,
+        'exec_err'  => $NO,
+        'fatal'     => $NO
+    },
+
+    {
+        'category'  => 'operations',
         'detail'    => "multiple files --include-type backdoor,dns,ftp",
         'err_msg'   => "did not translate backdoor,dns,ftp signatures",
         'positive_output_matches' => [
@@ -263,6 +279,42 @@ my @tests = (
         'match_all' => $MATCH_ALL_RE,
         'function'  => \&generic_exec,
         'cmdline'   => "$fwsnortCmd --no-ipt-test -c $default_conf --include-type backdoor,dns,ftp --exclude-type dns",
+        'fw_exec'   => $fw_exec,
+        'exec_err'  => $NO,
+        'fatal'     => $NO
+    },
+    {
+        'category'  => 'operations',
+        'detail'    => "--snort-sid $simple_sig_id,109,321 --exclude-regex sid\:109",
+        'err_msg'   => "did not translate sid: $simple_sig_id",
+        'positive_output_matches' => [qr/Found\ssid/,
+            qr/Found\ssid\:\s321/,
+            qr/Successful\stranslation/,
+        ],
+        'negative_output_matches' => [
+            qr/Found\ssid\:\s109/,
+        ],
+        'match_all' => $MATCH_ALL_RE,
+        'function'  => \&generic_exec,
+        'cmdline'   => "$fwsnortCmd --no-ipt-test -c $default_conf --snort-sid $simple_sig_id,109,321 --exclude-regex sid\:109",
+        'fw_exec'   => $fw_exec,
+        'exec_err'  => $NO,
+        'fatal'     => $NO
+    },
+    {
+        'category'  => 'operations',
+        'detail'    => "--snort-sid $simple_sig_id,109,321 --include-regex sid\:109",
+        'err_msg'   => "did not translate sid: $simple_sig_id",
+        'positive_output_matches' => [qr/Found\ssid/,
+            qr/Found\ssid\:\s109/,
+            qr/Successful\stranslation/,
+        ],
+        'negative_output_matches' => [
+            qr/Found\ssid\:\s321/,
+        ],
+        'match_all' => $MATCH_ALL_RE,
+        'function'  => \&generic_exec,
+        'cmdline'   => "$fwsnortCmd --no-ipt-test -c $default_conf --snort-sid $simple_sig_id,109,321 --include-regex sid\:109",
         'fw_exec'   => $fw_exec,
         'exec_err'  => $NO,
         'fatal'     => $NO
