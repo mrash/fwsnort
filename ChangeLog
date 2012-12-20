@@ -28,6 +28,11 @@ fwsnort-1.6.3 (12/18/2012):
       length testing, and optimized to drastically reduce run time for iptables
       capabilities checks (going from over 20 seconds to less than one second
       in some cases).
+    - (Dwight Davis) Contributed patches for several bugs including not
+      handling --exclude-regex properly, not ignoring the deleted.rules file,
+      not handling --strict mode opertions correctly, and more.  These issues
+      and the corresponding patch were originally reported here:
+        http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=693000
     - Updated to bundle the latest Emerging Threats rule set.
 
 fwsnort-1.6.2 (04/28/2012):

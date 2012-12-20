@@ -280,7 +280,24 @@ my %snort_opts = (
         'http_client_body' => '[\s;]http_client_body\s*;',
         'http_cookie' => '[\s;]http_cookie\s*;',
         'urilen'    => '[\s;]urilen:\s*.*?\s*;',
-    }
+    },
+
+    ### in --strict mode, signatures that include any of these
+    ### options are not translated to iptables rules
+    'strict_list' => [
+        'uricontent',
+        'pcre',
+        'distance',
+        'within',
+        'http_uri',
+        'http_raw_uri',
+        'http_method',
+        'http_stat_code',
+        'http_stat_msg',
+        'http_client_body',
+        'http_cookie',
+        'urilen'
+    ]
 );
 
 ### rules update link
@@ -623,7 +640,7 @@ sub parse_snort_rules() {
         if ($exclude_types) {
             next FILE if defined $exclude_types{$type};
         }
-        if ($rfile eq 'deleted.rules') {
+        if ($rfile =~ m|deleted\.rules|) {
             next FILE unless $add_deleted;
         }
         ($snort_type) = ($rfile =~ m|.*/(\S+)\.rules|);
@@ -3474,11 +3491,16 @@ sub fwsnort_init() {
 
     if ($strict) {
         ### make the snort options parser very strict
-        for my $opt (qw(uricontent pcre
-                distance within http_uri http_method urilen)) {
-            $snort_opts{'unsupported'}{$opt}
-                = $snort_opts{'filter'}{$opt};
-            delete $snort_opts{'filter'}{$opt};
+        for my $opt (@{$snort_opts{'strict_list'}}) {
+            if (defined $snort_opts{'filter'}{$opt}) {
+                $snort_opts{'unsupported'}{$opt}
+                    = $snort_opts{'filter'}{$opt};
+                delete $snort_opts{'filter'}{$opt};
+            } elsif (defined $snort_opts{'ignore'}{$opt}) {
+                $snort_opts{'unsupported'}{$opt}
+                    = $snort_opts{'ignore'}{$opt};
+                delete $snort_opts{'ignore'}{$opt};
+            }
         }
         my @ignore = (qw(nocase));
 
@@ -4452,7 +4474,8 @@ sub write_ipt_script() {
 
     ### make sure the script is writable first
     if (-e $config{'FWSNORT_SCRIPT'}) {
-        chmod 0755, $config{'FWSNORT_SCRIPT'} or die $!;
+        chmod 0755, $config{'FWSNORT_SCRIPT'} or
+            die "[*] Could not chmod $config{'FWSNORT_SCRIPT'}: $!";
     }
 
     open F, "> $config{'FWSNORT_SCRIPT'}" or
@@ -4460,7 +4483,8 @@ sub write_ipt_script() {
     print F "$_\n" for @ipt_script_lines;
     close F;
 
-    chmod 0500, $config{'FWSNORT_SCRIPT'} or die $!;
+    chmod 0500, $config{'FWSNORT_SCRIPT'} or
+        die "[*] Could not chmod $config{'FWSNORT_SCRIPT'}: $!";
 
     return;
 }
@@ -4724,7 +4748,7 @@ Options:
                                 iptables rules.
     --ipt-script=<script>     - Print iptables script to <script>
                                 instead of the default location at
-                                /etc/fwsnort/fwsnort.sh
+                                /var/lib/fwsnort/fwsnort.sh
     --ipt-apply               - Execute the fwsnort.sh script.
     --ipt-exec                - Synonym for --ipt-apply.
     --ipt-revert              - Revert to a version of the iptables
@@ -4832,7 +4856,7 @@ Options:
     --queue-rules-dir=<dir>   - Specify the path to the generated set of
                                 Snort rules that are to be queued to
                                 userspace in --NFQUEUE or --QUEUE mode.  The
-                                default is /etc/fwsnort/snort_rules_queue/.
+                                default is /var/lib/fwsnort/snort_rules_queue/.
     -Q   --QUEUE              - Same as the --NFQUEUE option, except use the
                                 older iptables QUEUE target.
     --string-match-alg=<alg>  - Specify the string match algorithm to use

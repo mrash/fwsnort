@@ -83,3 +83,10 @@ Peter Vrabec
 
 Andrew Merenbach
     - Contributed bug fix to properly honor --exclude-regex filtering option.
+
+Dwight Davis
+    - Contributed patches for several bugs including not handling
+      --exclude-regex properly, not ignoring the deleted.rules file, not
+      handling --strict mode opertions correctly, and more.  These issues and
+      the corresponding patch were originally reported here:
+        http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=693000
