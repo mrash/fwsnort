@@ -248,6 +248,25 @@ my @tests = (
         'exec_err'  => $NO,
         'fatal'     => $NO
     },
+    {
+        'category'  => 'operations',
+        'detail'    => "--include-type backdoor,dns,ftp --exclude-type dns",
+        'err_msg'   => "did not translate backdoor,ftp signatures",
+        'positive_output_matches' => [
+            qr/backdoor\.rules/,
+            qr/ftp\.rules/,
+            qr/Generated\siptables\srules\sfor/
+        ],
+        'negative_output_matches' => [
+            qr/dns\.rules/,
+        ],
+        'match_all' => $MATCH_ALL_RE,
+        'function'  => \&generic_exec,
+        'cmdline'   => "$fwsnortCmd --no-ipt-test -c $default_conf --include-type backdoor,dns,ftp --exclude-type dns",
+        'fw_exec'   => $fw_exec,
+        'exec_err'  => $NO,
+        'fatal'     => $NO
+    },
 
     {
         'category'  => 'errors',
