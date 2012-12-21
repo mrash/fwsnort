@@ -1,4 +1,4 @@
-fwsnort-1.6.3 (12/18/2012):
+fwsnort-1.6.3 (12/21/2012):
     - Bug fix to ensure that !, <, >, and = chars in content strings are
       converted to the appropriate hex equivalents.  All content strings with
       characters outside of [A-Za-z0-9] are now converted to hex-string format

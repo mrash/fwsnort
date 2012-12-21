@@ -187,7 +187,7 @@ cp -r deps/snort_rules $RPM_BUILD_ROOT%_sysconfdir/%name
 %_libdir/%name
 
 %changelog
-* Tue Dec 18 2012 Michael Rash <mbr@cipherydne.org>
+* Fri Dec 21 2012 Michael Rash <mbr@cipherydne.org>
 - fwsnort-1.6.3 release
 
 * Sat Apr 28 2012 Michael Rash <mbr@cipherydne.org>

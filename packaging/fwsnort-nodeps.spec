@@ -87,7 +87,7 @@ install -m 644 fwsnort.8 $RPM_BUILD_ROOT%{_mandir}/man8/
 %config(noreplace) %_sysconfdir/%name/fwsnort.conf
 
 %changelog
-* Tue Dec 18 2012 Michael Rash <mbr@cipherydne.org>
+* Fri Dec 21 2012 Michael Rash <mbr@cipherydne.org>
 - fwsnort-1.6.3 release
 
 * Sat Apr 28 2012 Michael Rash <mbr@cipherydne.org>
