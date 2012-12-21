@@ -717,10 +717,8 @@ sub parse_snort_rules() {
             }
 
             ### parse options portion of Snort rule
-            my ($parse_rv, $opts_hr, $patterns_ar)
-                            = &parse_rule_options($rule_options,
-                                    &get_avg_hdr_len($hdr_hr),
-                                    $line_num);
+            my ($parse_rv, $opts_hr, $patterns_ar) = &parse_rule_options(
+                    $rule_options, &get_avg_hdr_len($hdr_hr), $line_num);
 
             unless ($parse_rv) {
                 $unsup_ctr++;
@@ -1555,7 +1553,11 @@ sub ipt_build() {
     ### define iptables source and destination
     if ($snort_hdr_hr->{'dst'} =~ /any/i) {
         if ($snort_hdr_hr->{'src'} =~ /any/i) {
-            push @{$process_rules{'INPUT'}}, '' if $process_chains{'INPUT'};
+            if ($orig_snort_rule =~ m|\$HOME_NET.*\-\>\s+\$EXTERNAL_NET|) {
+                push @{$process_rules{'OUTPUT'}}, '' if $process_chains{'OUTPUT'};
+            } else {
+                push @{$process_rules{'INPUT'}}, '' if $process_chains{'INPUT'};
+            }
             push @{$process_rules{'FORWARD'}}, ''
                 if $process_chains{'FORWARD'};
         } else {

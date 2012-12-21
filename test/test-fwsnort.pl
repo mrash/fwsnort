@@ -142,7 +142,7 @@ my @tests = (
 
     {
         'category'  => 'operations',
-        'detail'    => "--snort-sid $simple_sig_id",
+        'detail'    => "--snort-sid $simple_sig_id EXTERNAL->HOME",
         'err_msg'   => "did not translate sid: $simple_sig_id",
         'positive_output_matches' => [qr/Found\ssid\:\s$simple_sig_id/,
             qr/Successful\stranslation/
@@ -154,6 +154,21 @@ my @tests = (
         'exec_err'  => $NO,
         'fatal'     => $NO
     },
+    {
+        'category'  => 'operations',
+        'detail'    => "--snort-sid 1292 HOME->EXTERNAL",
+        'err_msg'   => "did not translate sid: 1292",
+        'positive_output_matches' => [qr/Found\ssid\:\s1292/,
+            qr/Successful\stranslation/
+        ],
+        'match_all' => $MATCH_ALL_RE,
+        'function'  => \&generic_exec,
+        'cmdline'   => "$fwsnortCmd --no-ipt-test -c $default_conf --snort-sid 1292",
+        'fw_exec'   => $fw_exec,
+        'exec_err'  => $NO,
+        'fatal'     => $NO
+    },
+
     {
         'category'  => 'operations',
         'detail'    => "multiple rules --snort-sid $simple_sig_id,109,321",
@@ -514,7 +529,7 @@ my @tests = (
     },
     {
         'category'  => 'operations',
-        'detail'    => "ip6tables --sn.. $simple_sig_id,109,321 --in... sid\:109",
+        'detail'    => "ip6tables --sn.. $simple_sig_id,109,321 --in.. sid\:109",
         'err_msg'   => "did not translate sid: $simple_sig_id",
         'positive_output_matches' => [qr/Found\ssid/,
             qr/Found\ssid\:\s109/,
