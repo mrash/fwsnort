@@ -33,6 +33,9 @@ fwsnort-1.6.3 (12/21/2012):
       not handling --strict mode opertions correctly, and more.  These issues
       and the corresponding patch were originally reported here:
         http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=693000
+    - Bug fix for Snort rules with HOME_NET(any) -> EXTERNAL_NET(any) to
+      ensure they go into the OUTPUT chain instead of the INPUT chain.  This
+      bug was reported by Dwight Davis.
     - Updated to bundle the latest Emerging Threats rule set.
 
 fwsnort-1.6.2 (04/28/2012):
