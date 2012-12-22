@@ -1,4 +1,22 @@
-commit bd7c6c622d8d17afe81d893e5cecb8ac2a83bb86 (HEAD, refs/heads/master)
+commit 72a47c42f415b6c8551ccb8138626fa4a5ab49ae (HEAD, refs/heads/master)
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Fri Dec 21 21:23:46 2012 -0500
+
+    removed -pre1 from version string
+
+ fwsnort |    2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+commit 2e67c82d3e1e9752cba6a1e3a3971a75d86b6e3e
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Fri Dec 21 21:03:04 2012 -0500
+
+    ChangeLog.git file update for changes from 1.6.2 -> 1.6.3
+
+ ChangeLog.git |  729 +++++++++++++++++++++++++++++----------------------------
+ 1 file changed, 376 insertions(+), 353 deletions(-)
+
+commit bd7c6c622d8d17afe81d893e5cecb8ac2a83bb86
 Author: Michael Rash <mbr@cipherdyne.org>
 Date:   Fri Dec 21 20:53:35 2012 -0500
 
