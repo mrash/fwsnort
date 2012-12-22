@@ -1,426 +1,449 @@
-commit 8033d5d239dd544eaf927f1ea13c855c7ef054b6 (HEAD, refs/heads/fwsnort-1.6.2)
+commit bd7c6c622d8d17afe81d893e5cecb8ac2a83bb86 (HEAD, refs/heads/master)
 Author: Michael Rash <mbr@cipherdyne.org>
-Date:   Sat Apr 28 20:45:23 2012 -0400
+Date:   Fri Dec 21 20:53:35 2012 -0500
 
-    bumped version to 1.6.2
+    HOME_NET -> EXTERNAL_NET to OUTPUT chain
+
+ ChangeLog |    3 +++
+ 1 file changed, 3 insertions(+)
+
+commit 7519bff1c82e893fd737861c211d8b2fce99b401 (refs/remotes/web/master, refs/remotes/origin/master)
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Thu Dec 20 23:47:31 2012 -0500
+
+    updated 1.6.3 release date
+
+ ChangeLog                                |    2 +-
+ packaging/fwsnort-nodeps.spec            |    2 +-
+ packaging/fwsnort-require-makemaker.spec |    2 +-
+ packaging/fwsnort.spec                   |    2 +-
+ 4 files changed, 4 insertions(+), 4 deletions(-)
+
+commit c4c6fed8bf536914213077298a0e9ce446889632
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Thu Dec 20 23:42:28 2012 -0500
+
+    HOME_NET(any) -> EXTERNAL_NET(any) => OUTPUT chain
+    
+    Dwight Davis reported that "when EXTERNAL_NET is set to 'any' the outbound rules
+    get put into the INPUT chain":  http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=693000
+    
+    This commit fixes this behavior, and forces such rules to the OUTPUT chain
+    whenever the original Snort rule has HOME_NET -> EXTERNAL_NET.
+
+ fwsnort              |   12 +++++++-----
+ test/test-fwsnort.pl |   19 +++++++++++++++++--
+ 2 files changed, 24 insertions(+), 7 deletions(-)
+
+commit 0a073fde549f2e937a94dc644294bef509581f32
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Wed Dec 19 23:14:14 2012 -0500
+
+    added ip6tables tests
+
+ test/test-fwsnort.pl |  203 +++++++++++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 202 insertions(+), 1 deletion(-)
+
+commit 78b8053cddebf5cca43013c1b7ddadeb6eff574b
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Wed Dec 19 23:00:30 2012 -0500
+
+    converted snort options regex to use qr// form
+
+ fwsnort |  152 +++++++++++++++++++++++++++++++--------------------------------
+ 1 file changed, 76 insertions(+), 76 deletions(-)
+
+commit 163821e511118ea2a4093e27560d28f347adeb5f
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Wed Dec 19 22:45:40 2012 -0500
+
+    added --strict test
+
+ test/test-fwsnort.pl |   15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+commit 894a78ce6611cf39146fb43981801a83b4f23440
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Wed Dec 19 22:40:24 2012 -0500
+
+    Applied patch from Dwight Davis to fix multiple issues.
+    
+    (Dwight Davis) Contributed patches for several bugs including not
+    handling --exclude-regex properly, not ignoring the deleted.rules file,
+    not handling --strict mode opertions correctly, and more.  These issues
+    and the corresponding patch were originally reported here:
+    http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=693000
+
+ CREDITS   |    7 +++++++
+ ChangeLog |    5 +++++
+ fwsnort   |   46 +++++++++++++++++++++++++++++++++++-----------
+ 3 files changed, 47 insertions(+), 11 deletions(-)
+
+commit 716d3e8464cd4e49f4231c464c45975a3fa2ec27
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Wed Dec 19 21:44:06 2012 -0500
+
+    added --include-type emerging-all test
+
+ test/test-fwsnort.pl |   52 ++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 52 insertions(+)
+
+commit fc679fb26d376a615b7e4962c11ce348db599e6d
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Wed Dec 19 21:21:39 2012 -0500
+
+    added --include-type + --exclude-type test
+
+ test/test-fwsnort.pl |   19 +++++++++++++++++++
+ 1 file changed, 19 insertions(+)
+
+commit b6b8719c54cf0bc98295f224a138d18419170fa2
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Wed Dec 19 21:17:54 2012 -0500
+
+    added --exclude-type tests
+
+ test/test-fwsnort.pl |   34 ++++++++++++++++++++++++++++++++++
+ 1 file changed, 34 insertions(+)
+
+commit eaef45f24c9db76de18e70df70abda4195661ee7
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Wed Dec 19 21:17:37 2012 -0500
+
+    fwsnort.sh to use exec to pick up iptables-restore exit status
+
+ fwsnort |   17 +++++++++++++----
+ 1 file changed, 13 insertions(+), 4 deletions(-)
+
+commit 67b118dd8053e381cf5dc335f3a0cb12dc2c3692
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Wed Dec 19 19:40:12 2012 -0500
+
+    added return value checking in --enable-fw-exec mode
+
+ test/test-fwsnort.pl |    6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+commit 170abf64b6a6341e2fb6a873e3c8752bee8f9e34
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Wed Dec 19 19:37:16 2012 -0500
+
+    added --ipt-revert option, though --ipt-flush is usually more desirable
+
+ fwsnort   |   15 +++++++++++++++
+ fwsnort.8 |   13 +++++++++++++
+ 2 files changed, 28 insertions(+)
+
+commit 8b371c570c6a060744775452c5b73fa70aeabaf2
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Wed Dec 19 19:17:16 2012 -0500
+
+    added fw_exec for --enable-fw-exec mode to instantiate and revert fwsnort policy
+
+ test/test-fwsnort.pl |   26 +++++++++++++++++++++++++-
+ 1 file changed, 25 insertions(+), 1 deletion(-)
+
+commit 8438f236ca912d4e828c8a6e38af2fbf3a1d9fe8
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Wed Dec 19 18:58:08 2012 -0500
+
+    iptables capabilities check optimization
+    
+    Implemented a single unified function for iptables match parameter
+    length testing, and optimized to drastically reduce run time for iptables
+    capabilities checks (going from over 20 seconds to less than one second
+    in some cases).
+
+ ChangeLog            |    4 ++
+ fwsnort              |  115 +++++++++++++++++++-------------------------------
+ test/test-fwsnort.pl |    3 ++
+ 3 files changed, 51 insertions(+), 71 deletions(-)
+
+commit a20b84ba6cfdc1d6a9c61266ae5b73c9b681e82e
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Wed Dec 19 18:57:07 2012 -0500
+
+    Added easy way to revert fwsnort iptables policy changes
+    
+    Added the ability to easily revert the fwsnort policy back to the
+    original iptables policy with "/var/lib/fwsnort/fwsnort.sh -r".  Note
+    that this reverts back to the policy as it was when fwsnort itself was
+    executed.
+
+ ChangeLog |    4 ++++
+ fwsnort   |   32 ++++++++++++++++++++++++++------
+ 2 files changed, 30 insertions(+), 6 deletions(-)
+
+commit b87e2e0453e10357622f8a6f75634166dbbccec3
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Tue Dec 18 21:44:57 2012 -0500
+
+    added a test suite for fwsnort
+
+ ChangeLog                      |    3 +
+ test/conf/default_fwsnort.conf |  116 ++++++++
+ test/test-fwsnort.pl           |  582 ++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 701 insertions(+)
+
+commit 7aefe38bc8985c2f34cb5bfc61bed7b2c996308a
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Tue Dec 18 21:41:14 2012 -0500
+
+    added --install-test-dir argument for test suite installation
+
+ install.pl |   93 ++++++++++++++++++++++++++++++++++++++++++++++++++++++------
+ 1 file changed, 85 insertions(+), 8 deletions(-)
+
+commit 5435bf6bacb6ed2fd6efdc1d199c2729506ca982
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Tue Dec 18 21:40:44 2012 -0500
+
+    bug fix in --no-ipt-test mode to ensure no empty lines in fwsnort.save related to the conntrack test
+
+ fwsnort |    7 ++-----
+ 1 file changed, 2 insertions(+), 5 deletions(-)
+
+commit bf229236b79e3a33fb9507c384ca783d368de93f
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Mon Dec 17 22:25:20 2012 -0500
+
+    (Andrew Merenbach) Bug fix to properly honor --exclude-regex filtering option.
+
+ CREDITS   |    3 +++
+ ChangeLog |    2 ++
+ fwsnort   |    2 +-
+ 3 files changed, 6 insertions(+), 1 deletion(-)
+
+commit 99650e5b058be7933a2611e1ecee293bc3abbc4a
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Mon Dec 17 22:00:13 2012 -0500
+
+    bumped version to 1.6.3
+
+ fwsnort |    2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+commit a4fbc7fe48642e7efab12e812be57ca3abc3995f
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Mon Dec 17 21:59:51 2012 -0500
+
+    bumped version to 1.6.3
+
+ VERSION |    2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+commit 15e3e8b9c45c85aae4870ddfad823a120ddb2158
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Mon Dec 17 21:59:31 2012 -0500
+
+    added README to version changing script
+
+ bump_version.pl |    5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+commit 9dd187797a0656afde69a1422925459bf69d5bbe
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Mon Dec 17 21:59:05 2012 -0500
+
+    minor ChangeLog update
+
+ ChangeLog |    2 ++
+ 1 file changed, 2 insertions(+)
+
+commit 0eee109dc35305bf6827bb7e8c9332fa451c25e9
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Mon Dec 17 21:56:45 2012 -0500
+
+    All strings with non [A-Za-z0-9] chars now converted to hex format
+    
+      Bug fix to ensure that !, <, >, and = chars in content strings are
+      converted to the appropriate hex equivalents.  All content strings with
+      characters outside of [A-Za-z0-9] are now converted to hex-string format
+      in their entirety.  This should also fix an issue that results in the
+      following error when running /var/lib/fwsnort/fwsnort.sh:
+    
+        Using intrapositioned negation (`--option ! this`) is deprecated in
+        favor of extrapositioned (`! --option this`).
+        Bad argument `bm'
+        Error occurred at line: 64
+        Try `iptables-restore -h' or 'iptables-restore --help' for more
+        information.
+            Done.
+
+ fwsnort |  115 ++++++++++++++++++++++++++++++++++++++++++++++++++-------------
+ 1 file changed, 91 insertions(+), 24 deletions(-)
+
+commit 4468524dedf869f0ad34a243075940cd33376229
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Mon Dec 17 21:56:28 2012 -0500
+
+    added INSTALL_ROOT variable
+
+ install.pl |    8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+commit 85d20e92eee245a475464c418db3b471e2b6502d
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Mon Dec 17 21:56:13 2012 -0500
+
+    added INSTALL_ROOT variable
+
+ fwsnort.conf |   11 ++++++-----
+ 1 file changed, 6 insertions(+), 5 deletions(-)
+
+commit 16805833ef3136c085bc432ade8c2ca241b2f3d0
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Mon Dec 17 21:50:17 2012 -0500
+
+    added fwsnort-1.6.3 changes
+
+ ChangeLog |   17 +++++++++++++++--
+ 1 file changed, 15 insertions(+), 2 deletions(-)
+
+commit 518ccd791c56cb995e2d4a35f3170cba9420c00a
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Mon Dec 17 21:49:54 2012 -0500
+
+    fwsnort-1.6.3 release
+
+ packaging/fwsnort-nodeps.spec            |   15 ++++++++++-----
+ packaging/fwsnort-require-makemaker.spec |   15 ++++++++++-----
+ packaging/fwsnort.spec                   |   15 ++++++++++-----
+ 3 files changed, 30 insertions(+), 15 deletions(-)
+
+commit 46260f13b61e47eb1ac9ff47728d517aba9b2b5e
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Mon Dec 17 21:43:47 2012 -0500
+
+    minor README re-ordering
+
+ README |   45 ++++++++++++++++++++++-----------------------
+ 1 file changed, 22 insertions(+), 23 deletions(-)
+
+commit f08b09a5d6f3da23f20cc86209a77d6ca46a2602
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Mon Dec 17 21:43:11 2012 -0500
+
+    added various unrecognized snort rule options
+
+ snort_opts.pl |   27 +++++++++++++++++++++++++++
+ 1 file changed, 27 insertions(+)
+
+commit 897e4296ba0a660e93bc10285357b635c79ebc12
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Mon Dec 17 21:26:56 2012 -0500
+
+    updated Emerging Threats rule set
+
+ deps/snort_rules/emerging-all.rules | 1755 +++++++++++++++++++++++++++--------
+ 1 file changed, 1349 insertions(+), 406 deletions(-)
+
+commit c99826c59d1e1b250c98580d7381a4935b78f0d4 (tag: refs/tags/fwsnort-1.6.3-pre1)
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Tue Sep 18 20:46:02 2012 -0400
+
+    bumped version to 1.6.3-pre1
 
  VERSION |    2 +-
  fwsnort |    4 ++--
  2 files changed, 3 insertions(+), 3 deletions(-)
 
-commit 59e2ff7b2567126827bdb8136b2e242d32d16ede (refs/heads/master)
+commit 3588d8839bcba830a7d220b509cf15e683c45576
 Author: Michael Rash <mbr@cipherdyne.org>
-Date:   Sat Apr 28 14:27:02 2012 -0400
+Date:   Tue Sep 18 20:45:18 2012 -0400
 
-    removed ShortLog in favor of ChangeLog + ChangeLog.git
+    started on 1.6.3 ChangeLog
 
- ShortLog |  727 --------------------------------------------------------------
- 1 files changed, 0 insertions(+), 727 deletions(-)
+ ChangeLog |    4 ++++
+ 1 file changed, 4 insertions(+)
 
-commit 562e3acb0afbef722bdfa12ec69cea3d09b1881e (refs/remotes/origin/master)
+commit 884e7aafb90739a4bc09a34f7bc96f2508836d85
 Author: Michael Rash <mbr@cipherdyne.org>
-Date:   Sat Apr 28 14:23:56 2012 -0400
+Date:   Tue Sep 18 20:43:11 2012 -0400
 
-    Added --icmp-type 'any' (with capabilities test)
-    
-    Bug fix for recent versions of iptables (such as 1.4.12) where the icmp
-    match requires --icmp-type to be set - some Snort rules look for a string
-    to match in icmp traffic, but don't also specify an icmp type.
+    make sure \!, <, >, and = are converted to hex equivalents
 
- ChangeLog |    4 +++
- fwsnort   |   70 +++++++++++++++++++++++++++++++++++++++++++++---------------
- 2 files changed, 56 insertions(+), 18 deletions(-)
+ fwsnort |    4 ++++
+ 1 file changed, 4 insertions(+)
 
-commit 619d7820e7546e247b9232a3b527cb86009315f2
+commit 56f1fdc03e05f910105facd0efa4640c313322aa
 Author: Michael Rash <mbr@cipherdyne.org>
-Date:   Sat Apr 28 11:44:27 2012 -0400
+Date:   Tue Sep 18 20:39:23 2012 -0400
 
-    bug fix psadlibdir -> fwsnortlibdir
+    rules update from Emerging Threats
 
- packaging/fwsnort-require-makemaker.spec |  136 +++++++++++++++---------------
- packaging/fwsnort.spec                   |  136 +++++++++++++++---------------
- 2 files changed, 136 insertions(+), 136 deletions(-)
+ deps/snort_rules/emerging-all.rules | 4767 ++++++++++++++++++++++++++++-------
+ 1 file changed, 3910 insertions(+), 857 deletions(-)
 
-commit dbfc72ff06809e39bc2dff5b52323d8103625330
+commit b0f806220e3cdaf02a05a049e21fa1f695d2db65
 Author: Michael Rash <mbr@cipherdyne.org>
-Date:   Sat Apr 28 11:43:58 2012 -0400
+Date:   Sun Jun 10 23:07:37 2012 -0400
 
-    bug fix for 'qw() used as parenthesis' warnings under perl > 5.14
+    applied patch from Franck to fix man page paths to reflect new installation directory structure
 
- fwsnort |   34 +++++++++++++++++-----------------
- 1 files changed, 17 insertions(+), 17 deletions(-)
+ fwsnort.8 |   12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
 
-commit 9b31c8bef1e24d114857e38dcf62c22861f6487b
+commit cb48ba098c51e0d4b9eefcc0a51cbb0219c8907b
 Author: Michael Rash <mbr@cipherdyne.org>
-Date:   Sat Apr 28 10:18:16 2012 -0400
+Date:   Sun May 27 14:14:16 2012 -0400
 
-    added ChangeLog info for the 1.6.1 and 1.6.2 releases
+    updated QUEUE_RULES_DIR path to a sub-dir of /var/lib/fwsnort/
 
- ChangeLog |   82 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-
- 1 files changed, 81 insertions(+), 1 deletions(-)
+ fwsnort.conf |    2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
 
-commit f65256d026d532ef5e7f862ef1273520b3cd173e
+commit b404d75afbc7351e38249f7f07736154ebb5e47b
 Author: Michael Rash <mbr@cipherdyne.org>
-Date:   Sat Apr 28 10:17:48 2012 -0400
+Date:   Sun May 27 13:37:20 2012 -0400
 
-    updated RPM spec file version to 1.6.2
+    added note about trying yum/agt-get installation (Guillermo Gomez)
 
- packaging/fwsnort-nodeps.spec            |    4 ++--
- packaging/fwsnort-require-makemaker.spec |    4 ++--
- packaging/fwsnort.spec                   |    4 ++--
- 3 files changed, 6 insertions(+), 6 deletions(-)
+ README.RPM |    6 ++++++
+ 1 file changed, 6 insertions(+)
 
-commit ac12a3d634874f480c8e6e4cebd3aed7fcf8bca2
+commit ea0803577b76aca30a0ca7fbe7ec74d13a4442de
 Author: Michael Rash <mbr@cipherdyne.org>
-Date:   Sat Apr 28 10:17:05 2012 -0400
+Date:   Sun May 27 13:32:52 2012 -0400
 
-    updated to the latest Snort rules from Emerging Threats
+    minor version update (mentioned by Guillermo Gomez)
 
- deps/snort_rules/emerging-all.rules | 2852 +++++++++++++++++++++++++----------
- 1 files changed, 2032 insertions(+), 820 deletions(-)
+ README |    2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
 
-commit eab4b7f597deda88fe01662c1ac0d44ecf8be7f0
+commit fdba1beb554fee3e5556478ee1c2ec186b8811ba
+Merge: a15b8f6 f447c4b
 Author: Michael Rash <mbr@cipherdyne.org>
-Date:   Thu Apr 19 21:30:43 2012 -0400
+Date:   Sun May 27 13:29:04 2012 -0400
 
-    moved ChangeLog.old -> ChangeLog (the old style is much more readable)
+    Merge branch 'refs/heads/fwsnort-1.6.2'
 
- ChangeLog     | 7229 +++------------------------------------------------------
- ChangeLog.old |  428 ----
- 2 files changed, 381 insertions(+), 7276 deletions(-)
-
-commit 25c279906d353b90e294b6f6c5c36fc311c15f5f
+commit a15b8f6e074274b76903055313f48e4faddd3cfb
+Merge: 59e2ff7 5d1d646
 Author: Michael Rash <mbr@cipherdyne.org>
-Date:   Thu Apr 19 21:30:16 2012 -0400
+Date:   Sun May 27 13:28:50 2012 -0400
 
-    minor documentation fixes
+    merged fwsnort-1.6.2
 
- fwsnort   |    2 +-
- fwsnort.8 |   14 +++++++-------
- 2 files changed, 8 insertions(+), 8 deletions(-)
-
-commit f8c7588616510c31147da89f8674e3cc27a62d3a
+commit f447c4baea916c10daf1a5e19dc73eb1b6dc906a (refs/remotes/web/fwsnort-1.6.2, refs/remotes/origin/fwsnort-1.6.2, refs/heads/fwsnort-1.6.2)
 Author: Michael Rash <mbr@cipherdyne.org>
-Date:   Thu Apr 19 21:29:58 2012 -0400
+Date:   Sun May 27 13:27:18 2012 -0400
 
-    added 1.6.2 release
+    GPL license address update (mentioned by Guillermo Gomez)
 
- packaging/fwsnort-nodeps.spec |    4 ++++
- 1 files changed, 4 insertions(+), 0 deletions(-)
+ LICENSE                 |    2 +-
+ README                  |    2 +-
+ fwsnort                 |    2 +-
+ install.pl              |    2 +-
+ packaging/cd_rpmbuilder |    2 +-
+ snortspoof.pl           |    2 +-
+ 6 files changed, 6 insertions(+), 6 deletions(-)
 
-commit 6dca2e37a06952146b860f3c34abec34b6dcf149
+commit 6e4895e19fdedde6ee0e1448c52727fd88ee4acc
 Author: Michael Rash <mbr@cipherdyne.org>
-Date:   Thu Apr 19 21:28:50 2012 -0400
+Date:   Sun May 27 13:25:23 2012 -0400
 
-    Removed the ExtUtils::MakeMaker build requirement
-    
-    Although building the fwsnort RPM builds a set of perl modules which themselves
-    have the 'use ExtUtils::MakeMaker' requirement in their respective Makefile.PL
-    scripts, some Linux distributions don't seem to make it easy to install
-    ExtUtils::MakeMaker in a manner in which the local RPM install can see it.
-    And, at the same time, it usually is there since installing perl modules is
-    such a common operation.  The compromise is this solution, which will allow the
-    fwsnort RPM to be built even if RPM dosen't or can't see that ExtUtils::MakeMaker
-    is installed - most likely it will build anyway.  If it doesn't, there are
-    bigger problems since fwsnort is written in perl.  If you want to build the fwsnort
-    RPM with a .spec file that requires ExtUtils::MakeMaker, then use the
-    "fwsnort-require-makemaker.spec" file that is bundled in the fwsnort sources.
+    mentioned Guillermo Gomez as the fwsnort maintainer
 
- packaging/fwsnort-nobuildreqs.spec       |  172 ---------------------
- packaging/fwsnort-require-makemaker.spec |  239 ++++++++++++++++++++++++++++++
- packaging/fwsnort.spec                   |   83 +++++++++-
- 3 files changed, 313 insertions(+), 181 deletions(-)
-
-commit 774b5841386a69d0e701b1c866bc34bc641ab395
-Author: Michael Rash <mbr@cipherdyne.org>
-Date:   Fri Mar 2 22:58:11 2012 -0500
-
-    updated IPTables::Parse to 1.1
-
- deps/IPTables-Parse/Changes               |   26 +++-
- deps/IPTables-Parse/MANIFEST              |    1 +
- deps/IPTables-Parse/META.json             |   39 +++++
- deps/IPTables-Parse/META.yml              |   21 +++
- deps/IPTables-Parse/README                |    2 +-
- deps/IPTables-Parse/VERSION               |    2 +-
- deps/IPTables-Parse/lib/IPTables/Parse.pm |  145 +++++++++---------
- deps/IPTables-Parse/t/basic_tests.pl      |  247 +++++++++++++++++++++++++++++
- 8 files changed, 408 insertions(+), 75 deletions(-)
-
-commit 818483ea7541371c0f771640b6e893823c86bd5b
-Author: Michael Rash <mbr@cipherdyne.org>
-Date:   Mon Feb 20 20:33:18 2012 -0500
-
-    updated to IPTables::Parse 0.8
-
- deps/IPTables-Parse/Changes               |   29 ++-
- deps/IPTables-Parse/README                |    4 +-
- deps/IPTables-Parse/VERSION               |    2 +-
- deps/IPTables-Parse/lib/IPTables/Parse.pm |  450 ++++++++++++++++++++++++----
- fwsnort                                   |   17 +-
- 5 files changed, 425 insertions(+), 77 deletions(-)
-
-commit e7bb9c6d0663b3ebdccfa619f42beff2c851e531
-Author: Michael Rash <mbr@cipherdyne.org>
-Date:   Sun Feb 19 13:21:27 2012 -0500
-
-    bumped version to 1.6.2-pre1
-
- fwsnort |    4 ++--
- 1 files changed, 2 insertions(+), 2 deletions(-)
-
-commit 95a39ee4fc5563ea337d9c60178b2bec23692b5e
-Author: Michael Rash <mbr@cipherdyne.org>
-Date:   Sat Feb 18 14:33:29 2012 -0500
-
-    converted from Net::AddrIPv4 to the excellent NetAddr::IP module
-
- INSTALL    |    2 +-
- fwsnort    |   32 ++++++++++++++++----------------
- install.pl |    4 ++--
- 3 files changed, 19 insertions(+), 19 deletions(-)
-
-commit 7a7e4653c3dcd56884fc88e78bedcbda691f6647
-Author: Michael Rash <mbr@cipherdyne.org>
-Date:   Sat Feb 18 14:33:19 2012 -0500
-
-    converted from Net::AddrIPv4 to the excellent NetAddr::IP module
-
- deps/Net-IPv4Addr/ChangeLog                        |   90 -
- deps/Net-IPv4Addr/IPv4Addr.pm                      |  385 -
- deps/Net-IPv4Addr/IPv4Addr.spec                    |   90 -
- deps/Net-IPv4Addr/MANIFEST                         |   15 -
- deps/Net-IPv4Addr/Makefile.PL                      |    8 -
- deps/Net-IPv4Addr/NEWS                             |   28 -
- deps/Net-IPv4Addr/README                           |   41 -
- deps/Net-IPv4Addr/VERSION                          |    1 -
- deps/Net-IPv4Addr/debian/changelog                 |   37 -
- deps/Net-IPv4Addr/debian/control                   |   12 -
- deps/Net-IPv4Addr/debian/copyright                 |   14 -
- deps/Net-IPv4Addr/debian/dirs                      |    4 -
- deps/Net-IPv4Addr/debian/docs                      |    4 -
- deps/Net-IPv4Addr/debian/rules                     |   85 -
- deps/Net-IPv4Addr/ipv4calc                         |   89 -
- deps/Net-IPv4Addr/test.pl                          |   68 -
- deps/NetAddr-IP/Artistic                           |  131 +
- deps/NetAddr-IP/Changes                            |  464 ++
- deps/NetAddr-IP/Copying                            |  339 +
- deps/NetAddr-IP/IP.pm                              | 1572 ++++
- deps/NetAddr-IP/Lite/Changes                       |  373 +
- deps/NetAddr-IP/Lite/Lite.pm                       | 1583 ++++
- deps/NetAddr-IP/Lite/MANIFEST                      |  126 +
- deps/NetAddr-IP/Lite/MANIFEST.SKIP                 |   31 +
- deps/NetAddr-IP/Lite/META.yml                      |   10 +
- deps/NetAddr-IP/Lite/Makefile.PL                   |   42 +
- deps/NetAddr-IP/Lite/README                        |  510 ++
- deps/NetAddr-IP/Lite/Util/Changes                  |  255 +
- deps/NetAddr-IP/Lite/Util/MANIFEST                 |   53 +
- deps/NetAddr-IP/Lite/Util/MANIFEST.SKIP            |   31 +
- deps/NetAddr-IP/Lite/Util/Makefile.PL              |  235 +
- deps/NetAddr-IP/Lite/Util/README                   |  605 ++
- deps/NetAddr-IP/Lite/Util/Util.pm                  |  968 +++
- deps/NetAddr-IP/Lite/Util/Util.xs                  |  801 ++
- deps/NetAddr-IP/Lite/Util/config.h.in              |  127 +
- deps/NetAddr-IP/Lite/Util/configure                | 7799 ++++++++++++++++++++
- deps/NetAddr-IP/Lite/Util/configure.ac             |   54 +
- .../Lite/Util/lib/NetAddr/IP/InetBase.pm           |  791 ++
- deps/NetAddr-IP/Lite/Util/lib/NetAddr/IP/UtilPP.pm |  722 ++
- deps/NetAddr-IP/Lite/Util/localconf.h              |   80 +
- deps/NetAddr-IP/Lite/Util/t/4to6.t                 |   69 +
- deps/NetAddr-IP/Lite/Util/t/add128.t               |   92 +
- deps/NetAddr-IP/Lite/Util/t/addconst.t             |   77 +
- deps/NetAddr-IP/Lite/Util/t/af_inet6.t             |   46 +
- deps/NetAddr-IP/Lite/Util/t/anyto6.t               |   86 +
- deps/NetAddr-IP/Lite/Util/t/badd.t                 |   69 +
- deps/NetAddr-IP/Lite/Util/t/bcd2bin.t              |   68 +
- deps/NetAddr-IP/Lite/Util/t/bcdn2bin.t             |   73 +
- deps/NetAddr-IP/Lite/Util/t/bin.t                  |  111 +
- deps/NetAddr-IP/Lite/Util/t/binet_n2ad.t           |   49 +
- deps/NetAddr-IP/Lite/Util/t/binet_n2dx.t           |   50 +
- deps/NetAddr-IP/Lite/Util/t/binet_ntoa.t           |   66 +
- deps/NetAddr-IP/Lite/Util/t/binet_pton.t           |   96 +
- deps/NetAddr-IP/Lite/Util/t/bipv4_inet.t           |   59 +
- deps/NetAddr-IP/Lite/Util/t/bipv6_any2n.t          |   48 +
- deps/NetAddr-IP/Lite/Util/t/bipv6func.t            |   76 +
- deps/NetAddr-IP/Lite/Util/t/bisIPv4.t              |  187 +
- deps/NetAddr-IP/Lite/Util/t/bpackzeros.t           |   52 +
- deps/NetAddr-IP/Lite/Util/t/comp128.t              |   48 +
- deps/NetAddr-IP/Lite/Util/t/croak.t                |  168 +
- deps/NetAddr-IP/Lite/Util/t/hasbits.t              |  147 +
- deps/NetAddr-IP/Lite/Util/t/inet_4map6.t           |   70 +
- deps/NetAddr-IP/Lite/Util/t/inet_n2ad.t            |   48 +
- deps/NetAddr-IP/Lite/Util/t/inet_n2dx.t            |   50 +
- deps/NetAddr-IP/Lite/Util/t/inet_pton.t            |   96 +
- deps/NetAddr-IP/Lite/Util/t/ipv4_inet.t            |   59 +
- deps/NetAddr-IP/Lite/Util/t/ipv6_any2n.t           |   47 +
- deps/NetAddr-IP/Lite/Util/t/ipv6_ntoa.t            |   66 +
- deps/NetAddr-IP/Lite/Util/t/ipv6func.t             |   75 +
- deps/NetAddr-IP/Lite/Util/t/ipv6to4.t              |   55 +
- deps/NetAddr-IP/Lite/Util/t/isIPv4.t               |  186 +
- deps/NetAddr-IP/Lite/Util/t/leftshift.t            |   58 +
- deps/NetAddr-IP/Lite/Util/t/mode.t                 |   26 +
- deps/NetAddr-IP/Lite/Util/t/naip_gethostbyname.t   |   59 +
- .../Lite/Util/t/no6_naip_gethostbyname.t           |   58 +
- deps/NetAddr-IP/Lite/Util/t/notcontiguous.t        |   72 +
- deps/NetAddr-IP/Lite/Util/t/packzeros.t            |   53 +
- deps/NetAddr-IP/Lite/Util/t/simple_pack.t          |   51 +
- deps/NetAddr-IP/Lite/Util/t/sub128.t               |   68 +
- .../Lite/Util/tlib/NetAddr/IP/Util_IS.pm           |   51 +
- deps/NetAddr-IP/Lite/Util/typemap                  |   28 +
- deps/NetAddr-IP/Lite/bug2742981                    |   96 +
- deps/NetAddr-IP/Lite/t/addr.t                      |   36 +
- deps/NetAddr-IP/Lite/t/aton.t                      |   33 +
- deps/NetAddr-IP/Lite/t/bigint.t                    |  170 +
- deps/NetAddr-IP/Lite/t/bignums.t                   |  130 +
- deps/NetAddr-IP/Lite/t/bin_ips.t                   |  102 +
- deps/NetAddr-IP/Lite/t/bits.t                      |   37 +
- deps/NetAddr-IP/Lite/t/broadcast.t                 |   37 +
- deps/NetAddr-IP/Lite/t/bug62521.t                  |   28 +
- deps/NetAddr-IP/Lite/t/cidr.t                      |   36 +
- deps/NetAddr-IP/Lite/t/constants.t                 |   19 +
- deps/NetAddr-IP/Lite/t/contains.t                  |   40 +
- deps/NetAddr-IP/Lite/t/copy.t                      |   52 +
- deps/NetAddr-IP/Lite/t/firstlast.t                 |   66 +
- deps/NetAddr-IP/Lite/t/lemasklen.t                 |   19 +
- deps/NetAddr-IP/Lite/t/loops.t                     |   51 +
- deps/NetAddr-IP/Lite/t/lower.t                     |   11 +
- deps/NetAddr-IP/Lite/t/mask.t                      |   44 +
- deps/NetAddr-IP/Lite/t/masklen.t                   |   37 +
- deps/NetAddr-IP/Lite/t/netaddr.t                   |  208 +
- deps/NetAddr-IP/Lite/t/network.t                   |   44 +
- deps/NetAddr-IP/Lite/t/new-nth.t                   |   44 +
- deps/NetAddr-IP/Lite/t/new-num.t                   |   33 +
- deps/NetAddr-IP/Lite/t/numeric.t                   |   36 +
- deps/NetAddr-IP/Lite/t/old-nth.t                   |   36 +
- deps/NetAddr-IP/Lite/t/old-num.t                   |   33 +
- deps/NetAddr-IP/Lite/t/over-qq.t                   |   53 +
- deps/NetAddr-IP/Lite/t/over_comp.t                 |   66 +
- deps/NetAddr-IP/Lite/t/over_copy.t                 |   85 +
- deps/NetAddr-IP/Lite/t/over_equal.t                |  122 +
- deps/NetAddr-IP/Lite/t/over_math.t                 |   64 +
- deps/NetAddr-IP/Lite/t/overminus.t                 |   45 +
- deps/NetAddr-IP/Lite/t/pathological.t              |   27 +
- deps/NetAddr-IP/Lite/t/range.t                     |   34 +
- deps/NetAddr-IP/Lite/t/relops.t                    |   59 +
- deps/NetAddr-IP/Lite/t/v4-aton.t                   |   59 +
- deps/NetAddr-IP/Lite/t/v4-badnm.t                  |   42 +
- deps/NetAddr-IP/Lite/t/v4-base.t                   |   19 +
- deps/NetAddr-IP/Lite/t/v4-basem.t                  |   24 +
- deps/NetAddr-IP/Lite/t/v4-cidr.t                   |   28 +
- deps/NetAddr-IP/Lite/t/v4-cnew.t                   |   30 +
- deps/NetAddr-IP/Lite/t/v4-contains.t               |   60 +
- deps/NetAddr-IP/Lite/t/v4-last.t                   |   32 +
- deps/NetAddr-IP/Lite/t/v4-new-first.t              |   30 +
- deps/NetAddr-IP/Lite/t/v4-new.t                    |   67 +
- deps/NetAddr-IP/Lite/t/v4-new_from_aton.t          |   27 +
- deps/NetAddr-IP/Lite/t/v4-no_octal.t               |   50 +
- deps/NetAddr-IP/Lite/t/v4-num.t                    |   36 +
- deps/NetAddr-IP/Lite/t/v4-numeric.t                |   36 +
- deps/NetAddr-IP/Lite/t/v4-old-first.t              |   30 +
- deps/NetAddr-IP/Lite/t/v4-range.t                  |   48 +
- deps/NetAddr-IP/Lite/t/v4-snew.t                   |   29 +
- deps/NetAddr-IP/Lite/t/v4-wnew.t                   |   23 +
- deps/NetAddr-IP/Lite/t/v4_new_cis.t                |   68 +
- deps/NetAddr-IP/Lite/t/v6-cnew.t                   |   27 +
- deps/NetAddr-IP/Lite/t/v6-contains.t               |   51 +
- deps/NetAddr-IP/Lite/t/v6-inc.t                    |   38 +
- deps/NetAddr-IP/Lite/t/v6-new-base.t               |   70 +
- deps/NetAddr-IP/Lite/t/v6-new_cis6_base.t          |   69 +
- deps/NetAddr-IP/Lite/t/v6-new_cis_base.t           |   69 +
- deps/NetAddr-IP/Lite/t/v6-num.t                    |   53 +
- deps/NetAddr-IP/Lite/t/v6-numeric.t                |   91 +
- deps/NetAddr-IP/Lite/t/v6-old-base.t               |   70 +
- deps/NetAddr-IP/Lite/t/version.t                   |   29 +
- deps/NetAddr-IP/Lite/t/within.t                    |   40 +
- deps/NetAddr-IP/MANIFEST                           |  165 +
- deps/NetAddr-IP/MANIFEST.SKIP                      |   31 +
- deps/NetAddr-IP/META.yml                           |   14 +
- deps/NetAddr-IP/Makefile.PL                        |   91 +
- deps/NetAddr-IP/TODO                               |    5 +
- deps/NetAddr-IP/VERSION                            |    1 +
- deps/NetAddr-IP/docs/rfc1884.txt                   | 1023 +++
- deps/NetAddr-IP/t/constants.t                      |   20 +
- deps/NetAddr-IP/t/full.t                           |   25 +
- deps/NetAddr-IP/t/full6.t                          |   25 +
- deps/NetAddr-IP/t/imhoff.t                         |   35 +
- deps/NetAddr-IP/t/loops.t                          |   33 +
- deps/NetAddr-IP/t/lower.t                          |   11 +
- deps/NetAddr-IP/t/masklen.t                        |   21 +
- deps/NetAddr-IP/t/new-store.t                      |   40 +
- deps/NetAddr-IP/t/old-store.t                      |   40 +
- deps/NetAddr-IP/t/over-arr.t                       |   20 +
- deps/NetAddr-IP/t/over-qq.t                        |   55 +
- deps/NetAddr-IP/t/relops.t                         |   59 +
- deps/NetAddr-IP/t/short.t                          |   57 +
- deps/NetAddr-IP/t/splitref.t                       |   27 +
- deps/NetAddr-IP/t/v4-coalesce.t                    |   54 +
- deps/NetAddr-IP/t/v4-compact.t                     |  110 +
- deps/NetAddr-IP/t/v4-compplus.t                    |   35 +
- deps/NetAddr-IP/t/v4-hostenum.t                    |   50 +
- deps/NetAddr-IP/t/v4-re.t                          |   38 +
- deps/NetAddr-IP/t/v4-split-bulk.t                  |   23 +
- deps/NetAddr-IP/t/v4-split-list.t                  |   54 +
- deps/NetAddr-IP/t/v4-splitplan.t                   |   73 +
- deps/NetAddr-IP/t/v4-sprefix.t                     |   51 +
- deps/NetAddr-IP/t/v4-xprefix.t                     |   48 +
- deps/NetAddr-IP/t/v6-re.t                          |   69 +
- deps/NetAddr-IP/t/v6-split-bulk.t                  |   21 +
- deps/NetAddr-IP/t/v6-splitplan.t                   |   72 +
- deps/NetAddr-IP/t/wildcard.t                       |   37 +
- 181 files changed, 26626 insertions(+), 971 deletions(-)
-
-commit cca8f706be83ffb440b09053cacd032865ca69dd (tag: refs/tags/fwsnort-1.6.2-pre1)
-Author: Michael Rash <mbr@cipherdyne.org>
-Date:   Thu Feb 16 21:32:19 2012 -0500
-
-    added the proper ChangeLog back in
-
- ChangeLog | 2184 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
- 1 files changed, 2184 insertions(+), 0 deletions(-)
-
-commit f4715fe90d6ae875fc8570d00198c7b72a5eb413
-Author: Michael Rash <mbr@cipherdyne.org>
-Date:   Thu Feb 16 21:24:25 2012 -0500
-
-    bumped version to 1.6.2-pre1
-
- VERSION |    2 +-
- 1 files changed, 1 insertions(+), 1 deletions(-)
-
-commit 724f75a13f3ec264eccb553c6c28f83706048047
-Author: Michael Rash <mbr@cipherdyne.org>
-Date:   Thu Feb 16 21:18:44 2012 -0500
-
-    Switched --no-ipt-sync to default to not syncing with the iptables policy
-    
-    By default fwsnort attempts to match translated Snort rules to the running
-    iptables policy, but this is tough to do well because iptables policies can be
-    complex.  And, before fwsnort switched to the iptables-save format for
-    instantiating the policy, a large set of translated rules could take a really
-    long time to make active within the kernel.  Finally, many Snort rules restrict
-    themselves to established TCP connections anyway, and if a restrictive policy
-    doesn't allow connections to get into the established state for some port let's
-    say, then there is little harm in having translated Snort rules for this port.
-    Some kernel memory would be wasted (small), but no performance would be lost
-    since packets won't be processed against these rules anyway.  The end result is
-    that the default behavior is now to not sync with the local iptables policy in
-    favor of translating and instantiating as many rules as possible.
-    
-    This commit also moves the fwsnort.sh script and associated files into the
-    /var/lib/fwsnort/ directory.
-
- CREDITS      |    5 ++++-
- fwsnort      |   36 ++++++++++++++++++------------------
- fwsnort.8    |   15 +++++++++++----
- fwsnort.conf |   13 +++++++------
- install.pl   |    2 +-
- 5 files changed, 41 insertions(+), 30 deletions(-)
-
-commit 863f73aead5ca9111c64de98fca6a6631e40c7b5
-Author: Michael Rash <mbr@cipherdyne.org>
-Date:   Thu Feb 16 20:36:59 2012 -0500
-
-    updated to the latest emerging threats Snort rules
-
- deps/snort_rules/emerging-all.rules |26379 ++++++++++++++++++-----------------
- 1 files changed, 13483 insertions(+), 12896 deletions(-)
+ CREDITS |    1 +
+ 1 file changed, 1 insertion(+)
