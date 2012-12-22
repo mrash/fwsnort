@@ -102,7 +102,7 @@ my $CONFIG_DEFAULT = '/etc/fwsnort/fwsnort.conf';
 my $fwsnort_conf = $CONFIG_DEFAULT;
 
 ### version number
-my $version = '1.6.3-pre1';
+my $version = '1.6.3';
 
 my %ipt_hdr_opts = (
     'src'      => '-s',
