@@ -30,7 +30,7 @@ fwsnort-1.6.3 (12/21/2012):
       in some cases).
     - (Dwight Davis) Contributed patches for several bugs including not
       handling --exclude-regex properly, not ignoring the deleted.rules file,
-      not handling --strict mode opertions correctly, and more.  These issues
+      not handling --strict mode operations correctly, and more.  These issues
       and the corresponding patch were originally reported here:
         http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=693000
     - Bug fix for Snort rules with HOME_NET(any) -> EXTERNAL_NET(any) to
