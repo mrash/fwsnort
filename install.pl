@@ -51,6 +51,19 @@ my $tarCmd  = '/bin/tar';
 
 my %config = ();
 
+my @cmd_search_paths = qw(
+    /bin
+    /sbin
+    /usr/bin
+    /usr/sbin
+    /usr/local/bin
+    /usr/local/sbin
+);
+
+my %exclude_cmds = (
+    'ip6tables' => ''
+);
+
 ### map perl modules to versions
 my %required_perl_modules = (
     'NetAddr::IP' => {
@@ -74,6 +87,7 @@ my $install_test_dir = 0;
 my $force_mod_re = '';
 my $exclude_mod_re = '';
 my $deps_dir = 'deps';
+my $is_root = 0;
 my $help = 0;
 my $locale = 'C';  ### default LC_ALL env variable
 my $no_locale = 0;
@@ -130,8 +144,8 @@ $skip_module_install = 1 unless -d $deps_dir;
 &check_commands();
 
 ### check to make sure we are running as root
-$< == 0 && $> == 0 or die "You need to be root (or equivalent UID 0",
-    " account) to install/uninstall fwsnort!\n";
+ die "You need to be root (or equivalent UID 0",
+    " account) to install/uninstall fwsnort!\n" unless &is_root();
 
 if ($uninstall) {
     &uninstall();
@@ -447,7 +461,7 @@ sub import_config() {
     for my $dir ($install_root,
             $sbin_dir,
             $config{'LOG_DIR'},
-            $config{'LIB_DIR'},
+            $config{'LIBS_DIR'},
             $config{'STATE_DIR'},
             $config{'QUEUE_RULES_DIR'},
             $config{'ARCHIVE_DIR'},
@@ -527,16 +541,14 @@ sub required_vars() {
     return;
 }
 
+### check paths to commands and attempt to correct if any are wrong.
 sub check_commands() {
-    my @path = qw(
-        /bin
-        /usr/bin
-        /usr/local/bin
-    );
+
     CMD: for my $cmd (keys %cmds) {
+        next CMD if defined $exclude_cmds{$cmd};
         unless (-x $cmds{$cmd}) {
             my $found = 0;
-            PATH: for my $dir (@path) {
+            PATH: for my $dir (@cmd_search_paths) {
                 if (-x "${dir}/${cmd}") {
                     $cmds{$cmd} = "${dir}/${cmd}";
                     $found = 1;
@@ -544,13 +556,25 @@ sub check_commands() {
                 }
             }
             unless ($found) {
-                die "[*] Could not find $cmd, edit the ",
-                    "config section of install.pl";
+                die "\n[*] Could not find $cmd anywhere!!!  ",
+                    "Please edit the config section to include the path to ",
+                    "$cmd.";
             }
         }
+        unless (-x $cmds{$cmd}) {
+            return unless &is_root();
+            die "\n[*] $cmd is located at ",
+                "$cmds{$cmd} but is not executable by uid: $<";
+        }
     }
-
     return;
+}
+
+sub is_root() {
+    if ($< == 0 and $> == 0) {
+        $is_root = 1;
+    }
+    return $is_root;
 }
 
 sub query_preserve_config() {
