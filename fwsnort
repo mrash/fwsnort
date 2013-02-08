@@ -3566,6 +3566,7 @@ sub handle_cmd_line() {
         'Flush'          => \$ipt_flush,    # Synonym for --ipt-flush
         'ipt-list'       => \$ipt_list,     # List any existing fwsnort chains.
         'List'           => \$ipt_list,     # Synonym for --ipt-list
+        'fw-list'        => \$ipt_list,     # Synonym for --ipt-list
         'ipt-del'        => \$ipt_del_chains, # Delete fwsnort chains.
         'ip6tables'      => \$enable_ip6tables, # Turn on ip6tables mode.
         '6'              => \$enable_ip6tables, # Synonym for --ip6tables.
@@ -4624,11 +4625,11 @@ if [ "\$DO_REVERT" = 1 ];
 then
     echo " "
     echo "[+] Reverting to original iptables policy..."
-    grep -v FWSNORT $config{'FWSNORT_SAVE_FILE'} | exec $restore_bin
+    $cmds{'grep'} -v FWSNORT $config{'FWSNORT_SAVE_FILE'} | exec $restore_bin
 else
     echo " "
     echo "[+] Splicing fwsnort $abs_num rules into the iptables policy..."
-    exec $restore_bin < $config{'FWSNORT_SAVE_FILE'}
+    $cmds{'cat'} $config{'FWSNORT_SAVE_FILE'} | exec $restore_bin
 fi
 
 exit
