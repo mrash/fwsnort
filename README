@@ -8,16 +8,16 @@ DESCRIPTION:
 fwsnort is a perl script that translates Snort rules into equivalent iptables
 rules.  Some Snort rule options (such as "pcre") have no direct translation
 into iptables options so not all Snort rules can be translated.  However
-approximately 65% of all Snort-2.3.3 (the last release of Snort under the GPL)
-signatures can be successfully translated through the use of the iptables
-string match module.  When tranlating Snort rules, fwsnort makes heavy use of
-the iptables string match extension with its "--hex-string" option (added to
-iptables by the fwsnort project) which accepts Snort "content" argument with
-hex bytes between "|" chars (such as "|5a 4e|").  This allows the content
-fields in Snort rules to be directly input into iptables rulesets from the
-command line.  fwsnort alse parses the running iptables policy on the machine
-in order to determine which Snort rules are applicable to the specific policy
-loaded on the machine.
+approximately 65% of all Snort-2.3.3 signatures (the last release of Snort
+signatures under the GPL) can be successfully translated through the use of the
+iptables string match module.  When tranlating Snort rules, fwsnort makes heavy
+use of the iptables string match extension with its "--hex-string" option
+(added to iptables by the fwsnort project) which accepts Snort "content"
+argument with hex bytes between "|" chars (such as "|5a 4e|").  This allows the
+content fields in Snort rules to be directly input into iptables rulesets from
+the command line.  fwsnort alse parses the running iptables policy on the
+machine in order to determine which Snort rules are applicable to the specific
+policy loaded on the machine.
 
 fwsnort requires the iptables string match module in order to be able to
 detect application layer attacks.  If you are running modern Linux
