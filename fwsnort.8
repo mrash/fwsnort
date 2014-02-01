@@ -82,7 +82,8 @@ By default fwsnort makes use of the configuration file
 .B /etc/fwsnort/fwsnort.conf
 for almost all configuration parameters.  fwsnort can be made to
 override this path by specifying a different file on the command
-line with the \-\-config option.
+line with the \-\-config option.  When fwsnort is not executed as root, then
+a path to a readable fwsnort.conf file is required.
 .TP
 .BR \-\^\-update-rules
 Download the latest Emerging Threats rules from http://www.emergingthreats.net

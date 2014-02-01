@@ -90,3 +90,12 @@ Dwight Davis
       handling --strict mode opertions correctly, and more.  These issues and
       the corresponding patch were originally reported here:
         http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=693000
+
+Murray McAllister (Red Hat Security Team)
+    - Reported a bug fix for vulnerability CVE-2014-0039 in which an attacker-
+      controlled fwsnort.conf file could be read by fwsnort when not running as
+      root.  This was caused by fwsnort reading './fwsnort.conf' when not
+      running as root and when a path to the config file was not explicitly set
+      with -c on the command line.  This behavior has been changed to require
+      the user to specify a path to fwsnort.conf with -c when not running as
+      root.

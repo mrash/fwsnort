@@ -4660,8 +4660,10 @@ sub is_root() {
 }
 
 sub set_non_root_values() {
+
     if ($fwsnort_conf eq $CONFIG_DEFAULT) {
-        $fwsnort_conf = './fwsnort.conf';
+        die "[*] Must specify a path to readable ",
+            "fwsnort.conf file when not running as root.";
     }
 
     &set_defaults_without_ipt_test();

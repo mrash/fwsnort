@@ -1,3 +1,12 @@
+fwsnort-1.6.4 (02//2014):
+    - Bug fix for vulnerability CVE-2014-0039 reported by Murray McAllister of
+      the Red Hat Security Team in which an attacker-controlled fwsnort.conf
+      file could be read by fwsnort when not running as root.  This was caused
+      by fwsnort reading './fwsnort.conf' when not running as root and when a
+      path to the config file was not explicitly set with -c on the command
+      line.  This behavior has been changed to require the user to specify a
+      path to fwsnort.conf with -c when not running as root.
+
 fwsnort-1.6.3 (12/21/2012):
     - Bug fix to ensure that !, <, >, and = chars in content strings are
       converted to the appropriate hex equivalents.  All content strings with
