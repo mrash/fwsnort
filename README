@@ -1,5 +1,5 @@
 fwsnort   (Firewall Snort)
-Version:  1.6.3
+Version:  1.6.4
 Author:   Michael Rash <mbr@cipherdyne.org>
 Website:  http://www.cipherdyne.org/fwsnort/
 
@@ -51,7 +51,7 @@ things.
 
 COPYRIGHT:
 
-Copyright (C) 2003-2012 Michael Rash (mbr@cipherdyne.org)
+Copyright (C) 2003-2014 Michael Rash (mbr@cipherdyne.org)
 
 fwsnort is distributed under the GNU General Public License (GPLv2), and the
 latest version may be downloaded from http://www.cipherdyne.org/
