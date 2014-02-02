@@ -1,5 +1,5 @@
 %define name fwsnort
-%define version 1.6.3
+%define version 1.6.4
 %define release 1
 %define fwsnortlogdir /var/log/fwsnort
 
