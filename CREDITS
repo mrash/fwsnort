@@ -99,3 +99,8 @@ Murray McAllister (Red Hat Security Team)
       with -c on the command line.  This behavior has been changed to require
       the user to specify a path to fwsnort.conf with -c when not running as
       root.
+
+Paulo Bruck
+    - Submitted a patch to fix a bug in fwsnort usage of the iptables
+      --ulog-prefix option (an invalid quote was being used previous to the
+      fix).

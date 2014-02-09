@@ -2011,7 +2011,7 @@ sub ipt_build_opts() {
             }
         } else {
             if ($hdr_hr->{'action'} eq 'log' or $ulog_mode) {
-                $target_str .= qq| -j ULOG --ulog-nlgroup $ulog_nlgroup --ulog-prefix "|;
+                $target_str .= qq| -j ULOG --ulog-nlgroup $ulog_nlgroup --ulog-prefix |;
             } else {
                 $target_str .= ' -j LOG ';
                 $target_str .= '--log-ip-options ' unless $no_ipt_log_ip_opts;

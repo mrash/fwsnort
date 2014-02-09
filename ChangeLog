@@ -1,3 +1,8 @@
+fwsnort-1.6.5 (//2014):
+    - (Paulo Bruck) Submitted a patch to fix a bug in fwsnort usage of the
+      iptables --ulog-prefix option (an invalid quote was being used previous
+      to the fix).
+
 fwsnort-1.6.4 (02/02/2014):
     - Bug fix for vulnerability CVE-2014-0039 reported by Murray McAllister of
       the Red Hat Security Team in which an attacker-controlled fwsnort.conf
