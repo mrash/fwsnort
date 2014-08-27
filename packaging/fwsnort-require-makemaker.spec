@@ -1,5 +1,5 @@
 %define name fwsnort
-%define version 1.6.4
+%define version 1.6.5
 %define release 1
 %define fwsnortlibdir %_libdir/%name
 %define fwsnortlogdir /var/log/fwsnort
@@ -187,6 +187,9 @@ cp -r deps/snort_rules $RPM_BUILD_ROOT%_sysconfdir/%name
 %_libdir/%name
 
 %changelog
+* Tue Aug 26 2014 Michael Rash <mbr@cipherydne.org>
+- fwsnort-1.6.5 release
+
 * Sun Feb 02 2014 Michael Rash <mbr@cipherydne.org>
 - fwsnort-1.6.4 release
 
