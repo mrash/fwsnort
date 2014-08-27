@@ -1,4 +1,23 @@
-commit c87af31831b1df50635cf66e015eda346cb63f84 (HEAD, refs/heads/master)
+commit 65b8e929c6827348d7b977eb0286009b90701cc8 (HEAD, refs/heads/master)
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Tue Aug 26 21:14:42 2014 -0400
+
+    spec files fwsnort-1.6.5 release
+
+ packaging/fwsnort-nodeps.spec            | 7 +++++++
+ packaging/fwsnort-require-makemaker.spec | 5 ++++-
+ 2 files changed, 11 insertions(+), 1 deletion(-)
+
+commit 89a2573151d8708717b487da8ee4d4b48d4b9cac
+Author: Michael Rash <mbr@cipherdyne.org>
+Date:   Tue Aug 26 21:04:16 2014 -0400
+
+    changes since 1.6.4
+
+ ChangeLog.git | 116 +++++++++++-----------------------------------------------
+ 1 file changed, 21 insertions(+), 95 deletions(-)
+
+commit c87af31831b1df50635cf66e015eda346cb63f84
 Author: Michael Rash <mbr@cipherdyne.org>
 Date:   Tue Aug 26 20:53:01 2014 -0400
 
