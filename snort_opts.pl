@@ -11,6 +11,18 @@
 ########################################################################
 #
 
+use Getopt::Long;
+use strict;
+
+my $sig_file = '';
+my $help = 0;
+
+die "[*] Use --help for usage information.\n" unless (GetOptions(
+    'file=s'    => \$sig_file,
+    'help'      => \$help
+));
+&usage() if $help;
+
 my %options = (
     'flow'         => 0,
     'flowbits'     => 0,
@@ -79,20 +91,33 @@ my %options = (
 );
 
 my %unrecognized = ();
-
-my $dir   = 'deps/snort_rules';
 my $total_rules = 0;
+my $dir = 'deps/snort_rules';
 
-opendir D, $dir or die "[*] Could not open $dir: $!";
-my @rfiles = readdir D;
-closedir D;
+my @rfiles = ();
+if ($sig_file) {
+    push @rfiles, $sig_file;
+} else {
+    opendir D, $dir or die "[*] Could not open $dir: $!";
+    @rfiles = readdir D;
+    closedir D;
+}
 
 print "[+] Calculating snort rule keyword percentages:\n";
 for my $rfile (@rfiles) {
-    next unless $rfile =~ /\.rules/;
-    open R, "< $dir/$rfile" or die $!;
-    my @lines = <R>;
-    close R;
+
+    my @lines = ();
+
+    if ($sig_file) {
+        open R, "< $sig_file" or die $!;
+        @lines = <R>;
+        close R;
+    } else {
+        next unless $rfile =~ /\.rules/;
+        open R, "< $dir/$rfile" or die $!;
+        @lines = <R>;
+        close R;
+    }
 
     for my $line (@lines) {
         chomp $line;
@@ -135,3 +160,10 @@ for my $opt (keys %unrecognized) {
 }
 
 exit 0;
+
+sub usage() {
+    print <<_USAGE_;
+Usage: $0 [-f <sig file>] [-h]
+_USAGE_
+    exit 0;
+}
