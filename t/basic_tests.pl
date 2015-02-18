@@ -7,12 +7,29 @@ use strict;
 require IPTables::Parse;
 
 #==================== config =====================
-my $iptables_bin  = '/sbin/iptables';
-my $ip6tables_bin = '/sbin/ip6tables';
+my $iptables_bin    = '/sbin/iptables';
+my $ip6tables_bin   = '/sbin/ip6tables';
+my $fw_cmd_bin      = '/bin/firewall-cmd';
 
 my $logfile   = 'test.log';
 my $PRINT_LEN = 68;
 #================== end config ===================
+
+my %ipt_opts = (
+    'iptables' => $iptables_bin,
+    'iptout'   => '/tmp/iptables.out',
+    'ipterr'   => '/tmp/iptables.err',
+    'debug'    => 0,
+    'verbose'  => 0
+);
+
+my %ipt6_opts = (
+    'iptables' => $ip6tables_bin,
+    'iptout'   => '/tmp/iptables.out',
+    'ipterr'   => '/tmp/iptables.err',
+    'debug'    => 0,
+    'verbose'  => 0
+);
 
 my %targets = (
     'ACCEPT' => '',
@@ -50,15 +67,8 @@ exit 0;
 sub iptables_tests() {
 
     &logr("[+] Running $iptables_bin tests...\n");
-    my %opts = (
-        'iptables' => $iptables_bin,
-        'iptout'   => '/tmp/iptables.out',
-        'ipterr'   => '/tmp/iptables.err',
-        'debug'    => 0,
-        'verbose'  => 0
-    );
 
-    my $ipt_obj = new IPTables::Parse(%opts)
+    my $ipt_obj = new IPTables::Parse(%ipt_opts)
         or die "[*] Could not acquire IPTables::Parse object";
 
     &chain_policy_tests($ipt_obj, \%iptables_chains);
@@ -72,15 +82,8 @@ sub iptables_tests() {
 sub ip6tables_tests() {
 
     &logr("\n[+] Running $ip6tables_bin tests...\n");
-    my %opts = (
-        'ip6tables' => $ip6tables_bin,
-        'iptout'   => '/tmp/ip6tables.out',
-        'ipterr'   => '/tmp/ip6tables.err',
-        'debug'    => 0,
-        'verbose'  => 0
-    );
 
-    my $ipt_obj = new IPTables::Parse(%opts)
+    my $ipt_obj = new IPTables::Parse(%ipt6_opts)
         or die "[*] Could not acquire IPTables::Parse object";
 
     &chain_policy_tests($ipt_obj, \%ip6tables_chains);
@@ -162,7 +165,7 @@ sub chain_rules_tests() {
             &dots_print("chain_rules(): $table $chain rules");
 
             my ($rv, $out_ar, $err_ar) = $ipt_obj->exec_iptables(
-                "$ipt_obj->{'_iptables'} -t $table -v -n -L $chain");
+                "$ipt_obj->{'_cmd'} -t $table -v -n -L $chain");
 
             my $rules_ar = $ipt_obj->chain_rules($table, $chain);
 
@@ -238,9 +241,16 @@ sub init() {
             "UID 0 account) to effectively test fwknop";
 
     unlink $logfile if -e $logfile;
-    for my $bin ($iptables_bin, $ip6tables_bin) {
-        die "[*] $bin does not exist" unless -e $bin;
-        die "[*] $bin not executable" unless -x $bin;
+
+    if (-e $fw_cmd_bin and -x $fw_cmd_bin) {
+        $ipt_opts{'firewall-cmd'}  = $fw_cmd_bin;
+        $ipt6_opts{'firewall-cmd'} = $fw_cmd_bin;
+        $ipt6_opts{'fwd_args'}     = '--direct --passthrough ipv6';
+    } else {
+        for my $bin ($iptables_bin, $ip6tables_bin) {
+            die "[*] $bin does not exist" unless -e $bin;
+            die "[*] $bin not executable" unless -x $bin;
+        }
     }
 
     return;

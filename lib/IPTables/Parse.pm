@@ -28,23 +28,45 @@ sub new() {
     my %args  = @_;
 
     my $self = {
-        _iptables => $args{'iptables'} || $args{'ip6tables'} || '/sbin/iptables',
-        _iptout    => $args{'iptout'}    || '/tmp/ipt.out',
-        _ipterr    => $args{'ipterr'}    || '/tmp/ipt.err',
-        _ipt_alarm => $args{'ipt_alarm'} || 30,
-        _debug     => $args{'debug'}     || 0,
-        _verbose   => $args{'verbose'}   || 0,
-        _ipt_exec_style => $args{'ipt_exec_style'} || 'waitpid',
-        _ipt_exec_sleep => $args{'ipt_exec_sleep'} || 0,
+        _iptables     => $args{'iptables'} || $args{'ip6tables'} || '/sbin/iptables',
+        _firewall_cmd => $args{'firewall-cmd'} || '',
+        _fwd_args     => $args{'fwd_args'}  || '--direct --passthrough ipv4',
+        _iptout       => $args{'iptout'}    || '/tmp/ipt.out',
+        _ipterr       => $args{'ipterr'}    || '/tmp/ipt.err',
+        _ipt_alarm    => $args{'ipt_alarm'} || 30,
+        _debug        => $args{'debug'}     || 0,
+        _verbose      => $args{'verbose'}   || 0,
+        _ipt_exec_style  => $args{'ipt_exec_style'}  || 'waitpid',
+        _ipt_exec_sleep  => $args{'ipt_exec_sleep'}  || 0,
         _sigchld_handler => $args{'sigchld_handler'} || \&REAPER,
     };
-    croak "[*] $self->{'_iptables'} incorrect path.\n"
-        unless -e $self->{'_iptables'};
-    croak "[*] $self->{'_iptables'} not executable.\n"
-        unless -x $self->{'_iptables'};
+
+    if ($self->{'_firewall_cmd'}) {
+        croak "[*] $self->{'_firewall_cmd'} incorrect path.\n"
+            unless -e $self->{'_firewall_cmd'};
+        croak "[*] $self->{'_firewall_cmd'} not executable.\n"
+            unless -x $self->{'_firewall_cmd'};
+    } else {
+        croak "[*] $self->{'_iptables'} incorrect path.\n"
+            unless -e $self->{'_iptables'};
+        croak "[*] $self->{'_iptables'} not executable.\n"
+            unless -x $self->{'_iptables'};
+    }
 
     $self->{'_ipt_bin_name'} = 'iptables';
-    $self->{'_ipt_bin_name'} = $1 if $self->{'_iptables'} =~ m|.*/(\S+)|;
+
+    if ($self->{'_firewall_cmd'}) {
+        $self->{'_ipt_bin_name'} = $1 if $self->{'_firewall_cmd'} =~ m|.*/(\S+)|;
+    } else {
+        $self->{'_ipt_bin_name'} = $1 if $self->{'_iptables'} =~ m|.*/(\S+)|;
+    }
+
+    ### set the main command string to allow for iptables execution
+    ### via firewall-cmd if necessary
+    $self->{'_cmd'} = $self->{'_iptables'};
+    if ($self->{'_firewall_cmd'}) {
+        $self->{'_cmd'} = "$self->{'_firewall_cmd'} $self->{'_fwd_args'}";
+    }
 
     $self->{'parse_keys'} = &parse_keys();
 
@@ -160,7 +182,6 @@ sub chain_policy() {
     my $table  = shift || croak '[*] Specify a table, e.g. "nat"';
     my $chain  = shift || croak '[*] Specify a chain, e.g. "OUTPUT"';
     my $file   = shift || '';
-    my $iptables  = $self->{'_iptables'};
     my @ipt_lines = ();
 
     if ($file) {
@@ -171,7 +192,7 @@ sub chain_policy() {
         close F;
     } else {
         my ($rv, $out_ar, $err_ar) = $self->exec_iptables(
-                "$iptables -t $table -v -n -L $chain");
+                "$self->{'_cmd'} -t $table -v -n -L $chain");
         @ipt_lines = @$out_ar;
     }
 
@@ -197,7 +218,6 @@ sub chain_rules() {
     my $table  = shift || croak '[*] Specify a table, e.g. "nat"';
     my $chain  = shift || croak '[*] Specify a chain, e.g. "OUTPUT"';
     my $file   = shift || '';
-    my $iptables  = $self->{'_iptables'};
 
     my $found_chain  = 0;
     my @ipt_lines = ();
@@ -217,7 +237,7 @@ sub chain_rules() {
         close F;
     } else {
         my ($rv, $out_ar, $err_ar) = $self->exec_iptables(
-                "$iptables -t $table -v -n -L $chain");
+                "$self->{'_cmd'} -t $table -v -n -L $chain");
         @ipt_lines = @$out_ar;
     }
 
@@ -275,7 +295,9 @@ sub chain_rules() {
             my $match_re = qr/^\s*(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+\-\-\s+
                                 (\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*(.*)/x;
 
-            if ($self->{'_ipt_bin_name'} eq 'ip6tables') {
+            if ($self->{'_ipt_bin_name'} eq 'ip6tables'
+                    or ($self->{'_ipt_bin_name'} eq 'firewall-cmd'
+                    and $self->{'_fwd_args'} =~ /\sipv6/)) {
                 $match_re = qr/^\s*(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+
                                 (\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*(.*)/x;
             }
@@ -314,7 +336,9 @@ sub chain_rules() {
 
             my $match_re = qr/^\s*(\S+)\s+(\S+)\s+\-\-\s+(\S+)\s+(\S+)\s*(.*)/;
 
-            if ($self->{'_ipt_bin_name'} eq 'ip6tables') {
+            if ($self->{'_ipt_bin_name'} eq 'ip6tables'
+                    or ($self->{'_ipt_bin_name'} eq 'firewall-cmd'
+                    and $self->{'_fwd_args'} =~ /\sipv6/)) {
                 $match_re = qr/^\s*(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*(.*)/;
             }
 
@@ -364,7 +388,6 @@ sub default_drop() {
     my $table = shift || croak "[*] Specify a table, e.g. \"nat\"";
     my $chain = shift || croak "[*] Specify a chain, e.g. \"OUTPUT\"";
     my $file  = shift || '';
-    my $iptables  = $self->{'_iptables'};
     my @ipt_lines = ();
 
     if ($file) {
@@ -376,7 +399,7 @@ sub default_drop() {
     } else {
 ### FIXME -v for interfaces?
         my ($rv, $out_ar, $err_ar) = $self->exec_iptables(
-                "$iptables -t $table -n -L $chain");
+                "$self->{'_cmd'} -t $table -n -L $chain");
         @ipt_lines = @$out_ar;
     }
 
@@ -411,7 +434,9 @@ sub default_drop() {
         my $drop_re = qr/^DROP\s+(\w+)\s+\-\-\s+.*
             $any_ip_re\s+$any_ip_re\s*$/x;
 
-        if ($self->{'_ipt_bin_name'} eq 'ip6tables') {
+        if ($self->{'_ipt_bin_name'} eq 'ip6tables'
+                or ($self->{'_ipt_bin_name'} eq 'firewall-cmd'
+                and $self->{'_fwd_args'} =~ /ipv6/)) {
             $log_re = qr/^\s*U?LOG\s+(\w+)\s+
                     $any_ip_re\s+$any_ip_re\s+(.*)/x;
             $drop_re = qr/^DROP\s+(\w+)\s+
@@ -464,7 +489,6 @@ sub default_log() {
     my $table = shift || croak "[*] Specify a table, e.g. \"nat\"";
     my $chain = shift || croak "[*] Specify a chain, e.g. \"OUTPUT\"";
     my $file  = shift || '';
-    my $iptables  = $self->{'_iptables'};
 
     my $any_ip_re  = qr/(?:0\.){3}0\x2f0|\x3a{2}\x2f0/;
     my @ipt_lines  = ();
@@ -483,7 +507,7 @@ sub default_log() {
         close F;
     } else {
         my ($rv, $out_ar, $err_ar) = $self->exec_iptables(
-                "$iptables -t $table -n -L $chain");
+                "$self->{'_cmd'} -t $table -n -L $chain");
         @ipt_lines = @$out_ar;
     }
 
@@ -518,7 +542,9 @@ sub default_log() {
         my $proto = '';
         my $found = 0;
         if ($ipt_verbose) {
-            if ($self->{'_ipt_bin_name'} eq 'ip6tables') {
+            if ($self->{'_ipt_bin_name'} eq 'ip6tables'
+                    or ($self->{'_ipt_bin_name'} eq 'firewall-cmd'
+                    and $self->{'_fwd_args'} =~ /\sipv6/)) {
                 if ($line =~ m|^\s*\d+\s+\d+\s*U?LOG\s+(\w+)\s+
                         \S+\s+\S+\s+$any_ip_re
                         \s+$any_ip_re\s+.*U?LOG|x) {
@@ -534,7 +560,9 @@ sub default_log() {
                 }
             }
         } else {
-            if ($self->{'_ipt_bin_name'} eq 'ip6tables') {
+            if ($self->{'_ipt_bin_name'} eq 'ip6tables'
+                    or ($self->{'_ipt_bin_name'} eq 'firewall-cmd'
+                    and $self->{'_fwd_args'} =~ /\sipv6/)) {
                 if ($line =~ m|^\s*U?LOG\s+(\w+)\s+$any_ip_re
                         \s+$any_ip_re\s+.*U?LOG|x) {
                     $proto = $1;
@@ -621,7 +649,6 @@ sub exec_iptables() {
     my $self  = shift;
     my $cmd = shift || croak "[*] Must specify an " .
         "$self->{'_ipt_bin_name'} command to run.";
-    my $iptables  = $self->{'_iptables'};
     my $iptout    = $self->{'_iptout'};
     my $ipterr    = $self->{'_ipterr'};
     my $debug     = $self->{'_debug'};
@@ -633,7 +660,8 @@ sub exec_iptables() {
 
     croak "[*] $cmd does not look like an $self->{'_ipt_bin_name'} command."
         unless $cmd =~ m|^\s*iptables| or $cmd =~ m|^\S+/iptables|
-            or $cmd =~ m|^\s*ip6tables| or $cmd =~ m|^\S+/ip6tables|;
+            or $cmd =~ m|^\s*ip6tables| or $cmd =~ m|^\S+/ip6tables|
+            or $cmd =~ m|^\s*firewall-cmd| or $cmd =~ m|^\S+/firewall-cmd|;
 
     my $rv = 1;
     my @stdout = ();
