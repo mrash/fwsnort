@@ -7,7 +7,7 @@
 #
 # Author: Michael Rash (mbr@cipherdyne.org)
 #
-# Version: 1.2
+# Version: 1.3
 #
 ##################################################################
 #
@@ -21,7 +21,7 @@ use strict;
 use warnings;
 use vars qw($VERSION);
 
-$VERSION = '1.2';
+$VERSION = '1.3';
 
 sub new() {
     my $class = shift;
@@ -175,7 +175,6 @@ sub parse_keys() {
 
     return \%keys;
 }
-
 
 sub chain_policy() {
     my $self   = shift;
@@ -919,8 +918,7 @@ also here:
 
 Source control is provided by git:
 
-  http://www.cipherdyne.org/git/IPTables-Parse.git
-  http://www.cipherdyne.org/cgi-bin/gitweb.cgi?p=IPTables-Parse.git;a=summary
+  https://github.com/mrash/IPTables-Parse.git
 
 =head1 CREDITS
 
@@ -937,7 +935,7 @@ this address if there are any questions, comments, or bug reports.
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2005-2012 Michael Rash.  All rights reserved.
+Copyright (C) 2005-2015 Michael Rash.  All rights reserved.
 
 This module is free software.  You can redistribute it and/or
 modify it under the terms of the Artistic License 2.0.  More information
