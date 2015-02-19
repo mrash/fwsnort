@@ -87,16 +87,6 @@ sub new() {
         $self->{'_cmd'} = "$self->{'_firewall_cmd'} $self->{'_fwd_args'}";
     }
 
-    if ($self->{'_ipt_rules_file'}) {
-        if (-e $self->{'_ipt_rules_file'}) {
-            open F, "< $self->{'_ipt_rules_file'}"
-                or croak "[*] Could not open $self->{'_ipt_rules_file'}: $!";
-            close F;
-        } else {
-            croak "[*] $self->{'_ipt_rules_file'} does not exist.";
-        }
-    }
-
     $self->{'parse_keys'} = &parse_keys();
 
     bless $self, $class;

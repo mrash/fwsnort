@@ -12,7 +12,8 @@ my $iptables_bin    = '/sbin/iptables';
 my $ip6tables_bin   = '/sbin/ip6tables';
 my $fw_cmd_bin      = '/bin/firewall-cmd';
 
-my $logfile   = 'test.log';
+my $logfile        = 'test.log';
+my $ipt_rules_file = 'ipt_rules.tmp';
 my $PRINT_LEN = 68;
 #================== end config ===================
 
@@ -69,16 +70,24 @@ my $executed = 0;
 
 &init();
 
-&iptables_tests();
-&ip6tables_tests();
+### main test routines
+&iptables_tests('');
+&iptables_tests($ipt_rules_file);
+&ip6tables_tests('');
+&ip6tables_tests($ipt_rules_file);
 
 &logr("\n[+] passed/failed/executed: $passed/$failed/$executed tests\n\n");
 
 exit 0;
 
 sub iptables_tests() {
+    my $rules_file = shift;
 
     &logr("[+] Running $iptables_bin tests...\n");
+
+    if ($rules_file) {
+        $ipt_opts{'ipt_rules_file'} = $rules_file;
+    }
 
     my $ipt_obj = new IPTables::Parse(%ipt_opts)
         or die "[*] Could not acquire IPTables::Parse object";
@@ -92,8 +101,13 @@ sub iptables_tests() {
 }
 
 sub ip6tables_tests() {
+    my $rules_file = shift;
 
     &logr("\n[+] Running $ip6tables_bin tests...\n");
+
+    if ($rules_file) {
+        $ipt_opts{'ipt_rules_file'} = $rules_file;
+    }
 
     my $ipt_obj = new IPTables::Parse(%ipt6_opts)
         or die "[*] Could not acquire IPTables::Parse object";
@@ -110,7 +124,13 @@ sub default_log_tests() {
     my $ipt_obj = shift;
 
     for my $chain (qw/INPUT OUTPUT FORWARD/) {
-        &dots_print("default_log(): filter $chain");
+        &dots_print("default_log($ipt_obj->{'_ipt_rules_file'}): filter $chain");
+
+        if ($ipt_obj->{'_ipt_rules_file'}) {
+            my ($rv, $out_ar, $err_ar) = $ipt_obj->exec_iptables(
+                "$ipt_obj->{'_cmd'} -t filter -v -n -L $chain");
+            &write_rules_file($out_ar);
+        }
 
         my ($ipt_log, $rv) = $ipt_obj->default_log('filter', $chain);
         $executed++;
@@ -129,7 +149,13 @@ sub default_drop_tests() {
     my $ipt_obj = shift;
 
     for my $chain (qw/INPUT OUTPUT FORWARD/) {
-        &dots_print("default_drop(): filter $chain");
+        &dots_print("default_drop($ipt_obj->{'_ipt_rules_file'}): filter $chain");
+
+        if ($ipt_obj->{'_ipt_rules_file'}) {
+            my ($rv, $out_ar, $err_ar) = $ipt_obj->exec_iptables(
+                "$ipt_obj->{'_cmd'} -t filter -v -n -L $chain");
+            &write_rules_file($out_ar);
+        }
 
         my ($ipt_drop, $rv) = $ipt_obj->default_drop('filter', $chain);
         $executed++;
@@ -149,7 +175,14 @@ sub chain_policy_tests() {
 
     for my $table (keys %$tables_chains_hr) {
         for my $chain (@{$tables_chains_hr->{$table}}) {
-            &dots_print("chain_policy(): $table $chain policy");
+
+            if ($ipt_obj->{'_ipt_rules_file'}) {
+                my ($rv, $out_ar, $err_ar) = $ipt_obj->exec_iptables(
+                    "$ipt_obj->{'_cmd'} -t $table -v -n -L $chain");
+                &write_rules_file($out_ar);
+            }
+
+            &dots_print("chain_policy($ipt_obj->{'_ipt_rules_file'}): $table $chain policy");
 
             my $target = $ipt_obj->chain_policy($table, $chain);
 
@@ -174,7 +207,13 @@ sub chain_rules_tests() {
 
     for my $table (keys %$tables_chains_hr) {
 
-        &dots_print("list_table_chains(): $table");
+        &dots_print("list_table_chains($ipt_obj->{'_ipt_rules_file'}): $table");
+
+        if ($ipt_obj->{'_ipt_rules_file'}) {
+            my ($rv, $out_ar, $err_ar) = $ipt_obj->exec_iptables(
+                "$ipt_obj->{'_cmd'} -t $table -v -n -L");
+            &write_rules_file($out_ar);
+        }
 
         my $chains_ar = $ipt_obj->list_table_chains($table);
         if ($#$chains_ar > -1) {
@@ -187,10 +226,14 @@ sub chain_rules_tests() {
         $executed++;
 
         for my $chain (@{$tables_chains_hr->{$table}}) {
-            &dots_print("chain_rules(): $table $chain rules");
+            &dots_print("chain_rules($ipt_obj->{'_ipt_rules_file'}): $table $chain rules");
 
             my ($rv, $out_ar, $err_ar) = $ipt_obj->exec_iptables(
                 "$ipt_obj->{'_cmd'} -t $table -v -n -L $chain");
+
+            if ($ipt_obj->{'_ipt_rules_file'}) {
+                &write_rules_file($out_ar);
+            }
 
             my $rules_ar = $ipt_obj->chain_rules($table, $chain);
 
@@ -233,7 +276,6 @@ sub chain_rules_tests() {
             }
         }
     }
-
     return;
 }
 
@@ -266,6 +308,7 @@ sub init() {
             "UID 0 account) to effectively test fwknop";
 
     unlink $logfile if -e $logfile;
+    unlink $ipt_rules_file if -e $ipt_rules_file;
 
     if (-e $fw_cmd_bin and -x $fw_cmd_bin) {
         $ipt_opts{'firewall-cmd'}  = $fw_cmd_bin;
@@ -278,6 +321,14 @@ sub init() {
         }
     }
 
+    return;
+}
+
+sub write_rules_file() {
+    my $lines_ar = shift;
+    open F, "> $ipt_rules_file" or die $!;
+    print F $_ for @$lines_ar;
+    close F;
     return;
 }
 
