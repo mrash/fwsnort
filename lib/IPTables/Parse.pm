@@ -28,14 +28,16 @@ sub new() {
     my %args  = @_;
 
     my $self = {
-        _iptables     => $args{'iptables'} || $args{'ip6tables'} || '/sbin/iptables',
-        _firewall_cmd => $args{'firewall-cmd'} || '',
-        _fwd_args     => $args{'fwd_args'}  || '--direct --passthrough ipv4',
-        _iptout       => $args{'iptout'}    || '/tmp/ipt.out',
-        _ipterr       => $args{'ipterr'}    || '/tmp/ipt.err',
-        _ipt_alarm    => $args{'ipt_alarm'} || 30,
-        _debug        => $args{'debug'}     || 0,
-        _verbose      => $args{'verbose'}   || 0,
+        _iptables        => $args{'iptables'} || $args{'ip6tables'} || '/sbin/iptables',
+        _firewall_cmd    => $args{'firewall-cmd'} || '',
+        _fwd_args        => $args{'fwd_args'}     || '--direct --passthrough ipv4',
+        _ipv6            => $args{'use_ipv6'}     || 0,
+        _iptout          => $args{'iptout'}       || '/tmp/ipt.out',
+        _ipterr          => $args{'ipterr'}       || '/tmp/ipt.err',
+        _ipt_alarm       => $args{'ipt_alarm'}    || 30,
+        _debug           => $args{'debug'}        || 0,
+        _verbose         => $args{'verbose'}      || 0,
+        _ipt_rules_file  => $args{'ipt_rules_file'}  || '',
         _ipt_exec_style  => $args{'ipt_exec_style'}  || 'waitpid',
         _ipt_exec_sleep  => $args{'ipt_exec_sleep'}  || 0,
         _sigchld_handler => $args{'sigchld_handler'} || \&REAPER,
@@ -47,18 +49,35 @@ sub new() {
         croak "[*] $self->{'_firewall_cmd'} not executable.\n"
             unless -x $self->{'_firewall_cmd'};
     } else {
+        if ($self->{'_ipv6'} and $self->{'_iptables'} eq '/sbin/iptables') {
+            $self->{'_iptables'} = '/sbin/ip6tables';
+        }
         croak "[*] $self->{'_iptables'} incorrect path.\n"
             unless -e $self->{'_iptables'};
         croak "[*] $self->{'_iptables'} not executable.\n"
             unless -x $self->{'_iptables'};
     }
 
+    ### set the firewall binary name
     $self->{'_ipt_bin_name'} = 'iptables';
-
     if ($self->{'_firewall_cmd'}) {
         $self->{'_ipt_bin_name'} = $1 if $self->{'_firewall_cmd'} =~ m|.*/(\S+)|;
     } else {
         $self->{'_ipt_bin_name'} = $1 if $self->{'_iptables'} =~ m|.*/(\S+)|;
+    }
+
+    ### handle ipv6
+    if ($self->{'_ipv6'}) {
+        if ($self->{'_firewall_cmd'}) {
+            if ($self->{'_fwd_args'} =~ /ipv4/i) {
+                $self->{'_fwd_args'} = '--direct --passthrough ipv6';
+            }
+        } else {
+            if ($self->{'_ipt_bin_name'} eq 'iptables') {
+                croak "[*] use_ipv6 is true, " .
+                    "but $self->{'_iptables'} not ip6tables.\n";
+            }
+        }
     }
 
     ### set the main command string to allow for iptables execution
@@ -66,6 +85,16 @@ sub new() {
     $self->{'_cmd'} = $self->{'_iptables'};
     if ($self->{'_firewall_cmd'}) {
         $self->{'_cmd'} = "$self->{'_firewall_cmd'} $self->{'_fwd_args'}";
+    }
+
+    if ($self->{'_ipt_rules_file'}) {
+        if (-e $self->{'_ipt_rules_file'}) {
+            open F, "< $self->{'_ipt_rules_file'}"
+                or croak "[*] Could not open $self->{'_ipt_rules_file'}: $!";
+            close F;
+        } else {
+            croak "[*] $self->{'_ipt_rules_file'} does not exist.";
+        }
     }
 
     $self->{'parse_keys'} = &parse_keys();
@@ -176,12 +205,49 @@ sub parse_keys() {
     return \%keys;
 }
 
+sub list_table_chains() {
+    my $self   = shift;
+    my $table  = shift || croak '[*] Specify a table, e.g. "nat"';
+    my $file   = shift || '';
+
+    my @ipt_lines = ();
+    my @chains = ();
+
+    if ($self->{'_ipt_rules_file'} and not $file) {
+        $file = $self->{'_ipt_rules_file'};
+    }
+
+    if ($file) {
+        ### read the iptables rules out of $file instead of executing
+        ### the iptables command.
+        open F, "< $file" or croak "[*] Could not open file $file: $!";
+        @ipt_lines = <F>;
+        close F;
+    } else {
+        my ($rv, $out_ar, $err_ar) = $self->exec_iptables(
+                "$self->{'_cmd'} -t $table -v -n -L");
+        @ipt_lines = @$out_ar;
+    }
+
+    for (@ipt_lines) {
+        if (/^\s*Chain\s+(\w+)/) {
+            push @chains, $1;
+        }
+    }
+    return \@chains;
+}
+
 sub chain_policy() {
     my $self   = shift;
     my $table  = shift || croak '[*] Specify a table, e.g. "nat"';
     my $chain  = shift || croak '[*] Specify a chain, e.g. "OUTPUT"';
     my $file   = shift || '';
+
     my @ipt_lines = ();
+
+    if ($self->{'_ipt_rules_file'} and not $file) {
+        $file = $self->{'_ipt_rules_file'};
+    }
 
     if ($file) {
         ### read the iptables rules out of $file instead of executing
@@ -227,6 +293,10 @@ sub chain_rules() {
     ### array of hash refs
     my @chain = ();
     my @global_accept_state = ();
+
+    if ($self->{'_ipt_rules_file'} and not $file) {
+        $file = $self->{'_ipt_rules_file'};
+    }
 
     if ($file) {
         ### read the iptables rules out of $file instead of executing
@@ -387,7 +457,12 @@ sub default_drop() {
     my $table = shift || croak "[*] Specify a table, e.g. \"nat\"";
     my $chain = shift || croak "[*] Specify a chain, e.g. \"OUTPUT\"";
     my $file  = shift || '';
+
     my @ipt_lines = ();
+
+    if ($self->{'_ipt_rules_file'} and not $file) {
+        $file = $self->{'_ipt_rules_file'};
+    }
 
     if ($file) {
         ### read the iptables rules out of $file instead of executing
@@ -493,6 +568,10 @@ sub default_log() {
     my @ipt_lines  = ();
     my %log_chains = ();
     my %log_rules  = ();
+
+    if ($self->{'_ipt_rules_file'} and not $file) {
+        $file = $self->{'_ipt_rules_file'};
+    }
 
     ### note that we are not restricting the view to the current chain
     ### with the iptables -nL output; we are going to parse the given
@@ -808,10 +887,15 @@ IPTables::Parse - Perl extension for parsing iptables and ip6tables policies
       if (defined $ipt_hr->{'all'}) {
           print "The INPUT chain has a default DROP rule for all protocols.\n";
       } else {
+          my $found = 0;
           for my $proto (qw/tcp udp icmp/) {
               if (defined $ipt_hr->{$proto}) {
                   print "The INPUT chain drops $proto by default.\n";
+                  $found = 1;
               }
+          }
+          unless ($found) {
+              print "The INPUT chain does not have any default DROP rule.\n";
           }
       }
   } else {
@@ -823,10 +907,15 @@ IPTables::Parse - Perl extension for parsing iptables and ip6tables policies
       if (defined $ipt_hr->{'all'}) {
           print "The INPUT chain has a default LOG rule for all protocols.\n";
       } else {
+          my $found = 0;
           for my $proto (qw/tcp udp icmp/) {
               if (defined $ipt_hr->{$proto}) {
                   print "The INPUT chain logs $proto by default.\n";
+                  $found = 1;
               }
+          }
+          unless ($found) {
+              print "The INPUT chain does not have any default LOG rule.\n";
           }
       }
   } else {

@@ -2,6 +2,7 @@
 
 use lib '../lib';
 use Data::Dumper;
+use Getopt::Long 'GetOptions';
 use strict;
 
 require IPTables::Parse;
@@ -15,20 +16,31 @@ my $logfile   = 'test.log';
 my $PRINT_LEN = 68;
 #================== end config ===================
 
+my $verbose = 0;
+my $debug   = 0;
+my $help    = 0;
+
+die "[*] See 'psad -h' for usage information" unless (GetOptions(
+    'verbose' => \$verbose,
+    'debug'   => \$debug,
+    'help'    => \$help,
+));
+&usage() if $help;
+
 my %ipt_opts = (
     'iptables' => $iptables_bin,
     'iptout'   => '/tmp/iptables.out',
     'ipterr'   => '/tmp/iptables.err',
-    'debug'    => 0,
-    'verbose'  => 0
+    'debug'    => $debug,
+    'verbose'  => $verbose
 );
 
 my %ipt6_opts = (
     'iptables' => $ip6tables_bin,
     'iptout'   => '/tmp/iptables.out',
     'ipterr'   => '/tmp/iptables.err',
-    'debug'    => 0,
-    'verbose'  => 0
+    'debug'    => $debug,
+    'verbose'  => $verbose
 );
 
 my %targets = (
@@ -161,6 +173,19 @@ sub chain_rules_tests() {
     my ($ipt_obj, $tables_chains_hr) = @_;
 
     for my $table (keys %$tables_chains_hr) {
+
+        &dots_print("list_table_chains(): $table");
+
+        my $chains_ar = $ipt_obj->list_table_chains($table);
+        if ($#$chains_ar > -1) {
+            &logr("pass ($executed)\n");
+            $passed++;
+        } else {
+            &logr("fail ($executed)\n");
+            $failed++;
+        }
+        $executed++;
+
         for my $chain (@{$tables_chains_hr->{$table}}) {
             &dots_print("chain_rules(): $table $chain rules");
 
@@ -245,7 +270,7 @@ sub init() {
     if (-e $fw_cmd_bin and -x $fw_cmd_bin) {
         $ipt_opts{'firewall-cmd'}  = $fw_cmd_bin;
         $ipt6_opts{'firewall-cmd'} = $fw_cmd_bin;
-        $ipt6_opts{'fwd_args'}     = '--direct --passthrough ipv6';
+        $ipt6_opts{'use_ipv6'}     = 1;
     } else {
         for my $bin ($iptables_bin, $ip6tables_bin) {
             die "[*] $bin does not exist" unless -e $bin;
@@ -254,4 +279,9 @@ sub init() {
     }
 
     return;
+}
+
+sub usage() {
+    print "$0 [--debug] [--verbose] [-h]\n";
+    exit 0;
 }
