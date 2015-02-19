@@ -83,13 +83,17 @@ exit 0;
 sub iptables_tests() {
     my $rules_file = shift;
 
-    &logr("[+] Running $iptables_bin tests...\n");
+    if ($rules_file) {
+        &logr("[+] Running $iptables_bin $rules_file tests...\n");
+    } else {
+        &logr("[+] Running $iptables_bin tests...\n");
+    }
 
     if ($rules_file) {
         $ipt_opts{'ipt_rules_file'} = $rules_file;
     }
 
-    my $ipt_obj = new IPTables::Parse(%ipt_opts)
+    my $ipt_obj = IPTables::Parse->new(%ipt_opts)
         or die "[*] Could not acquire IPTables::Parse object";
 
     &chain_policy_tests($ipt_obj, \%iptables_chains);
@@ -103,13 +107,17 @@ sub iptables_tests() {
 sub ip6tables_tests() {
     my $rules_file = shift;
 
-    &logr("\n[+] Running $ip6tables_bin tests...\n");
+    if ($rules_file) {
+        &logr("[+] Running $ip6tables_bin $rules_file tests...\n");
+    } else {
+        &logr("[+] Running $ip6tables_bin tests...\n");
+    }
 
     if ($rules_file) {
         $ipt_opts{'ipt_rules_file'} = $rules_file;
     }
 
-    my $ipt_obj = new IPTables::Parse(%ipt6_opts)
+    my $ipt_obj = IPTables::Parse->new(%ipt6_opts)
         or die "[*] Could not acquire IPTables::Parse object";
 
     &chain_policy_tests($ipt_obj, \%ip6tables_chains);
