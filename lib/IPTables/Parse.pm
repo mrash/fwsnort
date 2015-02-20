@@ -1059,6 +1059,10 @@ The IPTables::Parse extension was written by Michael Rash F<E<lt>mbr@cipherdyne.
 to support the psad and fwsnort projects.  Please send email to
 this address if there are any questions, comments, or bug reports.
 
+=head1 VERSION
+
+Version 1.3 (February, 2015)
+
 =head1 COPYRIGHT AND LICENSE
 
 Copyright (C) 2005-2015 Michael Rash.  All rights reserved.
