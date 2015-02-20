@@ -325,6 +325,7 @@ sub chain_rules() {
             next LINE if $line =~ /^\s*target\s+prot/i;
         }
         next LINE unless $found_chain;
+        next LINE unless $line;
 
         ### initialize hash
         my %rule = (
@@ -810,6 +811,10 @@ sub exec_iptables() {
         $rv = 0 if @stderr;
     }
 
+    if ($stdout[$#stdout] =~ /^success/) {
+        pop @stdout;
+    }
+
     if ($debug or $verbose) {
         print $fh localtime() . "     $self->{'_ipt_bin_name'} " .
             "command stdout:\n";
@@ -858,21 +863,22 @@ IPTables::Parse - Perl extension for parsing iptables and ip6tables policies
 
   my %opts = (
       'iptables' => $ipt_bin,
+      'use_ipv6' => 0,         # can set to 1 to force ip6tables usage
+      'ipt_rules_file' => '',  # optional file path from
+                               # which to read iptables rules
       'iptout'   => '/tmp/iptables.out',
       'ipterr'   => '/tmp/iptables.err',
       'debug'    => 0,
       'verbose'  => 0
   );
 
-  my $ipt_obj = new IPTables::Parse(%opts)
+  my $ipt_obj = IPTables::Parse->new(%opts)
       or die "[*] Could not acquire IPTables::Parse object";
 
   my $rv = 0;
 
-  my $table = 'filter';
-  my $chain = 'INPUT';
-
-  my ($ipt_hr, $rv) = $ipt_obj->default_drop($table, $chain);
+  ### look for default DROP rules in the filter table INPUT chain
+  my ($ipt_hr, $rv) = $ipt_obj->default_drop('filter', 'INPUT');
   if ($rv) {
       if (defined $ipt_hr->{'all'}) {
           print "The INPUT chain has a default DROP rule for all protocols.\n";
@@ -892,7 +898,8 @@ IPTables::Parse - Perl extension for parsing iptables and ip6tables policies
       print "[-] Could not parse $ipt_obj->{'_ipt_bin_name'} policy\n";
   }
 
-  ($ipt_hr, $rv) = $ipt_obj->default_log($table, $chain);
+  ### look for default LOG rules in the filter table INPUT chain
+  ($ipt_hr, $rv) = $ipt_obj->default_log('filter', 'INPUT');
   if ($rv) {
       if (defined $ipt_hr->{'all'}) {
           print "The INPUT chain has a default LOG rule for all protocols.\n";
@@ -912,14 +919,29 @@ IPTables::Parse - Perl extension for parsing iptables and ip6tables policies
       print "[-] Could not parse $ipt_obj->{'_ipt_bin_name'} policy\n";
   }
 
+  ### print all chains in the filter table
+  for my $chain (@{$ipt_obj->list_table_chains('filter')}) {
+      print $chain, "\n";
+  }
+
 =head1 DESCRIPTION
 
 The C<IPTables::Parse> package provides an interface to parse iptables or
 ip6tables rules on Linux systems through the direct execution of
 iptables/ip6tables commands, or from parsing a file that contains an
-iptables/ip6tables policy listing.  You can get the current policy applied to a
+iptables/ip6tables policy listing. Note that the 'firewalld' infrastructure on
+Fedora21 is also supported through execution of the 'firewall-cmd' binary.
+
+With this module, you can get the current policy applied to a
 table/chain, look for a specific user-defined chain, check for a default DROP
-policy, or determing whether or not logging rules exist.
+policy, or determine whether or not a default LOG rule exists. Also, you can
+get a listing of all rules in a chain with each rule parsed into its own hash.
+
+Note that if you initialize the IPTables::Parse object with the 'ipt_rules_file'
+key, then all parsing routines will open the specified file for iptables rules
+data. So, you can create this file with a command like
+'iptables -t filter -nL -v > ipt.rules', and then initialize the object with
+IPTables::Parse->new({'ipt_rules_file'=>'ipt.rules'})
 
 =head1 FUNCTIONS
 
@@ -933,7 +955,8 @@ functions:
 This function returns the policy (e.g. 'DROP', 'ACCEPT', etc.) for the specified
 table and chain:
 
-  print "INPUT policy: ", $ipt_obj->chain_policy('filter', 'INPUT'), "\n";
+  print "INPUT policy: ",
+        $ipt_obj->chain_policy('filter', 'INPUT'), "\n";
 
 =item chain_rules($table, $chain)
 
@@ -944,13 +967,25 @@ C<protocol>, C<s_port>, C<d_port>, C<target>, C<packets>, C<bytes>, C<intf_in>,
 C<intf_out>, C<to_ip>, C<to_port>, C<state>, C<raw>, and C<extended>.  The C<extended>
 element contains the rule output past the protocol information, and the C<raw>
 element contains the complete rule itself as reported by iptables or ip6tables.
+Here is an example of checking whether the second rule in the INPUT chain (array
+index 1) allows traffic from any IP to TCP port 80:
+
+  $rules_ar = $ipt_obj->chain_rules('filter', 'INPUT);
+
+  if ($rules_ar->[1]->{'src'} eq '0.0.0.0/0'
+          and $rules_ar->[1]->{'protocol'} eq 'tcp'
+          and $rules_ar->[1]->{'d_port'}   eq '80'
+          and $rules_ar->[1]->{'target'}   eq 'ACCEPT') {
+
+      print "traffic accepted to TCP port 80 from anywhere\n";
+  }
 
 =item default_drop($table, $chain)
 
 This function parses the running iptables or ip6tables policy in order to
 determine if the specified chain contains a default DROP rule.  Two values
 are returned, a hash reference whose keys are the protocols that are dropped by
-default if a global ACCEPT rule has not accepted matching packets first, along
+default (if a global ACCEPT rule has not accepted matching packets first), along
 with a return value that tells the caller if parsing the iptables or ip6tables
 policy was successful.  Note that if all protocols are dropped by default, then
 the hash key 'all' will be defined.
@@ -962,12 +997,23 @@ the hash key 'all' will be defined.
 This function parses the running iptables or ip6tables policy in order to determine if
 the specified chain contains a default LOG rule.  Two values are returned,
 a hash reference whose keys are the protocols that are logged by default
-if a global ACCEPT rule has not accepted matching packets first, along with
+(if a global ACCEPT rule has not accepted matching packets first), along with
 a return value that tells the caller if parsing the iptables or ip6tables policy was
 successful.  Note that if all protocols are logged by default, then the
 hash key 'all' will be defined.  An example invocation is:
 
   ($ipt_hr, $rv) = $ipt_obj->default_log('filter', 'INPUT');
+
+=item list_table_chains($table)
+
+This function parses the specified table for all chains that are defined within
+the table. Data is returned as an array reference. For example, if there are no
+user-defined chains in the 'filter' table, then the returned array reference will
+contain the strings 'INPUT', 'FORWARD', and 'OUTPUT'.
+
+  for my $chain (@{$ipt_obj->list_table_chains('filter')}) {
+      print $chain, "\n";
+  }
 
 =back
 
@@ -977,7 +1023,7 @@ Michael Rash, E<lt>mbr@cipherdyne.orgE<gt>
 
 =head1 SEE ALSO
 
-The IPTables::Parse is used by the IPTables::ChainMgr extension in support of
+The IPTables::Parse module is used by the IPTables::ChainMgr extension in support of
 the psad and fwsnort projects to parse iptables or ip6tables policies (see the psad(8),
 and fwsnort(8) man pages).  As always, the iptables(8) and ip6tables(8) man pages
 provide the best information on command line execution and theory behind iptables
@@ -1005,12 +1051,17 @@ Thanks to the following people:
 
   Franck Joncourt <franck.mail@dthconnex.com>
   Grant Ferley
+  Fabien Mazieres
 
 =head1 AUTHOR
 
 The IPTables::Parse extension was written by Michael Rash F<E<lt>mbr@cipherdyne.orgE<gt>>
 to support the psad and fwsnort projects.  Please send email to
 this address if there are any questions, comments, or bug reports.
+
+=head1 VERSION
+
+Version 1.3 (February, 2015)
 
 =head1 COPYRIGHT AND LICENSE
 
