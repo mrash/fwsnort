@@ -100,7 +100,7 @@ sub iptables_tests() {
         $ipt_opts{'ipt_rules_file'} = $rules_file;
         if ($skip_ipt_exec_check == $SKIP_IPT_EXEC_CHECK) {
             $ipt_opts{'iptables'}     = $dummy_path;
-            $ipt_opts{'firewall-cmd'} = $dummy_path;
+            $ipt_opts{'firewall-cmd'} = $dummy_path if $use_fw_cmd;
             $ipt_opts{'skip_ipt_exec_check'} = $skip_ipt_exec_check;
         }
     } else {
@@ -364,17 +364,21 @@ sub write_rules() {
         $opts_cp{'iptables'} = $iptables_bin;
 
         if ($use_fw_cmd) {
-            $cmd =~ s/^$dummy_path/$fw_cmd_bin/;
+            $cmd =~ s|^$dummy_path|$fw_cmd_bin|;
         } else {
             if ($ipt_obj->{'use_ipv6'}) {
                 %opts_cp = %ipt6_opts;
                 $opts_cp{'iptables'} = $ip6tables_bin;
-                $cmd =~ s/^$dummy_path/$ip6tables_bin/;
+                $cmd =~ s|^$dummy_path|$ip6tables_bin|;
             } else {
-                $cmd =~ s/^$dummy_path/$iptables_bin/;
+                $cmd =~ s|^$dummy_path|$iptables_bin|;
             }
         }
-        $opts_cp{'firewall-cmd'} = $fw_cmd_bin if $use_fw_cmd;
+        if ($use_fw_cmd) {
+            $opts_cp{'firewall-cmd'} = $fw_cmd_bin;
+        } else {
+            $opts_cp{'firewall-cmd'} = '';
+        }
         $opts_cp{'skip_ipt_exec_check'} = 0;
 
         my $obj = IPTables::Parse->new(%opts_cp);
