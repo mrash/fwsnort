@@ -41,21 +41,24 @@ sub new() {
         _ipt_exec_style  => $args{'ipt_exec_style'}  || 'waitpid',
         _ipt_exec_sleep  => $args{'ipt_exec_sleep'}  || 0,
         _sigchld_handler => $args{'sigchld_handler'} || \&REAPER,
+        _skip_ipt_exec_check => $args{'skip_ipt_exec_check'} || 0
     };
 
-    if ($self->{'_firewall_cmd'}) {
-        croak "[*] $self->{'_firewall_cmd'} incorrect path.\n"
-            unless -e $self->{'_firewall_cmd'};
-        croak "[*] $self->{'_firewall_cmd'} not executable.\n"
-            unless -x $self->{'_firewall_cmd'};
-    } else {
-        if ($self->{'_ipv6'} and $self->{'_iptables'} eq '/sbin/iptables') {
-            $self->{'_iptables'} = '/sbin/ip6tables';
+    unless ($self->{'_skip_ipt_exec_check'}) {
+        if ($self->{'_firewall_cmd'}) {
+            croak "[*] $self->{'_firewall_cmd'} incorrect path.\n"
+                unless -e $self->{'_firewall_cmd'};
+            croak "[*] $self->{'_firewall_cmd'} not executable.\n"
+                unless -x $self->{'_firewall_cmd'};
+        } else {
+            if ($self->{'_ipv6'} and $self->{'_iptables'} eq '/sbin/iptables') {
+                $self->{'_iptables'} = '/sbin/ip6tables';
+            }
+            croak "[*] $self->{'_iptables'} incorrect path.\n"
+                unless -e $self->{'_iptables'};
+            croak "[*] $self->{'_iptables'} not executable.\n"
+                unless -x $self->{'_iptables'};
         }
-        croak "[*] $self->{'_iptables'} incorrect path.\n"
-            unless -e $self->{'_iptables'};
-        croak "[*] $self->{'_iptables'} not executable.\n"
-            unless -x $self->{'_iptables'};
     }
 
     ### set the firewall binary name
@@ -74,8 +77,10 @@ sub new() {
             }
         } else {
             if ($self->{'_ipt_bin_name'} eq 'iptables') {
-                croak "[*] use_ipv6 is true, " .
-                    "but $self->{'_iptables'} not ip6tables.\n";
+                unless ($self->{'_skip_ipt_exec_check'}) {
+                    croak "[*] use_ipv6 is true, " .
+                        "but $self->{'_iptables'} not ip6tables.\n";
+                }
             }
         }
     }
@@ -941,7 +946,11 @@ Note that if you initialize the IPTables::Parse object with the 'ipt_rules_file'
 key, then all parsing routines will open the specified file for iptables rules
 data. So, you can create this file with a command like
 'iptables -t filter -nL -v > ipt.rules', and then initialize the object with
-IPTables::Parse->new({'ipt_rules_file'=>'ipt.rules'})
+IPTables::Parse->new({'ipt_rules_file'=>'ipt.rules'}). Further, if you are
+running on a system without iptables installed, but you have an iptables policy
+written to the ipt.rules file, then you can pass in 'skip_ipt_exec_check=>1'
+in order to analyze the file without having IPTables::Parse check for the
+iptables binary.
 
 =head1 FUNCTIONS
 
