@@ -23,7 +23,7 @@ my $debug   = 0;
 my $help    = 0;
 my $use_fw_cmd = 0;
 
-die "[*] See 'psad -h' for usage information" unless (GetOptions(
+die "[*] See '$0 -h' for usage information" unless (GetOptions(
     'verbose' => \$verbose,
     'debug'   => \$debug,
     'help'    => \$help,
