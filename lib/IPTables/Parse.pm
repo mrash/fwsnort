@@ -85,6 +85,11 @@ sub new() {
         }
     }
 
+    $self->{'_ipv6'} = 1 if $self->{'_ipt_bin_name'} eq 'ip6tables';
+    if ($self->{'_firewall_cmd'}) {
+        $self->{'_ipv6'} = 1 if $self->{'_fwd_args'} =~ /ipv6/;
+    }
+
     ### set the main command string to allow for iptables execution
     ### via firewall-cmd if necessary
     $self->{'_cmd'} = $self->{'_iptables'};
