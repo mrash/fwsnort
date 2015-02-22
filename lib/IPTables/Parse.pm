@@ -190,7 +190,7 @@ sub parse_keys() {
                 'use_quotes' => 1
             },
             'string' => {
-                'regex'      => qr|STRING\smatch\s\"(.*?)\"|,
+                'regex'      => qr|STRING\s+match\s+\"(.*?)\"|,
                 'ipt_match'  => '-m string --algo bm --string',
                 'use_quotes' => 1
             },
