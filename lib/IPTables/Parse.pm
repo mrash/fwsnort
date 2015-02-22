@@ -816,8 +816,18 @@ sub exec_iptables() {
         $rv = 0 if @stderr;
     }
 
-    if (@stdout and $stdout[$#stdout] =~ /^success/) {
-        pop @stdout;
+    if (@stdout) {
+        if ($stdout[$#stdout] =~ /^success/) {
+            pop @stdout;
+        }
+        if ($self->{'_ipt_bin_name'} eq 'firewall-cmd') {
+            for (@stdout) {
+                if (/COMMAND_FAILED/) {
+                    $rv = 0;
+                    last;
+                }
+            }
+        }
     }
 
     if ($debug or $verbose) {
@@ -839,6 +849,10 @@ sub exec_iptables() {
                 print $fh $line, "\n";
             }
         }
+    }
+
+    if ($debug or $verbose) {
+        print $fh localtime() . "     Return value: $rv\n";
     }
 
     return $rv, \@stdout, \@stderr;
