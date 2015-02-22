@@ -816,7 +816,7 @@ sub exec_iptables() {
         $rv = 0 if @stderr;
     }
 
-    if ($stdout[$#stdout] =~ /^success/) {
+    if (@stdout and $stdout[$#stdout] =~ /^success/) {
         pop @stdout;
     }
 
