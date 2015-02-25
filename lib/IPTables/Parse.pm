@@ -999,11 +999,12 @@ written to the ipt.rules file, then you can pass in 'skip_ipt_exec_check=>1'
 in order to analyze the file without having IPTables::Parse check for the
 iptables binary.
 
-In summary, optional hash keys that can be passed to new() include '_iptables'
-(set path to iptables binary), '_firewall_cmd' (set path to 'firewall-cmd'
-binary for systems with 'firewalld'), '_fwd_args' (set 'firewall-cmd' usage
-args; defaults to '--direct --passthrough ipv4'), '_ipv6' (set IPv6 mode for
-ip6tables), '_debug' and '_verbose'.
+In summary, in addition to the hash keys mentioned above, optional keys that
+can be passed to new() include '_iptables' (set path to iptables binary),
+'_firewall_cmd' (set path to 'firewall-cmd' binary for systems with
+'firewalld'), '_fwd_args' (set 'firewall-cmd' usage args; defaults to
+'--direct --passthrough ipv4'), '_ipv6' (set IPv6 mode for ip6tables),
+'_debug' and '_verbose'.
 
 =head1 FUNCTIONS
 
