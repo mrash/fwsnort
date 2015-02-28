@@ -1124,7 +1124,7 @@ this address if there are any questions, comments, or bug reports.
 
 =head1 VERSION
 
-Version 1.3 (February, 2015)
+Version 1.3.1 (February, 2015)
 
 =head1 COPYRIGHT AND LICENSE
 
