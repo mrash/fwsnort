@@ -993,7 +993,7 @@ Note that if you initialize the IPTables::Parse object with the 'ipt_rules_file'
 key, then all parsing routines will open the specified file for iptables rules
 data. So, you can create this file with a command like
 'iptables -t filter -nL -v > ipt.rules', and then initialize the object with
-IPTables::Parse->new({'ipt_rules_file'=>'ipt.rules'}). Further, if you are
+IPTables::Parse->new('ipt_rules_file' => 'ipt.rules'). Further, if you are
 running on a system without iptables installed, but you have an iptables policy
 written to the ipt.rules file, then you can pass in 'skip_ipt_exec_check=>1'
 in order to analyze the file without having IPTables::Parse check for the
