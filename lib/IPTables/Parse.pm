@@ -259,7 +259,7 @@ sub list_table_chains() {
     }
 
     for (@ipt_lines) {
-        if (/^\s*Chain\s+(\w+)/) {
+        if (/^\s*Chain\s(.*)\s\(/) {
             push @chains, $1;
         }
     }
@@ -354,7 +354,7 @@ sub chain_rules() {
 
         last LINE if ($found_chain and $line =~ /^\s*Chain\s+/);
 
-        if ($line =~ /^\s*Chain\s+$chain\s+\(/i) {
+        if ($line =~ /^\s*Chain\s\Q$chain\E\s\(/i) {
             $found_chain = 1;
             next LINE;
         }
@@ -722,7 +722,7 @@ sub sub_chains() {
         chomp $line;
         ### Chain INPUT (policy DROP)
         ### Chain fwsnort_INPUT_eth1 (1 references)
-        if ($line =~ /^\s*Chain\s+$start_chain\s+\(/ and
+        if ($line =~ /^\s*Chain\s+\Q$start_chain\E\s+\(/ and
                 $line !~ /0\s+references/) {
             $found = 1;
             next;
