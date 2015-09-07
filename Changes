@@ -4,6 +4,8 @@ Revision history for Perl extension IPTables::Parse.
     - Bug fix to support additional characters in iptables chain names such as
       dashes and special characters. Stuart Schneider reported this bug and
       submitted a patch. Closes github issue #1.
+    - Added 'rule_num' hash key to chain_rules() results (suggested by Stuart
+      Schneider).
 
 1.4 Sun Mar 01 15:30:29 2015
     - Bump version to 1.4 so that CPAN recognizes it as a new version.

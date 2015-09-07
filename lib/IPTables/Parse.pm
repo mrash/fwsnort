@@ -228,6 +228,7 @@ sub parse_keys() {
                 'ipt_match'  => '-m length --length',
             },
         },
+        'rule_num' => '',
         'raw' => ''
     );
 
@@ -335,7 +336,7 @@ sub chain_rules() {
         close F;
     } else {
         my ($rv, $out_ar, $err_ar) = $self->exec_iptables(
-                "$self->{'_cmd'} -t $table -v -n -L $chain");
+                "$self->{'_cmd'} -t $table -v -n -L $chain --line-numbers");
         @ipt_lines = @$out_ar;
     }
 
@@ -343,11 +344,20 @@ sub chain_rules() {
     ### policy data came from a file then -v might not have been used)
     my $ipt_verbose = 0;
     for my $line (@ipt_lines) {
-        if ($line =~ /^\s*pkts\s+bytes\s+target/) {
+        if ($line =~ /\spkts\s+bytes\s+target/) {
             $ipt_verbose = 1;
             last;
         }
     }
+    my $has_line_numbers = 0;
+    for my $line (@ipt_lines) {
+        if ($line =~ /^num\s+pkts\s+bytes\s+target/) {
+            $has_line_numbers = 1;
+            last;
+        }
+    }
+
+    my $rule_num = 0;
 
     LINE: for my $line (@ipt_lines) {
         chomp $line;
@@ -358,24 +368,58 @@ sub chain_rules() {
             $found_chain = 1;
             next LINE;
         }
-        if ($ipt_verbose) {
-            next LINE if $line =~ /^\s*pkts\s+bytes\s+target\s/i;
-        } else {
-            next LINE if $line =~ /^\s*target\s+prot/i;
-        }
+        next LINE if $line =~ /\starget\s{2,}prot/i;
         next LINE unless $found_chain;
         next LINE unless $line;
+
+        ### track the rule number independently of --line-numbers,
+        ### but the values should always match
+        $rule_num++;
 
         ### initialize hash
         my %rule = (
             'extended' => '',
-            'raw'      => $line
+            'raw'      => $line,
+            'rule_num' => $rule_num
         );
         for my $key (keys %{$self->{'parse_keys'}->{'regular'}}) {
             $rule{$key} = '';
         }
         for my $key (keys %{$self->{'parse_keys'}->{'extended'}}) {
             $rule{$key} = '';
+        }
+
+        my $rule_body = '';
+        my $packets   = '';
+        my $bytes     = '';
+        my $rnum      = '';
+
+        if ($ipt_verbose) {
+            if ($has_line_numbers) {
+                if ($line =~ /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(.*)/) {
+                    $rnum      = $1;
+                    $packets   = $2;
+                    $bytes     = $3;
+                    $rule_body = $4;
+                }
+            } else {
+                if ($line =~ /^\s*(\d+)\s+(\d+)\s+(.*)/) {
+                    $packets   = $1;
+                    $bytes     = $2;
+                    $rule_body = $3;
+                }
+            }
+        } else {
+            if ($has_line_numbers) {
+                if ($line =~ /^\s*(\d+)\s+(\d+)\s+(.*)/) {
+                    $rnum      = $1;
+                    $rule_body = $2;
+                }
+            }
+        }
+
+        if ($rnum and $rnum ne $rule_num) {
+            croak "[*] Rule number mis-match.";
         }
 
         if ($ipt_verbose) {
@@ -391,26 +435,28 @@ sub chain_rules() {
             ### 0     0 ACCEPT  tcp   *   *   ::/0     fe80::aa:0:1/128    tcp dpt:12345
             ### 0     0 LOG     all   *   *   ::/0     ::/0                LOG flags 0 level 4
 
-            my $match_re = qr/^\s*(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+\-\-\s+
+            my $match_re = qr/^(\S+)\s+(\S+)\s+\-\-\s+
                                 (\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*(.*)/x;
 
             if ($self->{'_ipt_bin_name'} eq 'ip6tables'
                     or ($self->{'_ipt_bin_name'} eq 'firewall-cmd'
                     and $self->{'_fwd_args'} =~ /\sipv6/)) {
-                $match_re = qr/^\s*(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+
+                $match_re = qr/^(\S+)\s+(\S+)\s+
                                 (\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*(.*)/x;
             }
 
-            if ($line =~ $match_re) {
-                $rule{'packets'}  = $1;
-                $rule{'bytes'}    = $2;
-                $rule{'target'}   = $3;
-                $rule{'protocol'} = $rule{'proto'} = lc($4);
-                $rule{'intf_in'}  = $5;
-                $rule{'intf_out'} = $6;
-                $rule{'src'}      = $7;
-                $rule{'dst'}      = $8;
-                $rule{'extended'} = $9 || '';
+            if ($rule_body =~ $match_re) {
+                $rule{'packets'}  = $packets;
+                $rule{'bytes'}    = $bytes;
+                $rule{'target'}   = $1;
+                my $proto = $2;
+                $proto = 'all' if $proto eq '0';
+                $rule{'protocol'} = $rule{'proto'} = lc($proto);
+                $rule{'intf_in'}  = $3;
+                $rule{'intf_out'} = $4;
+                $rule{'src'}      = $5;
+                $rule{'dst'}      = $6;
+                $rule{'extended'} = $7 || '';
 
                 &parse_rule_extended(\%rule, $self->{'parse_keys'}->{'extended'});
             }
@@ -433,19 +479,19 @@ sub chain_rules() {
             ### ACCEPT     tcp   ::/0     fe80::aa:0:1/128    tcp dpt:12345
             ### LOG        all   ::/0     ::/0                LOG flags 0 level 4
 
-            my $match_re = qr/^\s*(\S+)\s+(\S+)\s+\-\-\s+(\S+)\s+(\S+)\s*(.*)/;
+            my $match_re = qr/^(\S+)\s+(\S+)\s+\-\-\s+(\S+)\s+(\S+)\s*(.*)/;
 
             if ($self->{'_ipt_bin_name'} eq 'ip6tables'
                     or ($self->{'_ipt_bin_name'} eq 'firewall-cmd'
                     and $self->{'_fwd_args'} =~ /\sipv6/)) {
-                $match_re = qr/^\s*(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*(.*)/;
+                $match_re = qr/^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s*(.*)/;
             }
 
-            if ($line =~ $match_re) {
+            if ($rule_body =~ $match_re) {
                 $rule{'target'}   = $1;
                 my $proto = $2;
                 $proto = 'all' if $proto eq '0';
-                $rule{'protocol'} = $rule{'proto'} = $proto;
+                $rule{'protocol'} = $rule{'proto'} = lc($proto);
                 $rule{'src'}      = $3;
                 $rule{'dst'}      = $4;
                 $rule{'extended'} = $5 || '';
