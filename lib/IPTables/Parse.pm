@@ -272,7 +272,7 @@ sub list_table_chains() {
     }
 
     for (@ipt_lines) {
-        if (/^\s*Chain\s(.*)\s\(/) {
+        if (/^\s*Chain\s(.*?)\s\(/) {
             push @chains, $1;
         }
     }
