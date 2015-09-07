@@ -6,10 +6,10 @@ Revision history for Perl extension IPTables::Parse.
       submitted a patch. Closes github issue #1.
     - Added 'rule_num' hash key to chain_rules() results (suggested by Stuart
       Schneider).
-    - Updated _iptout and _ipterr tmp files to use the current PID by default
-      if these files are not set when instantiating an IPTables::Parse object.
-      Also added a DESTROY block to clean these tmp files up. Patch submitted
-      by Stuart Schneider.
+    - Updated _iptout and _ipterr tmp file paths to use the current PID as an
+      extension by default if these files are not set when instantiating an
+      IPTables::Parse object.  Also added a DESTROY block to clean these tmp
+      files up. Patch submitted by Stuart Schneider.
 
 1.4 Sun Mar 01 15:30:29 2015
     - Bump version to 1.4 so that CPAN recognizes it as a new version.
