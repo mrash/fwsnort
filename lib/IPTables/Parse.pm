@@ -36,8 +36,8 @@ sub new() {
         _firewall_cmd    => $args{'firewall-cmd'} || '',
         _fwd_args        => $args{'fwd_args'}     || '--direct --passthrough ipv4',
         _ipv6            => $args{'use_ipv6'}     || 0,
-        _iptout          => $args{'iptout'}       || '/tmp/ipt.out',
-        _ipterr          => $args{'ipterr'}       || '/tmp/ipt.err',
+        _iptout          => $args{'iptout'}       || '/tmp/ipt.out' . $$,
+        _ipterr          => $args{'ipterr'}       || '/tmp/ipt.err' . $$,
         _ipt_alarm       => $args{'ipt_alarm'}    || 30,
         _debug           => $args{'debug'}        || 0,
         _verbose         => $args{'verbose'}      || 0,
@@ -129,6 +129,18 @@ sub new() {
     $self->{'parse_keys'} = &parse_keys();
 
     bless $self, $class;
+}
+
+sub DESTROY {
+    my $self = shift;
+
+    ### clean up tmp files
+    unless ($self->{'_debug'}) {
+        unlink $self->{'_iptout'};
+        unlink $self->{'_ipterr'};
+    }
+
+    return;
 }
 
 sub parse_keys() {
