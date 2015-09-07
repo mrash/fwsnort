@@ -771,6 +771,12 @@ sub exec_iptables() {
             or $cmd =~ m|^\s*ip6tables| or $cmd =~ m|^\S+/ip6tables|
             or $cmd =~ m|^\s*firewall-cmd| or $cmd =~ m|^\S+/firewall-cmd|;
 
+    ### sanitize $cmd - this is not bullet proof, but better than
+    ### nothing (especially for strange iptables chain names). Further,
+    ### quotemeta() is too aggressive since things like IPv6 addresses
+    ### contain ":" chars, etc.
+    $cmd =~ s/([;<>\$\|`\@&\(\)\[\]\{\}])/\\$1/g;
+
     my $rv = 1;
     my @stdout = ();
     my @stderr = ();
