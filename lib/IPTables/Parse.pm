@@ -17,6 +17,7 @@ package IPTables::Parse;
 use 5.006;
 use POSIX ":sys_wait_h";
 use Carp;
+use File::Temp;
 use strict;
 use warnings;
 use vars qw($VERSION);
@@ -36,8 +37,8 @@ sub new() {
         _firewall_cmd    => $args{'firewall-cmd'} || '',
         _fwd_args        => $args{'fwd_args'}     || '--direct --passthrough ipv4',
         _ipv6            => $args{'use_ipv6'}     || 0,
-        _iptout          => $args{'iptout'}       || '/tmp/ipt.out' . $$,
-        _ipterr          => $args{'ipterr'}       || '/tmp/ipt.err' . $$,
+        _iptout          => $args{'iptout'}       || mktemp('/tmp/ipt.out.XXXXXX'),
+        _ipterr          => $args{'ipterr'}       || mktemp('/tmp/ipt.err.XXXXXX'),
         _ipt_alarm       => $args{'ipt_alarm'}    || 30,
         _debug           => $args{'debug'}        || 0,
         _verbose         => $args{'verbose'}      || 0,
@@ -980,8 +981,6 @@ IPTables::Parse - Perl extension for parsing iptables and ip6tables policies
       'use_ipv6' => 0,         # can set to 1 to force ip6tables usage
       'ipt_rules_file' => '',  # optional file path from
                                # which to read iptables rules
-      'iptout'   => '/tmp/iptables.out',
-      'ipterr'   => '/tmp/iptables.err',
       'debug'    => 0,
       'verbose'  => 0
   );
