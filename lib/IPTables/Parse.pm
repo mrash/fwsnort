@@ -7,7 +7,7 @@
 #
 # Author: Michael Rash (mbr@cipherdyne.org)
 #
-# Version: 1.5
+# Version: 1.6
 #
 ##################################################################
 #
@@ -22,7 +22,7 @@ use strict;
 use warnings;
 use vars qw($VERSION);
 
-$VERSION = '1.5';
+$VERSION = '1.6';
 
 sub new() {
     my $class = shift;
@@ -1089,11 +1089,12 @@ in order to analyze the file without having IPTables::Parse check for the
 iptables binary.
 
 In summary, in addition to the hash keys mentioned above, optional keys that
-can be passed to new() include '_iptables' (set path to iptables binary),
-'_firewall_cmd' (set path to 'firewall-cmd' binary for systems with
-'firewalld'), '_fwd_args' (set 'firewall-cmd' usage args; defaults to
-'--direct --passthrough ipv4'), '_ipv6' (set IPv6 mode for ip6tables),
-'_debug' and '_verbose'.
+can be passed to new() include 'iptables' (set path to iptables binary),
+'firewall_cmd' (set path to 'firewall-cmd' binary for systems with
+'firewalld'), 'fwd_args' (set 'firewall-cmd' usage args; defaults to
+'--direct --passthrough ipv4'), 'ipv6' (set IPv6 mode for ip6tables),
+'debug', 'verbose', and 'lockless_ipt_exec' (disable usage of the iptables
+'-w' argument that acquires an exclusive lock on command execution).
 
 =head1 FUNCTIONS
 
@@ -1205,6 +1206,7 @@ Thanks to the following people:
   Stuart Schneider
   Grant Ferley
   Fabien Mazieres
+  Miloslav Trmač
 
 =head1 AUTHOR
 
@@ -1214,7 +1216,7 @@ this address if there are any questions, comments, or bug reports.
 
 =head1 VERSION
 
-Version 1.5 (Septebmer, 2015)
+Version 1.6 (November, 2015)
 
 =head1 COPYRIGHT AND LICENSE
 

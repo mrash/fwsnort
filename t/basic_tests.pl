@@ -228,6 +228,7 @@ sub parse_basic_ipv4_policy() {
 
     $ipt_opts{'ipt_rules_file'} = $basic_ipv4_rules_file;
 
+    &logr("\n[+] Running basic IPv4 chain_rules() parse test...\n");
     &dots_print("parse $basic_ipv4_rules_file via chain_rules()");
 
     my $ipt_obj = IPTables::Parse->new(%ipt_opts)
