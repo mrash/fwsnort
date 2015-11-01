@@ -45,7 +45,8 @@ sub new() {
         _ipt_exec_style  => $args{'ipt_exec_style'}  || 'waitpid',
         _ipt_exec_sleep  => $args{'ipt_exec_sleep'}  || 0,
         _sigchld_handler => $args{'sigchld_handler'} || \&REAPER,
-        _skip_ipt_exec_check => $args{'skip_ipt_exec_check'} || 0
+        _skip_ipt_exec_check => $args{'skip_ipt_exec_check'} || 0,
+        _lockless_ipt_exec   => $args{'lockless_ipt_exec'}   || 0,
     };
 
     if ($self->{'_skip_ipt_exec_check'}) {
@@ -124,6 +125,16 @@ sub new() {
     $self->{'_cmd'} = $self->{'_iptables'};
     if ($self->{'_firewall_cmd'}) {
         $self->{'_cmd'} = "$self->{'_firewall_cmd'} $self->{'_fwd_args'}";
+    }
+
+    unless ($self->{'_skip_ipt_exec_check'}) {
+        unless ($self->{'_lockless_ipt_exec'}) {
+            ### now that we have the iptables command defined, see whether
+            ### it supports -w to acquire an exclusive lock
+            my ($rv, $out_ar, $err_ar) = &exec_iptables($self,
+                "$self->{'_cmd'} -w -t filter -n -L INPUT");
+            $self->{'_cmd'} .= ' -w' if $rv;
+        }
     }
 
     $self->{'parse_keys'} = &parse_keys();
@@ -329,6 +340,9 @@ sub chain_rules() {
     my $found_chain  = 0;
     my @ipt_lines = ();
 
+    my $fh = *STDERR;
+    $fh = *STDOUT if $self->{'_verbose'};
+
     ### only used for IPv4 + NAT
     my $ip_re = qr|(?:[0-2]?\d{1,2}\.){3}[0-2]?\d{1,2}|;
 
@@ -408,14 +422,14 @@ sub chain_rules() {
 
         if ($ipt_verbose) {
             if ($has_line_numbers) {
-                if ($line =~ /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(.*)/) {
+                if ($line =~ /^\s*(\d+)\s+(\S+)\s+(\S+)\s+(.*)/) {
                     $rnum      = $1;
                     $packets   = $2;
                     $bytes     = $3;
                     $rule_body = $4;
                 }
             } else {
-                if ($line =~ /^\s*(\d+)\s+(\d+)\s+(.*)/) {
+                if ($line =~ /^\s*(\S+)\s+(\S+)\s+(.*)/) {
                     $packets   = $1;
                     $bytes     = $2;
                     $rule_body = $3;
@@ -423,10 +437,14 @@ sub chain_rules() {
             }
         } else {
             if ($has_line_numbers) {
-                if ($line =~ /^\s*(\d+)\s+(\d+)\s+(.*)/) {
+                if ($line =~ /^\s*(\d+)\s+(.*)/) {
                     $rnum      = $1;
                     $rule_body = $2;
                 }
+            } else {
+                $rule_body = $line;
+                $rnum      = $rule_num;
+                $rnum      = $rule_num;
             }
         }
 
@@ -471,6 +489,10 @@ sub chain_rules() {
                 $rule{'extended'} = $7 || '';
 
                 &parse_rule_extended(\%rule, $self->{'parse_keys'}->{'extended'});
+            } else {
+                if ($self->{'_debug'}) {
+                    print $fh localtime() . "     -v Did not match parse regex: $line\n";
+                }
             }
         } else {
 
@@ -509,6 +531,10 @@ sub chain_rules() {
                 $rule{'extended'} = $5 || '';
 
                 &parse_rule_extended(\%rule, $self->{'parse_keys'}->{'extended'});
+            } else {
+                if ($self->{'_debug'}) {
+                    print $fh localtime() . "     Did not match parse regex: $line\n";
+                }
             }
         }
         push @chain, \%rule;
