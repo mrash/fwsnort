@@ -995,6 +995,8 @@ sub REAPER {
 1;
 __END__
 
+=encoding UTF-8
+
 =head1 NAME
 
 IPTables::Parse - Perl extension for parsing iptables and ip6tables policies
