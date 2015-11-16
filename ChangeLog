@@ -1,3 +1,8 @@
+fwsnort-1.6.6 (11//2014):
+    - Fixed an issue for Snort rules against all IP protocols should be
+      translated with the iptables '-p all' argument instead of '-p ip'. This
+      issue was reported by Github user mgaulton.
+
 fwsnort-1.6.5 (08/26/2014):
     - (Paulo Bruck) Submitted a patch to fix a bug in fwsnort usage of the
       iptables --ulog-prefix option (an invalid quote was being used previous

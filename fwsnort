@@ -1808,7 +1808,8 @@ sub ipt_build_rule() {
         }
 
         if ($hdr_hr->{'proto'} =~ /ip/) {
-            $rule .= " $ipt_hdr_opts{'proto'} $hdr_hr->{'proto'}";
+            ### the special iptables keyword 'all' means all IP protocols
+            $rule .= " $ipt_hdr_opts{'proto'} all";
         } else {
             $rule .= " $ipt_hdr_opts{'proto'} $hdr_hr->{'proto'} " .
                 "-m $hdr_hr->{'proto'}";

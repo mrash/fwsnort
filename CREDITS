@@ -104,3 +104,7 @@ Paulo Bruck
     - Submitted a patch to fix a bug in fwsnort usage of the iptables
       --ulog-prefix option (an invalid quote was being used previous to the
       fix).
+
+Github user mgaulton:
+    - Reported an issue where the iptables 'all' keyword should have been used
+      intead of 'ip' to represent all IP protocols as the argument to -p.
