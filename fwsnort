@@ -1773,7 +1773,6 @@ sub get_local_addrs() {
             }
         }
         close IP;
-
     } else {
         open IFC, "$cmds{'ifconfig'} -a |" or die "[*] Could not run ",
             "$cmds{'ifconfig'}: $!";

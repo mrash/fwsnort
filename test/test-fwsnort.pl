@@ -553,7 +553,7 @@ my @tests = (
         'negative_output_matches' => [qr/Use\sof\suninitialized\svalue/i,
             qr/Missing\sargument/,
             qr/Argument.*isn\'t\snumeric/],
-        'match_all' => $MATCH_ALL_RE,
+        'match_all' => $MATCH_SINGLE_RE,
         'function'  => \&look_for_warnings,
         'cmdline'   => "grep -i uninit $output_dir/*.test",
         'exec_err'  => $IGNORE,
