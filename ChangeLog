@@ -1,4 +1,7 @@
 fwsnort-1.6.6 (11//2014):
+    - Update to IPTables::Parse-1.6 which contains a fix for a local-only
+      vulnerability dealing with temporary file handling. Details can be found
+      here: https://github.com/mrash/IPTables-Parse/blob/master/Changes
     - Fixed an issue for Snort rules against all IP protocols should be
       translated with the iptables '-p all' argument instead of '-p ip'. This
       issue was reported by Github user mgaulton.
