@@ -1757,21 +1757,39 @@ sub is_local() {
 }
 
 sub get_local_addrs() {
-    open IFC, "$cmds{'ifconfig'} -a |" or die "[*] Could not run ",
-        "$cmds{'ifconfig'}: $!";
-    my @lines = <IFC>;
-    close IFC;
-
     my $intf_name = '';
-    for my $line (@lines) {
-        if ($line =~ /^(\w+)\s+Link/) {
-            $intf_name = $1;
-            next;
+    if (-x $cmds{'ip'}) {
+        open IP, "$cmds{'ip'} addr show |" or die "[*] Could not run ",
+            "$cmds{'ip'}: $!";
+        while (<IP>) {
+            if (/^\d+\:\s+(\w)\:/) {
+                $intf_name = $1;
+                next;
+            }
+            next if $intf_name eq 'lo';
+            next if $intf_name =~ /dummy/i;
+            if (m|^\s+inet\s($ip_re)/(\d+)|) {
+                push @local_addrs, [$1, $2];
+            }
         }
-        next if $intf_name eq 'lo';
-        next if $intf_name =~ /dummy/i;
-        if ($line =~ /^\s+inet.*?:($ip_re).*:($ip_re)/i) {
-            push @local_addrs, [$1, $2];
+        close IP;
+
+    } else {
+        open IFC, "$cmds{'ifconfig'} -a |" or die "[*] Could not run ",
+            "$cmds{'ifconfig'}: $!";
+        my @lines = <IFC>;
+        close IFC;
+
+        for my $line (@lines) {
+            if ($line =~ /^(\w+)\s+Link/) {
+                $intf_name = $1;
+                next;
+            }
+            next if $intf_name eq 'lo';
+            next if $intf_name =~ /dummy/i;
+            if ($line =~ /^\s+inet.*?:($ip_re).*:($ip_re)/i) {
+                push @local_addrs, [$1, $2];
+            }
         }
     }
     return;
@@ -3598,7 +3616,7 @@ sub handle_cmd_line() {
                                             # directory.
         'snort-rfile=s'  => \$rules_file,   # Translate a single rules file.
         'no-pcre'        => \$no_pcre,      # Make no attempt to translate PCRE's.
-        'no-addresses'   => \$no_addr_check, # Don't check local ifconfig output.
+        'no-addresses'   => \$no_addr_check, # Don't check local ip/ifconfig output.
         'no-ipt-sync'    => \$ignore_opt,   # Do not sync with the iptables policy.
         'ipt-sync'       => \$ipt_sync,     # Sync fwsnort rules with the iptables
                                             # policy.
@@ -4442,9 +4460,16 @@ sub chk_commands() {
                 }
             }
             unless ($found) {
-                die "[*] Could not find $cmd, edit $fwsnort_conf";
+                unless ($cmd eq 'ifconfig' or $cmd eq 'ip') {
+                    die "[*] Could not find $cmd, edit $fwsnort_conf";
+                }
             }
         }
+    }
+
+    ### make sure either ifconfig or ip is available
+    unless (-x $cmds{'ip'} or -x $cmds{'ifconfig'}) {
+        die "[*] fwsnort requires either the 'ip' or 'ifconfig' command.";
     }
     return;
 }
