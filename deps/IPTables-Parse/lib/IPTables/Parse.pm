@@ -7,7 +7,7 @@
 #
 # Author: Michael Rash (mbr@cipherdyne.org)
 #
-# Version: 1.6
+# Version: 1.6.1
 #
 ##################################################################
 #
@@ -22,23 +22,30 @@ use strict;
 use warnings;
 use vars qw($VERSION);
 
-$VERSION = '1.6';
+$VERSION = '1.6.1';
 
 sub new() {
     my $class = shift;
     my %args  = @_;
 
-    my $ipt_bin  = '/sbin/iptables';
-    my $ipt6_bin = '/sbin/ip6tables';
-    my $fwc_bin  = '/usr/bin/firewall-cmd';
+    ### default iptables/ip6tables/firewall-cmd paths
+    my $ipt_bin    = '/sbin/iptables';
+    my $ipt6_bin   = '/sbin/ip6tables';
+    my $fwc_bin    = '/usr/bin/firewall-cmd';
+
+    my $iptout_pat = 'ipt.out.XXXXXX';
+    my $ipterr_pat = 'ipt.err.XXXXXX';
 
     my $self = {
-        _iptables        => $args{'iptables'} || $args{'ip6tables'} || '',
+        _iptables        => $args{'iptables'}     || $args{'ip6tables'} || '',
         _firewall_cmd    => $args{'firewall-cmd'} || '',
         _fwd_args        => $args{'fwd_args'}     || '--direct --passthrough ipv4',
         _ipv6            => $args{'use_ipv6'}     || 0,
-        _iptout          => $args{'iptout'}       || mktemp('/tmp/ipt.out.XXXXXX'),
-        _ipterr          => $args{'ipterr'}       || mktemp('/tmp/ipt.err.XXXXXX'),
+        _iptout          => $args{'iptout'}       || '',
+        _iptout_pat      => $args{'iptout_pat'}   || '',
+        _ipterr          => $args{'ipterr'}       || '',
+        _ipterr_pat      => $args{'ipterr_pat'}   || '',
+        _tmpdir          => $args{'tmpdir'}       || '',
         _ipt_alarm       => $args{'ipt_alarm'}    || 30,
         _debug           => $args{'debug'}        || 0,
         _verbose         => $args{'verbose'}      || 0,
@@ -50,7 +57,7 @@ sub new() {
         _lockless_ipt_exec   => $args{'lockless_ipt_exec'}   || 0,
     };
 
-    if ($self->{'_skip_ipt_exec_check'}) {
+    if ($self->{'_skip_ipt_exec_check'}) {  ### useful for file-only parsing
         unless ($self->{'_firewall_cmd'} or $self->{'_iptables'}) {
             ### default
             $self->{'_iptables'} = $ipt_bin;
@@ -70,26 +77,68 @@ sub new() {
             ### check for firewall-cmd first since systems with it
             ### will have iptables installed as well (but firewall-cmd
             ### should be used instead if it exists)
-            if (-e $fwc_bin and -x $fwc_bin) {
-                $self->{'_firewall_cmd'} = $fwc_bin;
-            } elsif (-e $ipt_bin and -x $ipt_bin) {
-                $self->{'_iptables'} = $ipt_bin;
-            } elsif (-e $ipt6_bin and -x $ipt6_bin) {
-                $self->{'_iptables'} = $ipt6_bin;
-            } else {
+            my $found = 0;
+            for my $cmd ('firewall-cmd', 'iptables', 'ip6tables') {
+                next if $self->{'_ipv6'} and $cmd eq 'iptables';
+                my $path = &check_cmd($cmd);
+                if ($path) {
+                    if ($cmd eq 'firewall-cmd') {
+                        $self->{'_firewall_cmd'} = $path;
+                    } else {
+                        $self->{'_iptables'} = $path;
+                    }
+                    $found = 1;
+                    last;
+                }
+            }
+            unless ($found) {
                 croak "[*] Could not find/execute iptables, " .
-                    "specify path via _iptables\n";
+                    "specify path via 'iptables' key.\n";
             }
         }
     }
 
-    if ($self->{'_ipv6'} and $self->{'_iptables'} eq $ipt_bin) {
+    if ($self->{'_ipv6'} and $self->{'_iptables'} !~ /ip6tables/) {
         if (-e $ipt6_bin and -x $ipt6_bin) {
             $self->{'_iptables'} = $ipt6_bin;
         } else {
-            croak "[*] Could not find/execute ip6tables, " .
-                "specify path via _iptables\n";
+            my $path = &check_cmd('ip6tables');
+            if ($path) {
+                $self->{'_iptables'} = $path;
+            } else {
+                croak "[*] Could not find/execute ip6tables, " .
+                    "specify path via 'ip6tables' hash key.\n";
+            }
         }
+    }
+
+    ### set up the path for temporary files
+    if ($self->{'_tmpdir'} and -d $self->{'_tmpdir'}) {
+        if ($self->{'_iptout_pat'}) {
+            $self->{'_iptout'}
+                = mktemp("$self->{'_tmpdir'}/$self->{'_iptout_pat'}");
+        } elsif ($self->{'_iptout'}) {
+            $self->{'_iptout'} = mktemp("$self->{'_tmpdir'}/$self->{'_iptout'}");
+        } else {
+            $self->{'_iptout'} = mktemp("$self->{'_tmpdir'}/$iptout_pat");
+        }
+        if ($self->{'_ipterr_pat'}) {
+            $self->{'_ipterr'}
+                = mktemp("$self->{'_tmpdir'}/$self->{'_iptout_pat'}");
+        } elsif ($self->{'_ipterr'}) {
+            $self->{'_ipterr'} = mktemp("$self->{'_tmpdir'}/$self->{'_ipterr'}");
+        } else {
+            $self->{'_ipterr'} = mktemp("$self->{'_tmpdir'}/$ipterr_pat");
+        }
+    } else {
+        croak "[*] 'iptout_pat' is only valid with 'tmpdir' set."
+            if $self->{'_iptout_pat'};
+        croak "[*] 'ipterr_pat' is only valid with 'tmpdir' set."
+            if $self->{'_iptout_err'};
+        $self->{'_iptout'} = mktemp("/tmp/$iptout_pat")
+            unless $self->{'_iptout'};
+        $self->{'_ipterr'} = mktemp("/tmp/$ipterr_pat")
+            unless $self->{'_ipterr'};
     }
 
     ### set the firewall binary name
@@ -110,7 +159,7 @@ sub new() {
             if ($self->{'_ipt_bin_name'} eq 'iptables') {
                 unless ($self->{'_skip_ipt_exec_check'}) {
                     croak "[*] use_ipv6 is true, " .
-                        "but $self->{'_iptables'} not ip6tables.\n";
+                        "but $self->{'_iptables'} is not ip6tables.\n";
                 }
             }
         }
@@ -257,6 +306,22 @@ sub parse_keys() {
     );
 
     return \%keys;
+}
+
+sub check_cmd() {
+    my $cmd_name = shift;
+
+    my $path = '';
+
+    for my $search_path ('/sbin', '/usr/sbin', '/bin', '/usr/bin') {
+        my $test_path = "$search_path/$cmd_name";
+        if (-e $test_path and -x $test_path) {
+            $path = $test_path;
+            last;
+        }
+    }
+
+    return $path;
 }
 
 sub list_table_chains() {
@@ -995,6 +1060,8 @@ sub REAPER {
 1;
 __END__
 
+=encoding UTF-8
+
 =head1 NAME
 
 IPTables::Parse - Perl extension for parsing iptables and ip6tables policies
@@ -1071,7 +1138,8 @@ iptables/ip6tables commands, or from parsing a file that contains an
 iptables/ip6tables policy listing. Note that the 'firewalld' infrastructure on
 Fedora21 is also supported through execution of the 'firewall-cmd' binary.
 By default, the path to iptables is assumed to be '/sbin/iptables', but if the
-firewall is 'firewalld', then the '/usr/bin/firewall-cmd' is used.
+firewall is 'firewalld', then the '/usr/bin/firewall-cmd' is used. Both of
+these paths are configurable via the keys mentioned below.
 
 With this module, you can get the current policy applied to a
 table/chain, look for a specific user-defined chain, check for a default DROP
@@ -1093,6 +1161,11 @@ can be passed to new() include 'iptables' (set path to iptables binary),
 'firewall_cmd' (set path to 'firewall-cmd' binary for systems with
 'firewalld'), 'fwd_args' (set 'firewall-cmd' usage args; defaults to
 '--direct --passthrough ipv4'), 'ipv6' (set IPv6 mode for ip6tables),
+'iptout' (set path to temporary stdout file, defaults to /tmp/ipt.out.XXXXXX),
+'iptout_pat' (set pattern for temporary stdout file in the 'tmpdir' directory),
+'ipterr' (set path to temporary stderr file, defaults to /tmp/ipt.err.XXXXXX),
+'iptout_err' (set pattern for temporary stderr file in the 'tmpdir' directory),
+'tmpdir' (set path to temporary file handling directory),
 'debug', 'verbose', and 'lockless_ipt_exec' (disable usage of the iptables
 '-w' argument that acquires an exclusive lock on command execution).
 
@@ -1216,7 +1289,7 @@ this address if there are any questions, comments, or bug reports.
 
 =head1 VERSION
 
-Version 1.6 (November, 2015)
+Version 1.6.1 (November, 2015)
 
 =head1 COPYRIGHT AND LICENSE
 
