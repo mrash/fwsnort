@@ -11,6 +11,7 @@ fwsnort-1.6.6 (12//2016):
       assigned to local interfaces. The 'ifconfig' command is still supported,
       but 'ip' is preferred when it is available. Issue #9 reported by
       'mgaulton'.
+    - Updated to bundle the latest Emerging Threats rule set.
 
 fwsnort-1.6.5 (08/26/2014):
     - (Paulo Bruck) Submitted a patch to fix a bug in fwsnort usage of the
