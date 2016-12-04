@@ -1,4 +1,4 @@
-fwsnort-1.6.6 (12//2016):
+fwsnort-1.6.6 (12/04/2016):
     - (Robert Foreman) Whitelist IP addresses for Emerging Threats ruleset
       downloads (96.43.137.99, 204.12.217.19).
     - Update to IPTables::Parse-1.6 which contains a fix for a local-only

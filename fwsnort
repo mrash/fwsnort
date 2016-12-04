@@ -14,9 +14,9 @@
 #
 # Credits: (see the CREDITS file)
 #
-# Version: 1.6.5
+# Version: 1.6.6
 #
-# Copyright (C) 2003-2014 Michael Rash (mbr@cipherdyne.org)
+# Copyright (C) 2003-2016 Michael Rash (mbr@cipherdyne.org)
 #
 # License - GNU Public License version 2 (GPLv2):
 #
@@ -102,7 +102,7 @@ my $CONFIG_DEFAULT = '/etc/fwsnort/fwsnort.conf';
 my $fwsnort_conf = $CONFIG_DEFAULT;
 
 ### version number
-my $version = '1.6.5';
+my $version = '1.6.6';
 
 my %ipt_hdr_opts = (
     'src'      => '-s',
