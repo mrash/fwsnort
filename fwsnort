@@ -1137,10 +1137,10 @@ sub parse_rule_hdr() {
         }
 
         for my $var (qw(sport dport)) {
+            $hsh{$var} =~ s/\[//;
+            $hsh{$var} =~ s/\]//;
             next unless $hsh{$var} =~ /,/;
             if ($ipt_have_multiport_match) {
-                $hsh{$var} =~ s/\[//;
-                $hsh{$var} =~ s/\]//;
                 my $ctr = 1;
                 my @ports = split /\s*,\s*/, $hsh{$var};
                 my $ports_str = '';
@@ -1162,8 +1162,6 @@ sub parse_rule_hdr() {
                     "$hsh{$var} until the $ipt_str multiport match is supported " .
                     "at line: $line_num.");
                 $hsh{$var} =~ s/,.*//;
-                $hsh{$var} =~ s/\[//;
-                $hsh{$var} =~ s/\]//;
             }
         }
 
