@@ -228,6 +228,11 @@ my %snort_opts = (
         'rev'       => qr/[\s;]rev:\s*(\d+)\s*;/,
     },
 
+    ### handle the metadata field
+    'info' => {
+        'metadata' => qr/[\s;]metadata\s*(.*?)\s*;/,
+    },
+
     ### snort options that cannot be included directly
     ### within iptables filter statements (yet :)
     'unsupported' => {
@@ -1005,6 +1010,13 @@ sub parse_rule_options() {
 
     for my $opt (keys %{$snort_opts{'logprefix'}}) {
         if ($rule_options =~ $snort_opts{'logprefix'}{$opt}) {
+            $opts{$opt} = $1;
+        }
+    }
+
+    ### handle 'info' fields (currently just 'metadata')
+    for my $opt (keys %{$snort_opts{'info'}}) {
+        if ($rule_options =~ $snort_opts{'info'}{$opt}) {
             $opts{$opt} = $1;
         }
     }
