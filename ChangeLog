@@ -1,14 +1,14 @@
-fwsnort-1.6.8 (08//2018):
-	- Update to handle the 'metadata' keyword in the Snort rules language.
-	  This restores the ability to translate the Emerging Threats rule sets
-	  and beyond.
+fwsnort-1.6.8 (07/31/2018):
+    - Update to handle the 'metadata' keyword in the Snort rules language.
+      This restores the ability to translate the Emerging Threats rule sets
+      and beyond.
     - Updated to bundle the latest Emerging Threats rule set.
 
 fwsnort-1.6.7 (05/06/2017):
     - Bug fix reported independently by Dan Alberghetti and fixed by Axel
       Beckert in github issue #14 to strip out brackets from single port
       numbers in Snort rules when they exist.
-	- Updated IPTables::Parse to 1.6.1.
+    - Updated IPTables::Parse to 1.6.1.
     - Updated to bundle the latest Emerging Threats rule set.
 
 fwsnort-1.6.6 (12/04/2016):
