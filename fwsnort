@@ -1846,24 +1846,40 @@ sub ipt_build_rule() {
     ### append the source and destination ports
     for my $type (qw(sport dport)) {
         if (defined $hdr_hr->{$type} and $hdr_hr->{$type} !~ /any/i) {
-            my $negate = '';
             my $port = $hdr_hr->{$type};
-            $negate = '! ' if $port =~ m|!|;
-            $port =~ s/\!\s*(\d)/$1/;
             if ($port =~ /,/) {
-                ### multiport match
-                $rule .= " -m multiport ${negate}--${type}s $port";
+                ### multiport match - build positive and negative lists
+                my @ports = split /,/, $port;
+                my $positive_list = '';
+                my $negative_list = '';
+                for my $p (@ports) {
+                    if ($p =~ m|!|) {
+                        $p =~ s/\!\s*(\d)/$1/;
+                        $negative_list .= "$p,";
+                    } else {
+                        $positive_list .= "$p,";
+                    }
+                }
+                if ($negative_list) {
+                    $negative_list =~ s|,$||;
+                    $rule .= " -m multiport ! --${type}s $negative_list";
+                }
+                if ($positive_list) {
+                    $positive_list =~ s|,$||;
+                    $rule .= " -m multiport --${type}s $positive_list";
+                }
             } else {
+                my $negate = '';
+                $negate = '! ' if $port =~ m|!|;
+                $port =~ s/\!\s*(\d)/$1/;
                 $rule .= " ${negate}$ipt_hdr_opts{$type} $port";
             }
         }
     }
 
-    my $rv = &ipt_build_opts($rule, $hdr_hr, $opts_hr, $patterns_ar,
+    return &ipt_build_opts($rule, $hdr_hr, $opts_hr, $patterns_ar,
         $orig_snort_rule, $flow_logging_prefix, $chain, $fwsnort_chain,
         $add_snort_comment, $add_perl_trigger);
-
-    return $rv;
 }
 
 sub ipt_build_opts() {

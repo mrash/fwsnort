@@ -1,3 +1,8 @@
+fwsnort-1.6.9 (12//2018):
+    - Bug fix to handle negated port numbers in multiport match usage (bug
+      reported by David Mason).
+    - Updated to bundle the latest Emerging Threats rule set.
+
 fwsnort-1.6.8 (07/31/2018):
     - Update to handle the 'metadata' keyword in the Snort rules language.
       This restores the ability to translate the Emerging Threats rule sets
